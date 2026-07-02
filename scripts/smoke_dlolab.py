@@ -80,6 +80,7 @@ def env_kwargs(config: dict[str, Any], *, n_envs: int) -> dict[str, Any]:
         "reset_settle_max_steps": int(sim.get("reset_settle_max_steps", 1000)),
         "move_step_size": float(sim.get("move_step_size", 0.002)),
         "move_hold_steps": int(sim.get("move_hold_steps", 20)),
+        "grasp_realism": bool(sim.get("grasp_realism", False)),
     }
 
 
@@ -102,7 +103,7 @@ def run_primitive(config: dict[str, Any], seed: int, *, bend: float, friction: f
     delta = np.array(primitive_cfg.get("delta", [0.08, -0.04, 0.0]), dtype=float)
     lift = str(primitive_cfg.get("lift", "high"))
     env = DLOLabEnv(**env_kwargs(config, n_envs=1))
-    env.reset(params, init_shape=str(config.get("init_shape", "bent")), seed=seed)
+    env.reset(params, init_shape=str(config.get("init_shape", "u_bend")), seed=seed)
     result = env.step_primitive(p, delta, lift)
     return np.asarray(result["X_after"], dtype=float), result
 
@@ -223,7 +224,7 @@ def main() -> int:
             check(no_nan, "7 2000 steps no NaN", f"steps={nan_steps}")
 
             primitive_env = DLOLabEnv(**env_kwargs(config, n_envs=1))
-            primitive_env.reset(params, init_shape=str(config.get("init_shape", "bent")), seed=seed)
+            primitive_env.reset(params, init_shape=str(config.get("init_shape", "u_bend")), seed=seed)
             start = time.perf_counter()
             primitive_result = primitive_env.step_primitive(p, delta, lift)
             primitive_wall_time_s = time.perf_counter() - start

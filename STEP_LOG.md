@@ -32,3 +32,7 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 
 - 2026-07-02T22:51:11+00:00 — **북키핑 정정:** gh CLI 사용 가능해짐(/usr/bin/gh, jiminc77 인증). 이전 "gh CLI 없음 — issue #1/#2/#3 수동 처리 필요" 노트는 폐기. issue #1, #2는 evidence와 함께 close 완료 확인; issue #3은 인간 결정 코멘트(4871069692) 위에 evidence 코멘트(4871088553) 추가 후 close 완료. 이후 milestone부터 전역 규칙 6의 gh 경로 정상 사용.
 - 2026-07-02T22:51:11+00:00 — **운영 노트 (DLO-Lab asset):** assets/dlo-lab.zip 확보됨 (149MB, gitignore 대상 — 커밋 금지). 향후 DLO-Lab 렌더링/datagen 시 LuisaRender 경로를 올바르게 연결하고 공식 datagen을 --raytracer 플래그로 실행할 것.
+- 2026-07-02T23:16:58+00:00 — M3 start: primary(DLO-Lab) adapter를 §5 인터페이스로 완성.
+- 2026-07-02T23:16:58+00:00 — M3 impl: grasp realism(±1 node, 5% fail, config off), 4 init shapes(해석 곡선+seeded noise, rod_entity.set_position 직접 배치), param sweep 반영 확인, tests/test_primitive.py 14 passed(68s), demo 10 primitives(log+plot+meta). 1000-draw failure stat 4.9% ∈ [4,6]%.
+- 2026-07-02T23:16:58+00:00 — M3 note: MuJoCo adapter 동결 유지(변경 없음); legacy init 'bent' 제거 → smoke_dlolab은 u_bend + realism off 사용.
+- 2026-07-02T23:16:58+00:00 — M3 complete (게이트 검증 후 issue #4 close).

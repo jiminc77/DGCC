@@ -38,3 +38,6 @@ packages = ["src/dgcc"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "gpu: tests that exercise the headless Genesis GPU adapter",
+]

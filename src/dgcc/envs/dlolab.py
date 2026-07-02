@@ -1,4 +1,4 @@
-"""DLO-Lab/Genesis rod adapter for the P0-M1 smoke milestone."""
+"""DLO-Lab/Genesis rod adapter for the P0-M3 primary primitive milestone."""
 
 from __future__ import annotations
 
@@ -20,6 +20,105 @@ MU_K_RATIO = 0.80
 SEGMENT_MASS_BASE = 1.0e-3
 MAX_DELTA_NORM = 0.15
 LIFT_HEIGHTS = {"low": 0.02, "high": 0.15}
+GRASP_FAILURE_PROB = 0.05
+GRASP_NOISE_CHOICES = (-1, 0, 1)
+VALID_INIT_SHAPES = frozenset({"straight", "u_bend", "s_curve", "random_smooth"})
+
+
+def sample_grasp(
+    p: int,
+    n_nodes: int,
+    rng: np.random.Generator,
+    enabled: bool = True,
+) -> tuple[int, bool]:
+    """Sample the M3 grasp-realism noise/failure model without touching Genesis."""
+
+    node = int(p)
+    n = int(n_nodes)
+    if n < 1:
+        raise ValueError("n_nodes must be at least 1")
+    if node < 0 or node >= n:
+        raise IndexError(f"grasp node {node} outside [0, {n})")
+    if not enabled:
+        return node, True
+
+    offset = int(rng.choice(GRASP_NOISE_CHOICES))
+    actual = int(np.clip(node + offset, 0, n - 1))
+    success = bool(rng.random() >= GRASP_FAILURE_PROB)
+    return actual, success
+
+
+def centerline_arc_length(points: np.ndarray) -> float:
+    """Return the polyline arc length of a ``(N, 3)`` centerline."""
+
+    centerline = np.asarray(points, dtype=float)
+    if centerline.ndim != 2 or centerline.shape[1] != 3:
+        raise ValueError(f"centerline must have shape (N, 3), got {centerline.shape}")
+    if centerline.shape[0] < 2:
+        return 0.0
+    return float(np.linalg.norm(np.diff(centerline, axis=0), axis=1).sum())
+
+
+def _normalize_init_shape(init_shape: str) -> str:
+    shape = str(init_shape).lower()
+    if shape not in VALID_INIT_SHAPES:
+        allowed = ", ".join(sorted(VALID_INIT_SHAPES))
+        raise ValueError(f"init_shape must be one of {{{allowed}}}, got {init_shape!r}")
+    return shape
+
+
+def _scale_curve_to_length(points: np.ndarray, length_m: float) -> np.ndarray:
+    curve = np.asarray(points, dtype=float).copy()
+    current = centerline_arc_length(curve)
+    if current <= 0.0:
+        raise ValueError("analytic init curve has zero arc length")
+    centroid = curve.mean(axis=0, keepdims=True)
+    return centroid + (curve - centroid) * (float(length_m) / current)
+
+
+def analytic_init_centerline(params: RopeParams, init_shape: str, seed: int) -> np.ndarray:
+    """Build a seeded analytic reset centerline with arc length ``params.length_m``."""
+
+    shape = _normalize_init_shape(init_shape)
+    n_vertices = int(params.n_segments)
+    if n_vertices < 2:
+        raise ValueError("params.n_segments must be at least 2")
+    length = float(params.length_m)
+    radius = float(params.radius)
+    t = np.linspace(0.0, 1.0, n_vertices)
+    rng = np.random.default_rng(seed)
+
+    if shape == "straight":
+        xy = np.column_stack((t - 0.5, np.zeros_like(t)))
+    elif shape == "u_bend":
+        theta = np.linspace(np.pi, 0.0, n_vertices)
+        xy = np.column_stack((np.cos(theta), np.sin(theta)))
+    elif shape == "s_curve":
+        xy = np.column_stack((t - 0.5, 0.18 * np.sin(2.0 * np.pi * t)))
+    else:
+        coeffs = rng.normal(0.0, [0.10, 0.055, 0.030, 0.018])
+        y = sum(coeffs[k - 1] * np.sin(k * np.pi * t) for k in range(1, 5))
+        xy = np.column_stack((t - 0.5, y))
+
+    curve = np.column_stack((xy[:, 0], xy[:, 1], np.zeros_like(t)))
+    curve[:, 0] -= float(curve[:, 0].mean())
+    curve[:, 1] -= float(curve[:, 1].mean())
+
+    noise_scale = min(0.0015 * length, 0.20 * radius)
+    if noise_scale > 0.0:
+        noise = rng.normal(0.0, noise_scale, size=curve.shape)
+        noise[:, 0] *= 0.25
+        noise[:, 2] *= 0.20
+        noise[0] *= 0.25
+        noise[-1] *= 0.25
+        curve += noise
+
+    curve = _scale_curve_to_length(curve, length)
+    curve[:, 0] -= float(curve[:, 0].mean())
+    curve[:, 1] -= float(curve[:, 1].mean())
+    curve[:, 2] -= float(curve[:, 2].min())
+    curve[:, 2] += max(radius * 1.25, 0.008)
+    return curve.astype(float, copy=False)
 
 
 class DLOLabUnavailableError(RuntimeError):
@@ -38,8 +137,8 @@ def ensure_genesis_initialized(seed: int | None = None):
     if not getattr(gs, "_initialized", False):
         # Genesis can only be initialized once per process, so the seed passed to
         # the FIRST caller wins for gs-internal RNG. Per-seed reproducibility in
-        # this adapter therefore comes from numpy RNG in reset()/pre-bend, not
-        # from re-seeding Genesis. Documented for the M3 determinism test.
+        # this adapter therefore comes from numpy RNG in reset()/sample_grasp(),
+        # not from re-seeding Genesis. Documented for the M3 determinism test.
         gs.init(seed=seed, precision="32", logging_level="warning", backend=gs.gpu)
 
     # DLO-Lab 1.0.0's sample_centerline kernel references the legacy alias
@@ -93,6 +192,7 @@ class DLOLabEnv(DLOEnvBase):
         reset_settle_max_steps: int = 1000,
         move_step_size: float = 0.002,
         move_hold_steps: int = 20,
+        grasp_realism: bool = True,
     ) -> None:
         if n_envs < 1:
             raise ValueError("n_envs must be at least 1")
@@ -105,6 +205,7 @@ class DLOLabEnv(DLOEnvBase):
         self.reset_settle_max_steps = int(reset_settle_max_steps)
         self.move_step_size = float(move_step_size)
         self.move_hold_steps = int(move_hold_steps)
+        self.grasp_realism = bool(grasp_realism)
 
         self.gs: Any | None = None
         self.scene: Any | None = None
@@ -117,19 +218,28 @@ class DLOLabEnv(DLOEnvBase):
         self.last_settle_converged = False
         self.last_delta_clamped = np.zeros(3, dtype=float)
         self.last_move_target = np.zeros((self.n_envs, 3), dtype=float)
-        self.last_bent_reset_converged: bool | None = None
+        self.last_grasp_actual_node: int | None = None
+        self.last_grasp_success = False
+        self._rng = np.random.default_rng(0)
+        self.last_reset_settle_converged: bool | None = None
 
     def reset(self, params: RopeParams, init_shape: str, seed: int) -> dict[str, Any]:
         self._validate_params(params)
+        normalized_shape = _normalize_init_shape(init_shape)
+        init_vertices = analytic_init_centerline(params, normalized_shape, seed)
+
         seed_everything(seed)
+        self._rng = np.random.default_rng(seed)
         self.gs = ensure_genesis_initialized(seed)
         gs = self.gs
 
         self.params = params
         self.active_node = None
+        self.last_grasp_actual_node = None
+        self.last_grasp_success = False
         self.last_settle_steps = 0
         self.last_settle_converged = False
-        self.last_bent_reset_converged = None
+        self.last_reset_settle_converged = None
 
         mapped = mapped_parameters(params)
         length = float(params.length_m)
@@ -181,15 +291,8 @@ class DLOLabEnv(DLOEnvBase):
         self.apply_params(params)
 
         self._rollout(self.initial_settle_steps)
-        self.settle(max_steps=self.reset_settle_max_steps)
-
-        normalized_shape = init_shape.lower()
-        if normalized_shape == "straight":
-            pass
-        elif normalized_shape in {"bent", "u_bend"}:
-            self.last_bent_reset_converged = self._script_bent_reset(seed)
-        else:
-            raise ValueError("init_shape must be 'straight', 'bent', or 'u_bend'")
+        self._place_rod_vertices(init_vertices)
+        self.last_reset_settle_converged = self.settle(max_steps=self.reset_settle_max_steps)
 
         self._assert_finite()
         return {
@@ -201,9 +304,11 @@ class DLOLabEnv(DLOEnvBase):
             "n_vertices": int(params.n_segments),
             "length_m": length,
             "interval_m": interval,
+            "initial_arc_length_m": centerline_arc_length(init_vertices),
             "mapped_parameters": mapped,
             "stiffness_bases": stiffness_bases(),
-            "bent_reset_converged": self.last_bent_reset_converged,
+            "reset_settle_converged": self.last_reset_settle_converged,
+            "init_vertex_setter": "rod_entity.set_position((n_envs, n_vertices, 3)); rod_entity.set_velocity(zeros)",
             "show_viewer": False,
             "backend": str(getattr(gs, "backend", "unknown")),
         }
@@ -265,10 +370,7 @@ class DLOLabEnv(DLOEnvBase):
         self._assert_finite()
         return True
 
-    def move(self, delta: np.ndarray, lift: str) -> np.ndarray:
-        self._require_reset()
-        if self.active_node is None:
-            raise RuntimeError("move called before grasp")
+    def _prepare_primitive_inputs(self, delta: np.ndarray, lift: str) -> np.ndarray:
         if lift not in LIFT_HEIGHTS:
             raise ValueError(f"lift must be one of {sorted(LIFT_HEIGHTS)}, got {lift!r}")
 
@@ -281,6 +383,13 @@ class DLOLabEnv(DLOEnvBase):
         if norm > MAX_DELTA_NORM:
             delta_vec = delta_vec * (MAX_DELTA_NORM / norm)
         self.last_delta_clamped = delta_vec.copy()
+        return delta_vec
+
+    def move(self, delta: np.ndarray, lift: str) -> np.ndarray:
+        self._require_reset()
+        if self.active_node is None:
+            raise RuntimeError("move called before grasp")
+        delta_vec = self._prepare_primitive_inputs(delta, lift)
 
         start = self._gripper_positions()
         lifted = start.copy()
@@ -314,9 +423,38 @@ class DLOLabEnv(DLOEnvBase):
         return self.settle(vel_threshold=vel_threshold, max_steps=max_steps)
 
     def step_primitive(self, p: int, delta: np.ndarray, lift: str) -> dict[str, Any]:
+        delta_vec = self._prepare_primitive_inputs(delta, lift)
         X_before = self.get_centerline()
-        grasp_success = self.grasp(p)
-        target = self.move(delta, lift)
+        p_actual, sampled_success = sample_grasp(p, self._n_vertices(), self._rng, self.grasp_realism)
+        self.last_grasp_actual_node = p_actual
+        self.last_grasp_success = bool(sampled_success)
+
+        if not sampled_success:
+            self.last_settle_steps = 0
+            self.last_settle_converged = True
+            X_after = X_before.copy()
+            return {
+                "X_before": X_before,
+                "X_after": X_after,
+                "grasp_success": False,
+                "settle_steps": 0,
+                "info": {
+                    "p": int(p),
+                    "p_actual": int(p_actual),
+                    "grasp_realism": bool(self.grasp_realism),
+                    "grasp_failure_prob": GRASP_FAILURE_PROB,
+                    "grasp_noise": int(p_actual - int(p)),
+                    "delta_clamped": delta_vec.copy(),
+                    "lift": lift,
+                    "gripper_target": None,
+                    "settle_converged": True,
+                    "max_node_speed": self.max_node_speed(),
+                    "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
+                },
+            }
+
+        grasp_success = self.grasp(p_actual)
+        target = self.move(delta_vec, lift)
         settle_converged = self.release()
         X_after = self.get_centerline()
         return {
@@ -326,6 +464,10 @@ class DLOLabEnv(DLOEnvBase):
             "settle_steps": int(self.last_settle_steps),
             "info": {
                 "p": int(p),
+                "p_actual": int(p_actual),
+                "grasp_realism": bool(self.grasp_realism),
+                "grasp_failure_prob": GRASP_FAILURE_PROB,
+                "grasp_noise": int(p_actual - int(p)),
                 "delta_clamped": self.last_delta_clamped.copy(),
                 "lift": lift,
                 "gripper_target": target,
@@ -362,23 +504,27 @@ class DLOLabEnv(DLOEnvBase):
             return 0.0
         return float(np.max(np.linalg.norm(vels, axis=-1)))
 
-    def _script_bent_reset(self, seed: int) -> bool:
-        assert self.params is not None
-        rng = np.random.default_rng(seed)
-        direction = -1.0 if int(rng.integers(0, 2)) == 0 else 1.0
-        bend_delta = np.array(
-            [0.0, direction * min(MAX_DELTA_NORM, 0.20 * float(self.params.length_m)), 0.0],
-            dtype=float,
-        )
-        node = self._n_vertices() // 2
-        self.grasp(node)
-        self.move(bend_delta, "high")
-        return self.release(max_steps=self.reset_settle_max_steps)
 
     def _raw_batch(self) -> np.ndarray:
         self._require_reset()
         assert self.rod_entity is not None
         return np.asarray(self.rod_entity.get_all_verts(), dtype=float)
+
+    def _place_rod_vertices(self, vertices: np.ndarray) -> None:
+        self._require_reset()
+        assert self.rod_entity is not None
+        n_vertices = self._n_vertices()
+        verts = np.asarray(vertices, dtype=float)
+        if verts.shape != (n_vertices, 3):
+            raise ValueError(f"vertices must have shape ({n_vertices}, 3), got {verts.shape}")
+        if not np.all(np.isfinite(verts)):
+            raise ValueError("vertices contain non-finite values")
+
+        batched = np.broadcast_to(verts, (self.n_envs, n_vertices, 3)).copy()
+        zeros = np.zeros_like(batched)
+        self.rod_entity.set_position(batched)
+        self.rod_entity.set_velocity(zeros)
+        self._step_scene()
 
     def _gripper_positions(self) -> np.ndarray:
         self._require_reset()
