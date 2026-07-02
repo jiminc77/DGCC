@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Data & assets (대용량 — 커밋 금지)
+outputs/data/
+*.h5
+*.hdf5
+*.npz
+external/
+assets/
+
+# Sim/render artifacts
+*.mp4
+MUJOCO_LOG.TXT
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
