@@ -6,3 +6,4 @@
 - 2026-07-02T17:02:00+00:00 — Verified `uv run pytest tests/` and base import one-liner.
 - 2026-07-02T17:02:00+00:00 — gh CLI 없음 — issue #1 수동 처리 필요.
 - 2026-07-02T17:02:00+00:00 — M0 complete.
+- 2026-07-02T17:15:12+00:00 — M0 review-gate fixes: writer.py stub callables (QA C5), resample.py M1-minimal/M4-finalize docstring note; tests 3 passed + red-team 34 passed.
