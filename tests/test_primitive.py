@@ -173,3 +173,17 @@ def test_param_sweep_length_setters_and_bend_response(genesis_session) -> None:
     stiff_after = stiff.step_primitive(16, primitive_delta, "low")["X_after"]
 
     assert np.linalg.norm(soft_after - stiff_after) > 1e-5
+
+
+@pytest.mark.gpu
+def test_param_sweep_friction_response(genesis_session) -> None:
+    # A4: friction multiplier must actually change dynamics, not just mapped values.
+    primitive_delta = np.array([0.05, 0.03, 0.0])
+    slippery = _fast_env(grasp_realism=False, reset_steps=8)
+    grippy = _fast_env(grasp_realism=False, reset_steps=8)
+    slippery.reset(_params(length_m=0.75, friction=0.5), init_shape="u_bend", seed=31)
+    grippy.reset(_params(length_m=0.75, friction=2.0), init_shape="u_bend", seed=31)
+    slippery_after = slippery.step_primitive(16, primitive_delta, "low")["X_after"]
+    grippy_after = grippy.step_primitive(16, primitive_delta, "low")["X_after"]
+
+    assert np.linalg.norm(slippery_after - grippy_after) > 1e-5

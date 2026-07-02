@@ -36,3 +36,5 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 - 2026-07-02T23:16:58+00:00 — M3 impl: grasp realism(±1 node, 5% fail, config off), 4 init shapes(해석 곡선+seeded noise, rod_entity.set_position 직접 배치), param sweep 반영 확인, tests/test_primitive.py 14 passed(68s), demo 10 primitives(log+plot+meta). 1000-draw failure stat 4.9% ∈ [4,6]%.
 - 2026-07-02T23:16:58+00:00 — M3 note: MuJoCo adapter 동결 유지(변경 없음); legacy init 'bent' 제거 → smoke_dlolab은 u_bend + realism off 사용.
 - 2026-07-02T23:16:58+00:00 — M3 complete (게이트 검증 후 issue #4 close).
+- 2026-07-02T23:34:01+00:00 — M3 정정: 'test_primitive.py 14 passed' 표기는 전체 tests/ 스위트 기준(14) — test_primitive.py 자체는 8개(현재 9개, friction 응답 테스트 A4 추가)였음 (architect A8).
+- 2026-07-02T23:34:01+00:00 — M3 gate 후속 fix: sample_grasp 경계 클램프 semantics docstring(A3), grasp 실패 분기 settle_converged 실측정(A5), move 이중 클램프 제거 _move_prepared(A7), friction 동역학 응답 테스트(A4). M4 설계 입력으로 기록: 비수렴 transition은 settle_steps==max_steps로 판별해 필터/플래그(A1, 스키마 변경 없이), 대량 수집 전 경량 reset 경로/scene teardown 필요(A2).

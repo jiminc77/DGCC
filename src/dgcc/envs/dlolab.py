@@ -31,7 +31,12 @@ def sample_grasp(
     rng: np.random.Generator,
     enabled: bool = True,
 ) -> tuple[int, bool]:
-    """Sample the M3 grasp-realism noise/failure model without touching Genesis."""
+    """Sample the M3 grasp-realism noise/failure model without touching Genesis.
+
+    Boundary semantics: the ±1 offset is drawn uniformly and then clamped to the
+    valid node range, so the two end nodes self-select with probability 2/3
+    (an outward miss re-grasps the end node); interior nodes stay uniform ±1.
+    """
 
     node = int(p)
     n = int(n_nodes)
@@ -386,10 +391,14 @@ class DLOLabEnv(DLOEnvBase):
         return delta_vec
 
     def move(self, delta: np.ndarray, lift: str) -> np.ndarray:
+        delta_vec = self._prepare_primitive_inputs(delta, lift)
+        return self._move_prepared(delta_vec, lift)
+
+    def _move_prepared(self, delta_vec: np.ndarray, lift: str) -> np.ndarray:
+        """Run the waypoint move for an already-validated/clamped delta (A7: clamp once)."""
         self._require_reset()
         if self.active_node is None:
             raise RuntimeError("move called before grasp")
-        delta_vec = self._prepare_primitive_inputs(delta, lift)
 
         start = self._gripper_positions()
         lifted = start.copy()
@@ -430,8 +439,11 @@ class DLOLabEnv(DLOEnvBase):
         self.last_grasp_success = bool(sampled_success)
 
         if not sampled_success:
+            # A5: measure rather than assert quasi-staticity of the untouched rope.
+            measured_speed = self.max_node_speed()
+            measured_converged = bool(measured_speed <= 1e-3)
             self.last_settle_steps = 0
-            self.last_settle_converged = True
+            self.last_settle_converged = measured_converged
             X_after = X_before.copy()
             return {
                 "X_before": X_before,
@@ -447,14 +459,14 @@ class DLOLabEnv(DLOEnvBase):
                     "delta_clamped": delta_vec.copy(),
                     "lift": lift,
                     "gripper_target": None,
-                    "settle_converged": True,
-                    "max_node_speed": self.max_node_speed(),
+                    "settle_converged": measured_converged,
+                    "max_node_speed": measured_speed,
                     "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
                 },
             }
 
         grasp_success = self.grasp(p_actual)
-        target = self.move(delta_vec, lift)
+        target = self._move_prepared(delta_vec, lift)
         settle_converged = self.release()
         X_after = self.get_centerline()
         return {
