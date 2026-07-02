@@ -1,0 +1,11 @@
+smoke_mujoco seed=0 config=configs/smoke_mujoco.yaml
+mujoco_version=3.10.0 MUJOCO_GL=egl
+PASS 1 model compiles from generated MJCF — nbody=52 neq=50 nv=153
+PASS 2 MUJOCO_GL=egl headless render saved — path=outputs/plots/smoke_mujoco_frame.png bytes=32737
+PASS 3 centerline raw/resample shapes — raw=(50, 3) resampled=(32, 3)
+PASS 4 grasped node tracks mocap after move — distance=0.0019043 tolerance=0.03 target=[0.5, 0.005, 0.02]
+PASS 5 release settle qvel decays below threshold — max_abs_qvel=0.000993035 threshold=0.001 steps=2653
+PASS 6 2000 steps produce no NaN in qpos/qvel — steps=2000
+PASS 7 full step_primitive wall-time measured — primitive_wall_time_s=2.622185 settle_steps=2653
+meta_json=outputs/metrics/smoke_mujoco_meta.json
+SMOKE_MUJOCO PASS

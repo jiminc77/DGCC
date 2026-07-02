@@ -1,0 +1,4119 @@
+{
+  "aggregates": {
+    "dlolab": {
+      "nan_check_fail_count": 0,
+      "nan_check_pass_count": 30,
+      "primitive_count": 30,
+      "run_count": 15,
+      "settle_converged_count": 30,
+      "settle_convergence_rate": 1.0,
+      "settle_nonconverged_count": 0,
+      "settle_steps": {
+        "max": 3935.0,
+        "mean": 1471.7,
+        "min": 1043.0
+      },
+      "straightness_improvement_per_primitive": {
+        "max": 0.1968027789381207,
+        "mean": 0.010685591459783627,
+        "min": -0.5033611531324828
+      },
+      "straightness_improvement_per_sequence": {
+        "max": 0.27065968398064433,
+        "mean": 0.021371182919567255,
+        "min": -0.38586676001319575
+      },
+      "wall_time_s": {
+        "max": 11.996325021609664,
+        "mean": 4.772375723176325,
+        "min": 3.3770949468016624
+      }
+    },
+    "mujoco": {
+      "nan_check_fail_count": 0,
+      "nan_check_pass_count": 30,
+      "primitive_count": 30,
+      "run_count": 15,
+      "settle_converged_count": 0,
+      "settle_convergence_rate": 0.0,
+      "settle_nonconverged_count": 30,
+      "settle_steps": {
+        "max": 5000.0,
+        "mean": 5000.0,
+        "min": 5000.0
+      },
+      "straightness_improvement_per_primitive": {
+        "max": 0.16499299002197743,
+        "mean": 0.08059142347303973,
+        "min": -0.04222274794058534
+      },
+      "straightness_improvement_per_sequence": {
+        "max": 0.2454747984635579,
+        "mean": 0.1611828469460794,
+        "min": 0.11587339484690284
+      },
+      "wall_time_s": {
+        "max": 6.629255833104253,
+        "mean": 5.825551285517092,
+        "min": 5.000642360653728
+      }
+    }
+  },
+  "commit_hash": "4390ec79536473ca51e28ec61f07cdf91ba42113",
+  "config": {
+    "init_shape": "u_bend",
+    "outputs": {
+      "metrics_json": "outputs/metrics/sim_comparison_metrics.json",
+      "plots_dir": "outputs/plots",
+      "report_md": "outputs/reports/sim_comparison.md",
+      "stdout_log": "outputs/reports/compare_sims_stdout.log"
+    },
+    "plots": {
+      "seed_offset": 0,
+      "sequence_ids": [
+        "seq0_end_stretch_low",
+        "seq1_end_stretch_high_y_trim"
+      ]
+    },
+    "rope": {
+      "bend_stiffness": 1.0,
+      "friction": 1.0,
+      "length_m": 1.0,
+      "n_segments": 50,
+      "radius": 0.005,
+      "twist_stiffness": 1.0
+    },
+    "seed_offsets": [
+      0,
+      1,
+      2
+    ],
+    "sequences": [
+      {
+        "description": "Pull near-end nodes outward along x with low lifts.",
+        "id": "seq0_end_stretch_low",
+        "primitives": [
+          {
+            "delta": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "lift": "low",
+            "p": 4
+          },
+          {
+            "delta": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "lift": "low",
+            "p": 45
+          }
+        ]
+      },
+      {
+        "description": "High-lift end stretch with small opposing y trims.",
+        "id": "seq1_end_stretch_high_y_trim",
+        "primitives": [
+          {
+            "delta": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "lift": "high",
+            "p": 45
+          },
+          {
+            "delta": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "lift": "high",
+            "p": 4
+          }
+        ]
+      },
+      {
+        "description": "Pull the middle toward the centerline, then stretch the right side.",
+        "id": "seq2_midline_then_right",
+        "primitives": [
+          {
+            "delta": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "lift": "high",
+            "p": 25
+          },
+          {
+            "delta": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "lift": "low",
+            "p": 42
+          }
+        ]
+      },
+      {
+        "description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "id": "seq3_quarter_stretch_low",
+        "primitives": [
+          {
+            "delta": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "lift": "low",
+            "p": 12
+          },
+          {
+            "delta": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "lift": "low",
+            "p": 37
+          }
+        ]
+      },
+      {
+        "description": "Opposite middle trim followed by left-side stretch.",
+        "id": "seq4_midline_then_left",
+        "primitives": [
+          {
+            "delta": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "lift": "high",
+            "p": 25
+          },
+          {
+            "delta": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "lift": "low",
+            "p": 7
+          }
+        ]
+      }
+    ],
+    "simulators": {
+      "dlolab": {
+        "env": {
+          "dt": 0.001,
+          "initial_settle_steps": 20,
+          "move_hold_steps": 20,
+          "move_step_size": 0.002,
+          "reset_settle_max_steps": 1000,
+          "rod_angular_damping": 5.0,
+          "rod_damping": 10.0,
+          "substeps": 5
+        },
+        "init_shape": "u_bend"
+      },
+      "mujoco": {
+        "init_shape": "u_bend"
+      }
+    },
+    "thresholds": {
+      "settle_max_steps": 5000,
+      "settle_vel": 0.001
+    }
+  },
+  "config_path": "configs/compare_sims.yaml",
+  "outputs": {
+    "metrics_json": "outputs/metrics/sim_comparison_metrics.json",
+    "report_md": "outputs/reports/sim_comparison.md",
+    "stdout_log": "outputs/reports/compare_sims_stdout.log"
+  },
+  "plots": [
+    {
+      "path": "outputs/plots/compare_mujoco_seq0_end_stretch_low.png",
+      "seed": 0,
+      "sequence_id": "seq0_end_stretch_low",
+      "sim": "mujoco"
+    },
+    {
+      "path": "outputs/plots/compare_mujoco_seq1_end_stretch_high_y_trim.png",
+      "seed": 0,
+      "sequence_id": "seq1_end_stretch_high_y_trim",
+      "sim": "mujoco"
+    },
+    {
+      "path": "outputs/plots/compare_dlolab_seq0_end_stretch_low.png",
+      "seed": 0,
+      "sequence_id": "seq0_end_stretch_low",
+      "sim": "dlolab"
+    },
+    {
+      "path": "outputs/plots/compare_dlolab_seq1_end_stretch_high_y_trim.png",
+      "seed": 0,
+      "sequence_id": "seq1_end_stretch_high_y_trim",
+      "sim": "dlolab"
+    }
+  ],
+  "rope_params": {
+    "bend_stiffness": 1.0,
+    "friction": 1.0,
+    "length_m": 1.0,
+    "n_segments": 50,
+    "radius": 0.005,
+    "twist_stiffness": 1.0
+  },
+  "run_records": {
+    "dlolab": [
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000997439520731031,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": true,
+            "settle_steps": 1111,
+            "straightness_after": 0.7479232671195066,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.1418113373936648,
+            "target": [
+              -0.34698138654232025,
+              -0.014274911023676395,
+              0.02
+            ],
+            "wall_time_s": 3.6111115431413054
+          },
+          {
+            "delta_clamped": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009989331770962773,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": true,
+            "settle_steps": 1222,
+            "straightness_after": 0.8356039500039628,
+            "straightness_before": 0.7479232671195066,
+            "straightness_improvement": 0.08768068288445618,
+            "target": [
+              0.3438153964281082,
+              -0.022236088290810585,
+              0.02
+            ],
+            "wall_time_s": 3.88774082204327
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 12.525540358852595,
+        "seed": 0,
+        "sequence_description": "Pull near-end nodes outward along x with low lifts.",
+        "sequence_id": "seq0_end_stretch_low",
+        "sim": "dlolab",
+        "straightness_final": 0.8356039500039628,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.229492020278121
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "delta_requested": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009983847501320688,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": true,
+            "settle_steps": 1387,
+            "straightness_after": 0.669312019638727,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.06320008991288517,
+            "target": [
+              0.3330999171733856,
+              -0.057930544912815095,
+              0.15
+            ],
+            "wall_time_s": 4.588426934089512
+          },
+          {
+            "delta_clamped": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "delta_requested": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009997846522633192,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": true,
+            "settle_steps": 1314,
+            "straightness_after": 0.8563116806326256,
+            "straightness_before": 0.669312019638727,
+            "straightness_improvement": 0.18699966099389864,
+            "target": [
+              -0.3405811494588852,
+              0.016612800732254983,
+              0.15
+            ],
+            "wall_time_s": 4.558428301010281
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 7.620100158266723,
+        "seed": 0,
+        "sequence_description": "High-lift end stretch with small opposing y trims.",
+        "sequence_id": "seq1_end_stretch_high_y_trim",
+        "sim": "dlolab",
+        "straightness_final": 0.8563116806326256,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.2501997509067838
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.000993693255773354,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": true,
+            "settle_steps": 1510,
+            "straightness_after": 0.5110215916609918,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.09509033806485001,
+            "target": [
+              0.01052993442863226,
+              0.11944301903247834,
+              0.15
+            ],
+            "wall_time_s": 4.933684840332717
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000995295855992858,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 42,
+            "settle_converged": true,
+            "settle_steps": 3018,
+            "straightness_after": 0.5293759324843696,
+            "straightness_before": 0.5110215916609918,
+            "straightness_improvement": 0.018354340823377835,
+            "target": [
+              0.2723690032958984,
+              0.07194651663303375,
+              0.02
+            ],
+            "wall_time_s": 9.185521395877004
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 7.642755035776645,
+        "seed": 0,
+        "sequence_description": "Pull the middle toward the centerline, then stretch the right side.",
+        "sequence_id": "seq2_midline_then_right",
+        "sim": "dlolab",
+        "straightness_final": 0.5293759324843696,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.07673599724147218
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009998171848051198,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 12,
+            "settle_converged": true,
+            "settle_steps": 1043,
+            "straightness_after": 0.6396984216292336,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.0335864919033918,
+            "target": [
+              -0.1847761556506157,
+              0.047942402288317684,
+              0.02
+            ],
+            "wall_time_s": 3.3770949468016624
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000998734909621931,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 37,
+            "settle_converged": true,
+            "settle_steps": 1253,
+            "straightness_after": 0.7096930544017482,
+            "straightness_before": 0.6396984216292336,
+            "straightness_improvement": 0.06999463277251461,
+            "target": [
+              0.20425768792629242,
+              0.03527817457914352,
+              0.02
+            ],
+            "wall_time_s": 4.0043831137008965
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 7.650695401709527,
+        "seed": 0,
+        "sequence_description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "sequence_id": "seq3_quarter_stretch_low",
+        "sim": "dlolab",
+        "straightness_final": 0.7096930544017482,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.10358112467590641
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009986046320622241,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": true,
+            "settle_steps": 1192,
+            "straightness_after": 0.10275077659335907,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.5033611531324828,
+            "target": [
+              0.01052993442863226,
+              0.35944301903247833,
+              0.15
+            ],
+            "wall_time_s": 4.027849264908582
+          },
+          {
+            "delta_clamped": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009994375725931536,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 7,
+            "settle_converged": true,
+            "settle_steps": 1662,
+            "straightness_after": 0.22165423820611685,
+            "straightness_before": 0.10275077659335907,
+            "straightness_improvement": 0.11890346161275778,
+            "target": [
+              -0.19874306619167328,
+              0.17222760617733002,
+              0.02
+            ],
+            "wall_time_s": 5.194836379960179
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 7.839423330035061,
+        "seed": 0,
+        "sequence_description": "Opposite middle trim followed by left-side stretch.",
+        "sequence_id": "seq4_midline_then_left",
+        "sim": "dlolab",
+        "straightness_final": 0.22165423820611685,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.384457691519725
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000997439520731031,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": true,
+            "settle_steps": 1111,
+            "straightness_after": 0.7479232671195066,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.1418113373936648,
+            "target": [
+              -0.34698138654232025,
+              0.014274911023676395,
+              0.02
+            ],
+            "wall_time_s": 3.6176642440259457
+          },
+          {
+            "delta_clamped": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009989331770962773,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": true,
+            "settle_steps": 1222,
+            "straightness_after": 0.8356039500039628,
+            "straightness_before": 0.7479232671195066,
+            "straightness_improvement": 0.08768068288445618,
+            "target": [
+              0.3438153964281082,
+              0.022236088290810585,
+              0.02
+            ],
+            "wall_time_s": 3.9478489058092237
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.73616244411096,
+        "seed": 1,
+        "sequence_description": "Pull near-end nodes outward along x with low lifts.",
+        "sequence_id": "seq0_end_stretch_low",
+        "sim": "dlolab",
+        "straightness_final": 0.8356039500039628,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.229492020278121
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "delta_requested": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009983847501320688,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": true,
+            "settle_steps": 1300,
+            "straightness_after": 0.8029147086639625,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.1968027789381207,
+            "target": [
+              0.3330999171733856,
+              -0.022069455087184907,
+              0.15
+            ],
+            "wall_time_s": 4.402722142636776
+          },
+          {
+            "delta_clamped": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "delta_requested": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009969747261885196,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": true,
+            "settle_steps": 1357,
+            "straightness_after": 0.8767716137064862,
+            "straightness_before": 0.8029147086639625,
+            "straightness_improvement": 0.07385690504252362,
+            "target": [
+              -0.339835644364357,
+              0.059019104540348054,
+              0.15
+            ],
+            "wall_time_s": 4.545242907945067
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.776930965017527,
+        "seed": 1,
+        "sequence_description": "High-lift end stretch with small opposing y trims.",
+        "sequence_id": "seq1_end_stretch_high_y_trim",
+        "sim": "dlolab",
+        "straightness_final": 0.8767716137064862,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.27065968398064433
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009986046320622241,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": true,
+            "settle_steps": 1192,
+            "straightness_after": 0.10275077659335907,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.5033611531324828,
+            "target": [
+              0.01052993442863226,
+              -0.35944301903247833,
+              0.15
+            ],
+            "wall_time_s": 4.091450904961675
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000958538621575112,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 42,
+            "settle_converged": true,
+            "settle_steps": 1609,
+            "straightness_after": 0.2731665557146745,
+            "straightness_before": 0.10275077659335907,
+            "straightness_improvement": 0.17041577912131545,
+            "target": [
+              0.20833530873060227,
+              -0.18873420357704163,
+              0.02
+            ],
+            "wall_time_s": 5.127530941274017
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 10.005002244841307,
+        "seed": 1,
+        "sequence_description": "Pull the middle toward the centerline, then stretch the right side.",
+        "sequence_id": "seq2_midline_then_right",
+        "sim": "dlolab",
+        "straightness_final": 0.2731665557146745,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.3329453740111673
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000999082233396189,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 12,
+            "settle_converged": true,
+            "settle_steps": 1146,
+            "straightness_after": 0.6022431655608106,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.0038687641650312354,
+            "target": [
+              -0.1847761556506157,
+              -0.00794240228831768,
+              0.02
+            ],
+            "wall_time_s": 3.726318638306111
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009981729661982456,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 37,
+            "settle_converged": true,
+            "settle_steps": 1080,
+            "straightness_after": 0.5977534993545248,
+            "straightness_before": 0.6022431655608106,
+            "straightness_improvement": -0.0044896662062857695,
+            "target": [
+              0.21437688767910004,
+              -0.0892121833562851,
+              0.02
+            ],
+            "wall_time_s": 3.5354009228758514
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.781895806081593,
+        "seed": 1,
+        "sequence_description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "sequence_id": "seq3_quarter_stretch_low",
+        "sim": "dlolab",
+        "straightness_final": 0.5977534993545248,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.008358430371317005
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.000993693255773354,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": true,
+            "settle_steps": 1510,
+            "straightness_after": 0.5110215916609918,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.09509033806485001,
+            "target": [
+              0.01052993442863226,
+              -0.11944301903247834,
+              0.15
+            ],
+            "wall_time_s": 5.013408234808594
+          },
+          {
+            "delta_clamped": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009688468887610223,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 7,
+            "settle_converged": true,
+            "settle_steps": 3935,
+            "straightness_after": 0.5268466734725011,
+            "straightness_before": 0.5110215916609918,
+            "straightness_improvement": 0.015825081811509323,
+            "target": [
+              -0.2715622395277023,
+              -0.06290271878242493,
+              0.02
+            ],
+            "wall_time_s": 11.996325021609664
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.815211982931942,
+        "seed": 1,
+        "sequence_description": "Opposite middle trim followed by left-side stretch.",
+        "sequence_id": "seq4_midline_then_left",
+        "sim": "dlolab",
+        "straightness_final": 0.5268466734725011,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.07926525625334069
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000997439520731031,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": true,
+            "settle_steps": 1111,
+            "straightness_after": 0.7479232671195066,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.1418113373936648,
+            "target": [
+              -0.34698138654232025,
+              -0.014274911023676395,
+              0.02
+            ],
+            "wall_time_s": 3.651082697790116
+          },
+          {
+            "delta_clamped": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009989331770962773,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": true,
+            "settle_steps": 1222,
+            "straightness_after": 0.8356039500039628,
+            "straightness_before": 0.7479232671195066,
+            "straightness_improvement": 0.08768068288445618,
+            "target": [
+              0.3438153964281082,
+              -0.022236088290810585,
+              0.02
+            ],
+            "wall_time_s": 3.974357344675809
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.993739387951791,
+        "seed": 2,
+        "sequence_description": "Pull near-end nodes outward along x with low lifts.",
+        "sequence_id": "seq0_end_stretch_low",
+        "sim": "dlolab",
+        "straightness_final": 0.8356039500039628,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.229492020278121
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "delta_requested": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009983847501320688,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": true,
+            "settle_steps": 1387,
+            "straightness_after": 0.669312019638727,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.06320008991288517,
+            "target": [
+              0.3330999171733856,
+              -0.057930544912815095,
+              0.15
+            ],
+            "wall_time_s": 4.638516407925636
+          },
+          {
+            "delta_clamped": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "delta_requested": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009997846522633192,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": true,
+            "settle_steps": 1314,
+            "straightness_after": 0.8563116806326256,
+            "straightness_before": 0.669312019638727,
+            "straightness_improvement": 0.18699966099389864,
+            "target": [
+              -0.3405811494588852,
+              0.016612800732254983,
+              0.15
+            ],
+            "wall_time_s": 4.4198862155899405
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.823964373208582,
+        "seed": 2,
+        "sequence_description": "High-lift end stretch with small opposing y trims.",
+        "sequence_id": "seq1_end_stretch_high_y_trim",
+        "sim": "dlolab",
+        "straightness_final": 0.8563116806326256,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.2501997509067838
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.000993693255773354,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": true,
+            "settle_steps": 1510,
+            "straightness_after": 0.5110215916609918,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.09509033806485001,
+            "target": [
+              0.01052993442863226,
+              0.11944301903247834,
+              0.15
+            ],
+            "wall_time_s": 5.035377339925617
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000995295855992858,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 42,
+            "settle_converged": true,
+            "settle_steps": 3018,
+            "straightness_after": 0.5293759324843696,
+            "straightness_before": 0.5110215916609918,
+            "straightness_improvement": 0.018354340823377835,
+            "target": [
+              0.2723690032958984,
+              0.07194651663303375,
+              0.02
+            ],
+            "wall_time_s": 9.322875344194472
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.828736395109445,
+        "seed": 2,
+        "sequence_description": "Pull the middle toward the centerline, then stretch the right side.",
+        "sequence_id": "seq2_midline_then_right",
+        "sim": "dlolab",
+        "straightness_final": 0.5293759324843696,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.07673599724147218
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009998171848051198,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 12,
+            "settle_converged": true,
+            "settle_steps": 1043,
+            "straightness_after": 0.6396984216292336,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": 0.0335864919033918,
+            "target": [
+              -0.1847761556506157,
+              0.047942402288317684,
+              0.02
+            ],
+            "wall_time_s": 3.4819712531752884
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.0009944240129243556,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 37,
+            "settle_converged": true,
+            "settle_steps": 1132,
+            "straightness_after": 0.7079288088665594,
+            "straightness_before": 0.6396984216292336,
+            "straightness_improvement": 0.06823038723732577,
+            "target": [
+              0.20425768792629242,
+              0.03527817457914352,
+              0.02
+            ],
+            "wall_time_s": 3.7506927279755473
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 10.086761687882245,
+        "seed": 2,
+        "sequence_description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "sequence_id": "seq3_quarter_stretch_low",
+        "sim": "dlolab",
+        "straightness_final": 0.7079288088665594,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": 0.10181687914071758
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_node_speed": 0.0009986046320622241,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": true,
+            "settle_steps": 1192,
+            "straightness_after": 0.10275077659335907,
+            "straightness_before": 0.6061119297258418,
+            "straightness_improvement": -0.5033611531324828,
+            "target": [
+              0.01052993442863226,
+              0.35944301903247833,
+              0.15
+            ],
+            "wall_time_s": 4.095204278826714
+          },
+          {
+            "delta_clamped": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_node_speed": 0.000998865170190113,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 7,
+            "settle_converged": true,
+            "settle_steps": 1048,
+            "straightness_after": 0.22024516971264607,
+            "straightness_before": 0.10275077659335907,
+            "straightness_improvement": 0.117494393119287,
+            "target": [
+              -0.19874306619167328,
+              0.17222760617733002,
+              0.02
+            ],
+            "wall_time_s": 3.428317679092288
+          }
+        ],
+        "reset_info": {
+          "backend": "2",
+          "bent_reset_converged": false,
+          "init_shape": "u_bend",
+          "interval_m": 0.02040816326530612,
+          "length_m": 1.0,
+          "mapped_parameters": {
+            "bending_stiffness_E": 100000.0,
+            "mu_k": 0.24,
+            "mu_s": 0.3,
+            "segment_mass": 0.001,
+            "segment_radius": 0.005,
+            "stretching_stiffness_K": 800000.0,
+            "twisting_stiffness_G": 10000.0
+          },
+          "n_envs": 1,
+          "n_vertices": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "show_viewer": false,
+          "sim": "dlolab",
+          "stiffness_bases": {
+            "bend_base_E": 100000.0,
+            "mu_k_ratio": 0.8,
+            "mu_s_base": 0.3,
+            "segment_mass_base": 0.001,
+            "stretch_base_K": 800000.0,
+            "twist_base_G": 10000.0
+          }
+        },
+        "reset_wall_time_s": 9.903546600136906,
+        "seed": 2,
+        "sequence_description": "Opposite middle trim followed by left-side stretch.",
+        "sequence_id": "seq4_midline_then_left",
+        "sim": "dlolab",
+        "straightness_final": 0.22024516971264607,
+        "straightness_initial": 0.6061119297258418,
+        "straightness_sequence_improvement": -0.38586676001319575
+      }
+    ],
+    "mujoco": [
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.009167306140622998,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7047760603782239,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.08078181520567573,
+            "target": [
+              -0.04057411050401405,
+              0.007662120036070093,
+              0.02
+            ],
+            "wall_time_s": 6.299301079940051
+          },
+          {
+            "delta_clamped": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.00709366731792665,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7843698989516436,
+            "straightness_before": 0.7047760603782239,
+            "straightness_improvement": 0.07959383857341962,
+            "target": [
+              0.2264547211007853,
+              0.6089934881195649,
+              0.02
+            ],
+            "wall_time_s": 6.544420205056667
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.014012659899890423,
+        "seed": 0,
+        "sequence_description": "Pull near-end nodes outward along x with low lifts.",
+        "sequence_id": "seq0_end_stretch_low",
+        "sim": "mujoco",
+        "straightness_final": 0.7843698989516436,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.16037565377909535
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "delta_requested": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.003702239244637441,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7632304752459531,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.1392362300734049,
+            "target": [
+              0.20877181226475755,
+              0.5709384289451412,
+              0.15
+            ],
+            "wall_time_s": 5.018150956835598
+          },
+          {
+            "delta_clamped": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "delta_requested": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.00785016927727373,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7902704587949065,
+            "straightness_before": 0.7632304752459531,
+            "straightness_improvement": 0.027039983548953428,
+            "target": [
+              -0.033173777299910764,
+              0.027266049838781684,
+              0.15
+            ],
+            "wall_time_s": 5.136206132825464
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.011044851038604975,
+        "seed": 0,
+        "sequence_description": "High-lift end stretch with small opposing y trims.",
+        "sequence_id": "seq1_end_stretch_high_y_trim",
+        "sim": "mujoco",
+        "straightness_final": 0.7902704587949065,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.16627621362235834
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.009971167518586134,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7889872351945256,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.16499299002197743,
+            "target": [
+              0.3219971230462256,
+              0.19183682440242367,
+              0.15
+            ],
+            "wall_time_s": 5.249372457154095
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.013671073990770196,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 42,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.8694690436361061,
+            "straightness_before": 0.7889872351945256,
+            "straightness_improvement": 0.08048180844158048,
+            "target": [
+              0.3560022148974308,
+              0.4975181579914853,
+              0.02
+            ],
+            "wall_time_s": 6.22506750933826
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010830212384462357,
+        "seed": 0,
+        "sequence_description": "Pull the middle toward the centerline, then stretch the right side.",
+        "sequence_id": "seq2_midline_then_right",
+        "sim": "mujoco",
+        "straightness_final": 0.8694690436361061,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.2454747984635579
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.004674193822320149,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 12,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.6943555599953298,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.07036131482278163,
+            "target": [
+              0.11975593980850174,
+              0.10087221526021678,
+              0.02
+            ],
+            "wall_time_s": 6.030696047935635
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.011574314928692701,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 37,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.739867640019451,
+            "straightness_before": 0.6943555599953298,
+            "straightness_improvement": 0.045512080024121215,
+            "target": [
+              0.3377982601807827,
+              0.49854230922010323,
+              0.02
+            ],
+            "wall_time_s": 5.951117854099721
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010675645899027586,
+        "seed": 0,
+        "sequence_description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "sequence_id": "seq3_quarter_stretch_low",
+        "sim": "mujoco",
+        "straightness_final": 0.739867640019451,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.11587339484690284
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.0073483670193197565,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7841311671316162,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.16013692195906803,
+            "target": [
+              0.3219971230462256,
+              0.43183682440242366,
+              0.15
+            ],
+            "wall_time_s": 5.477386798709631
+          },
+          {
+            "delta_clamped": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.021624865289132666,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 7,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7419084191910309,
+            "straightness_before": 0.7841311671316162,
+            "straightness_improvement": -0.04222274794058534,
+            "target": [
+              0.16171121780646028,
+              0.0983381195348177,
+              0.02
+            ],
+            "wall_time_s": 6.432934786193073
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 0,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010538289789110422,
+        "seed": 0,
+        "sequence_description": "Opposite middle trim followed by left-side stretch.",
+        "sequence_id": "seq4_midline_then_left",
+        "sim": "mujoco",
+        "straightness_final": 0.7419084191910309,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.1179141740184827
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.009167306140622998,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7047760603782239,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.08078181520567573,
+            "target": [
+              -0.04057411050401405,
+              0.007662120036070093,
+              0.02
+            ],
+            "wall_time_s": 6.348492003977299
+          },
+          {
+            "delta_clamped": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.00709366731792665,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7843698989516436,
+            "straightness_before": 0.7047760603782239,
+            "straightness_improvement": 0.07959383857341962,
+            "target": [
+              0.2264547211007853,
+              0.6089934881195649,
+              0.02
+            ],
+            "wall_time_s": 6.59728843672201
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010620262008160353,
+        "seed": 1,
+        "sequence_description": "Pull near-end nodes outward along x with low lifts.",
+        "sequence_id": "seq0_end_stretch_low",
+        "sim": "mujoco",
+        "straightness_final": 0.7843698989516436,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.16037565377909535
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "delta_requested": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.003702239244637441,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7632304752459531,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.1392362300734049,
+            "target": [
+              0.20877181226475755,
+              0.5709384289451412,
+              0.15
+            ],
+            "wall_time_s": 5.000642360653728
+          },
+          {
+            "delta_clamped": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "delta_requested": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.00785016927727373,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7902704587949065,
+            "straightness_before": 0.7632304752459531,
+            "straightness_improvement": 0.027039983548953428,
+            "target": [
+              -0.033173777299910764,
+              0.027266049838781684,
+              0.15
+            ],
+            "wall_time_s": 5.296318698208779
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010721296072006226,
+        "seed": 1,
+        "sequence_description": "High-lift end stretch with small opposing y trims.",
+        "sequence_id": "seq1_end_stretch_high_y_trim",
+        "sim": "mujoco",
+        "straightness_final": 0.7902704587949065,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.16627621362235834
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.009971167518586134,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7889872351945256,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.16499299002197743,
+            "target": [
+              0.3219971230462256,
+              0.19183682440242367,
+              0.15
+            ],
+            "wall_time_s": 5.326888893265277
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.013671073990770196,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 42,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.8694690436361061,
+            "straightness_before": 0.7889872351945256,
+            "straightness_improvement": 0.08048180844158048,
+            "target": [
+              0.3560022148974308,
+              0.4975181579914853,
+              0.02
+            ],
+            "wall_time_s": 6.2631806819699705
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010611811187118292,
+        "seed": 1,
+        "sequence_description": "Pull the middle toward the centerline, then stretch the right side.",
+        "sequence_id": "seq2_midline_then_right",
+        "sim": "mujoco",
+        "straightness_final": 0.8694690436361061,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.2454747984635579
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.004674193822320149,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 12,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.6943555599953298,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.07036131482278163,
+            "target": [
+              0.11975593980850174,
+              0.10087221526021678,
+              0.02
+            ],
+            "wall_time_s": 5.956618600990623
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.011574314928692701,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 37,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.739867640019451,
+            "straightness_before": 0.6943555599953298,
+            "straightness_improvement": 0.045512080024121215,
+            "target": [
+              0.3377982601807827,
+              0.49854230922010323,
+              0.02
+            ],
+            "wall_time_s": 5.757935380097479
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010507637169212103,
+        "seed": 1,
+        "sequence_description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "sequence_id": "seq3_quarter_stretch_low",
+        "sim": "mujoco",
+        "straightness_final": 0.739867640019451,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.11587339484690284
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.0073483670193197565,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7841311671316162,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.16013692195906803,
+            "target": [
+              0.3219971230462256,
+              0.43183682440242366,
+              0.15
+            ],
+            "wall_time_s": 5.435309805907309
+          },
+          {
+            "delta_clamped": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.021624865289132666,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 7,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7419084191910309,
+            "straightness_before": 0.7841311671316162,
+            "straightness_improvement": -0.04222274794058534,
+            "target": [
+              0.16171121780646028,
+              0.0983381195348177,
+              0.02
+            ],
+            "wall_time_s": 6.275143662001938
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 1,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.01060832990333438,
+        "seed": 1,
+        "sequence_description": "Opposite middle trim followed by left-side stretch.",
+        "sequence_id": "seq4_midline_then_left",
+        "sim": "mujoco",
+        "straightness_final": 0.7419084191910309,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.1179141740184827
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.009167306140622998,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7047760603782239,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.08078181520567573,
+            "target": [
+              -0.04057411050401405,
+              0.007662120036070093,
+              0.02
+            ],
+            "wall_time_s": 6.3190230298787355
+          },
+          {
+            "delta_clamped": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.12,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.00709366731792665,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7843698989516436,
+            "straightness_before": 0.7047760603782239,
+            "straightness_improvement": 0.07959383857341962,
+            "target": [
+              0.2264547211007853,
+              0.6089934881195649,
+              0.02
+            ],
+            "wall_time_s": 6.629255833104253
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010453484021127224,
+        "seed": 2,
+        "sequence_description": "Pull near-end nodes outward along x with low lifts.",
+        "sequence_id": "seq0_end_stretch_low",
+        "sim": "mujoco",
+        "straightness_final": 0.7843698989516436,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.16037565377909535
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "delta_requested": [
+              0.11,
+              -0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.003702239244637441,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 45,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7632304752459531,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.1392362300734049,
+            "target": [
+              0.20877181226475755,
+              0.5709384289451412,
+              0.15
+            ],
+            "wall_time_s": 5.059535639826208
+          },
+          {
+            "delta_clamped": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "delta_requested": [
+              -0.11,
+              0.04,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.00785016927727373,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 4,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7902704587949065,
+            "straightness_before": 0.7632304752459531,
+            "straightness_improvement": 0.027039983548953428,
+            "target": [
+              -0.033173777299910764,
+              0.027266049838781684,
+              0.15
+            ],
+            "wall_time_s": 5.12999972095713
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010536547284573317,
+        "seed": 2,
+        "sequence_description": "High-lift end stretch with small opposing y trims.",
+        "sequence_id": "seq1_end_stretch_high_y_trim",
+        "sim": "mujoco",
+        "straightness_final": 0.7902704587949065,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.16627621362235834
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              -0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.009971167518586134,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7889872351945256,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.16499299002197743,
+            "target": [
+              0.3219971230462256,
+              0.19183682440242367,
+              0.15
+            ],
+            "wall_time_s": 5.286284336820245
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.013671073990770196,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 42,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.8694690436361061,
+            "straightness_before": 0.7889872351945256,
+            "straightness_improvement": 0.08048180844158048,
+            "target": [
+              0.3560022148974308,
+              0.4975181579914853,
+              0.02
+            ],
+            "wall_time_s": 6.150055204052478
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010621780063956976,
+        "seed": 2,
+        "sequence_description": "Pull the middle toward the centerline, then stretch the right side.",
+        "sequence_id": "seq2_midline_then_right",
+        "sim": "mujoco",
+        "straightness_final": 0.8694690436361061,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.2454747984635579
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.004674193822320149,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 12,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.6943555599953298,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.07036131482278163,
+            "target": [
+              0.11975593980850174,
+              0.10087221526021678,
+              0.02
+            ],
+            "wall_time_s": 6.040771482978016
+          },
+          {
+            "delta_clamped": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "delta_requested": [
+              0.1,
+              -0.02,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.011574314928692701,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 37,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.739867640019451,
+            "straightness_before": 0.6943555599953298,
+            "straightness_improvement": 0.045512080024121215,
+            "target": [
+              0.3377982601807827,
+              0.49854230922010323,
+              0.02
+            ],
+            "wall_time_s": 5.888939226046205
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.01052168570458889,
+        "seed": 2,
+        "sequence_description": "Low-lift quarter-node pulls to reduce curvature while stretching.",
+        "sequence_id": "seq3_quarter_stretch_low",
+        "sim": "mujoco",
+        "straightness_final": 0.739867640019451,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.11587339484690284
+      },
+      {
+        "init_shape": "u_bend",
+        "no_nan_final": true,
+        "no_nan_initial": true,
+        "primitive_records": [
+          {
+            "delta_clamped": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "delta_requested": [
+              0.0,
+              0.12,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "high",
+            "max_abs_qvel": 0.0073483670193197565,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 25,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7841311671316162,
+            "straightness_before": 0.6239942451725482,
+            "straightness_improvement": 0.16013692195906803,
+            "target": [
+              0.3219971230462256,
+              0.43183682440242366,
+              0.15
+            ],
+            "wall_time_s": 5.412218040786684
+          },
+          {
+            "delta_clamped": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "delta_requested": [
+              -0.1,
+              0.0,
+              0.0
+            ],
+            "grasp_success": true,
+            "lift": "low",
+            "max_abs_qvel": 0.021624865289132666,
+            "no_nan": true,
+            "no_nan_after": true,
+            "no_nan_before": true,
+            "p": 7,
+            "settle_converged": false,
+            "settle_steps": 5000,
+            "straightness_after": 0.7419084191910309,
+            "straightness_before": 0.7841311671316162,
+            "straightness_improvement": -0.04222274794058534,
+            "target": [
+              0.16171121780646028,
+              0.0983381195348177,
+              0.02
+            ],
+            "wall_time_s": 6.227983699180186
+          }
+        ],
+        "reset_info": {
+          "body_names": [
+            "ropeB_first",
+            "ropeB_1",
+            "ropeB_2",
+            "ropeB_3",
+            "ropeB_4",
+            "ropeB_5",
+            "ropeB_6",
+            "ropeB_7",
+            "ropeB_8",
+            "ropeB_9",
+            "ropeB_10",
+            "ropeB_11",
+            "ropeB_12",
+            "ropeB_13",
+            "ropeB_14",
+            "ropeB_15",
+            "ropeB_16",
+            "ropeB_17",
+            "ropeB_18",
+            "ropeB_19",
+            "ropeB_20",
+            "ropeB_21",
+            "ropeB_22",
+            "ropeB_23",
+            "ropeB_24",
+            "ropeB_25",
+            "ropeB_26",
+            "ropeB_27",
+            "ropeB_28",
+            "ropeB_29",
+            "ropeB_30",
+            "ropeB_31",
+            "ropeB_32",
+            "ropeB_33",
+            "ropeB_34",
+            "ropeB_35",
+            "ropeB_36",
+            "ropeB_37",
+            "ropeB_38",
+            "ropeB_39",
+            "ropeB_40",
+            "ropeB_41",
+            "ropeB_42",
+            "ropeB_43",
+            "ropeB_44",
+            "ropeB_45",
+            "ropeB_46",
+            "ropeB_47",
+            "ropeB_48",
+            "ropeB_last"
+          ],
+          "init_shape": "u_bend",
+          "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+          "mujoco_version": "3.10.0",
+          "n_rope_bodies": 50,
+          "rope_params": {
+            "bend_stiffness": 1.0,
+            "friction": 1.0,
+            "length_m": 1.0,
+            "n_segments": 50,
+            "radius": 0.005,
+            "twist_stiffness": 1.0
+          },
+          "seed": 2,
+          "sim": "mujoco"
+        },
+        "reset_wall_time_s": 0.010736634954810143,
+        "seed": 2,
+        "sequence_description": "Opposite middle trim followed by left-side stretch.",
+        "sequence_id": "seq4_midline_then_left",
+        "sim": "mujoco",
+        "straightness_final": 0.7419084191910309,
+        "straightness_initial": 0.6239942451725482,
+        "straightness_sequence_improvement": 0.1179141740184827
+      }
+    ]
+  },
+  "schema_version": 1,
+  "seed_base": 0,
+  "seed_offsets": [
+    0,
+    1,
+    2
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ]
+}

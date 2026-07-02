@@ -1,0 +1,29 @@
+rope:
+  length_m: 1.0
+  n_segments: 50
+  bend_stiffness: 1.0
+  twist_stiffness: 1.0
+  friction: 1.0
+  radius: 0.005
+init_shape: bent
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 20
+  reset_settle_max_steps: 1000
+  move_step_size: 0.002
+  move_hold_steps: 20
+primitive:
+  p: 25
+  delta: [0.08, -0.04, 0.0]
+  lift: high
+thresholds:
+  track_distance_m: 0.01
+  settle_vel: 0.001
+  settle_max_steps: 12000
+  nan_steps: 2000
+outputs:
+  stdout_log: outputs/reports/smoke_dlolab_stdout.log
+  meta_json: outputs/metrics/smoke_dlolab_meta.json

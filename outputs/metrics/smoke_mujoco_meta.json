@@ -1,0 +1,120 @@
+{
+  "commit_hash": "4390ec79536473ca51e28ec61f07cdf91ba42113",
+  "config": {
+    "init_shape": "straight",
+    "outputs": {
+      "frame_png": "outputs/plots/smoke_mujoco_frame.png",
+      "meta_json": "outputs/metrics/smoke_mujoco_meta.json",
+      "stdout_log": "outputs/reports/smoke_mujoco_stdout.log"
+    },
+    "physics": {
+      "air_viscosity": 0.0,
+      "gravity": [
+        0.0,
+        0.0,
+        -9.81
+      ],
+      "ground_z": 0.0
+    },
+    "primitive": {
+      "delta": [
+        0.0,
+        0.005,
+        0.0
+      ],
+      "lift": "low",
+      "p": 25
+    },
+    "render": {
+      "height": 480,
+      "width": 640
+    },
+    "rope": {
+      "bend_stiffness": 1.0,
+      "friction": 0.3,
+      "length_m": 1.0,
+      "n_segments": 50,
+      "radius": 0.005,
+      "twist_stiffness": 1.0
+    },
+    "seed": 0,
+    "thresholds": {
+      "nan_steps": 2000,
+      "settle_max_steps": 5000,
+      "settle_qvel": 0.001,
+      "track_distance_m": 0.03
+    }
+  },
+  "mujoco_version": "3.10.0",
+  "primitive_wall_time_s": 2.6221850621514022,
+  "reset_info": {
+    "body_names": [
+      "ropeB_first",
+      "ropeB_1",
+      "ropeB_2",
+      "ropeB_3",
+      "ropeB_4",
+      "ropeB_5",
+      "ropeB_6",
+      "ropeB_7",
+      "ropeB_8",
+      "ropeB_9",
+      "ropeB_10",
+      "ropeB_11",
+      "ropeB_12",
+      "ropeB_13",
+      "ropeB_14",
+      "ropeB_15",
+      "ropeB_16",
+      "ropeB_17",
+      "ropeB_18",
+      "ropeB_19",
+      "ropeB_20",
+      "ropeB_21",
+      "ropeB_22",
+      "ropeB_23",
+      "ropeB_24",
+      "ropeB_25",
+      "ropeB_26",
+      "ropeB_27",
+      "ropeB_28",
+      "ropeB_29",
+      "ropeB_30",
+      "ropeB_31",
+      "ropeB_32",
+      "ropeB_33",
+      "ropeB_34",
+      "ropeB_35",
+      "ropeB_36",
+      "ropeB_37",
+      "ropeB_38",
+      "ropeB_39",
+      "ropeB_40",
+      "ropeB_41",
+      "ropeB_42",
+      "ropeB_43",
+      "ropeB_44",
+      "ropeB_45",
+      "ropeB_46",
+      "ropeB_47",
+      "ropeB_48",
+      "ropeB_last"
+    ],
+    "init_shape": "straight",
+    "mjcf_note": "MuJoCo 3.10 cable composite uses count=n_segments+1 to expose n_segments body samples.",
+    "mujoco_version": "3.10.0",
+    "n_rope_bodies": 50,
+    "rope_params": {
+      "bend_stiffness": 1.0,
+      "friction": 0.3,
+      "length_m": 1.0,
+      "n_segments": 50,
+      "radius": 0.005,
+      "twist_stiffness": 1.0
+    },
+    "seed": 0,
+    "sim": "mujoco"
+  },
+  "seed": 0,
+  "smoke_passed": true
+}

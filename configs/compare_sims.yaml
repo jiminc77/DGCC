@@ -1,0 +1,60 @@
+seed_offsets: [0, 1, 2]
+rope:
+  length_m: 1.0
+  n_segments: 50
+  bend_stiffness: 1.0
+  twist_stiffness: 1.0
+  friction: 1.0
+  radius: 0.005
+init_shape: u_bend
+thresholds:
+  settle_vel: 0.001
+  settle_max_steps: 5000
+simulators:
+  mujoco:
+    init_shape: u_bend
+  dlolab:
+    init_shape: u_bend
+    env:
+      dt: 0.001
+      substeps: 5
+      rod_damping: 10.0
+      rod_angular_damping: 5.0
+      initial_settle_steps: 20
+      reset_settle_max_steps: 1000
+      move_step_size: 0.002
+      move_hold_steps: 20
+sequences:
+  - id: seq0_end_stretch_low
+    description: Pull near-end nodes outward along x with low lifts.
+    primitives:
+      - {p: 4, delta: [-0.12, 0.0, 0.0], lift: low}
+      - {p: 45, delta: [0.12, 0.0, 0.0], lift: low}
+  - id: seq1_end_stretch_high_y_trim
+    description: High-lift end stretch with small opposing y trims.
+    primitives:
+      - {p: 45, delta: [0.11, -0.04, 0.0], lift: high}
+      - {p: 4, delta: [-0.11, 0.04, 0.0], lift: high}
+  - id: seq2_midline_then_right
+    description: Pull the middle toward the centerline, then stretch the right side.
+    primitives:
+      - {p: 25, delta: [0.0, -0.12, 0.0], lift: high}
+      - {p: 42, delta: [0.10, 0.0, 0.0], lift: low}
+  - id: seq3_quarter_stretch_low
+    description: Low-lift quarter-node pulls to reduce curvature while stretching.
+    primitives:
+      - {p: 12, delta: [-0.10, 0.02, 0.0], lift: low}
+      - {p: 37, delta: [0.10, -0.02, 0.0], lift: low}
+  - id: seq4_midline_then_left
+    description: Opposite middle trim followed by left-side stretch.
+    primitives:
+      - {p: 25, delta: [0.0, 0.12, 0.0], lift: high}
+      - {p: 7, delta: [-0.10, 0.0, 0.0], lift: low}
+plots:
+  sequence_ids: [seq0_end_stretch_low, seq1_end_stretch_high_y_trim]
+  seed_offset: 0
+outputs:
+  metrics_json: outputs/metrics/sim_comparison_metrics.json
+  report_md: outputs/reports/sim_comparison.md
+  stdout_log: outputs/reports/compare_sims_stdout.log
+  plots_dir: outputs/plots

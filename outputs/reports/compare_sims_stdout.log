@@ -1,0 +1,38 @@
+compare_sims config=configs/compare_sims.yaml seed_base=0 seeds=[0, 1, 2]
+rope_params={'length_m': 1.0, 'n_segments': 50, 'bend_stiffness': 1.0, 'twist_stiffness': 1.0, 'friction': 1.0, 'radius': 0.005}
+RUN sim=mujoco seed=0 seq=seq0_end_stretch_low primitives=2 converged=0/2 straightness=0.6240->0.7844
+RUN sim=mujoco seed=0 seq=seq1_end_stretch_high_y_trim primitives=2 converged=0/2 straightness=0.6240->0.7903
+RUN sim=mujoco seed=0 seq=seq2_midline_then_right primitives=2 converged=0/2 straightness=0.6240->0.8695
+RUN sim=mujoco seed=0 seq=seq3_quarter_stretch_low primitives=2 converged=0/2 straightness=0.6240->0.7399
+RUN sim=mujoco seed=0 seq=seq4_midline_then_left primitives=2 converged=0/2 straightness=0.6240->0.7419
+RUN sim=mujoco seed=1 seq=seq0_end_stretch_low primitives=2 converged=0/2 straightness=0.6240->0.7844
+RUN sim=mujoco seed=1 seq=seq1_end_stretch_high_y_trim primitives=2 converged=0/2 straightness=0.6240->0.7903
+RUN sim=mujoco seed=1 seq=seq2_midline_then_right primitives=2 converged=0/2 straightness=0.6240->0.8695
+RUN sim=mujoco seed=1 seq=seq3_quarter_stretch_low primitives=2 converged=0/2 straightness=0.6240->0.7399
+RUN sim=mujoco seed=1 seq=seq4_midline_then_left primitives=2 converged=0/2 straightness=0.6240->0.7419
+RUN sim=mujoco seed=2 seq=seq0_end_stretch_low primitives=2 converged=0/2 straightness=0.6240->0.7844
+RUN sim=mujoco seed=2 seq=seq1_end_stretch_high_y_trim primitives=2 converged=0/2 straightness=0.6240->0.7903
+RUN sim=mujoco seed=2 seq=seq2_midline_then_right primitives=2 converged=0/2 straightness=0.6240->0.8695
+RUN sim=mujoco seed=2 seq=seq3_quarter_stretch_low primitives=2 converged=0/2 straightness=0.6240->0.7399
+RUN sim=mujoco seed=2 seq=seq4_midline_then_left primitives=2 converged=0/2 straightness=0.6240->0.7419
+RUN sim=dlolab seed=0 seq=seq0_end_stretch_low primitives=2 converged=2/2 straightness=0.6061->0.8356
+RUN sim=dlolab seed=0 seq=seq1_end_stretch_high_y_trim primitives=2 converged=2/2 straightness=0.6061->0.8563
+RUN sim=dlolab seed=0 seq=seq2_midline_then_right primitives=2 converged=2/2 straightness=0.6061->0.5294
+RUN sim=dlolab seed=0 seq=seq3_quarter_stretch_low primitives=2 converged=2/2 straightness=0.6061->0.7097
+RUN sim=dlolab seed=0 seq=seq4_midline_then_left primitives=2 converged=2/2 straightness=0.6061->0.2217
+RUN sim=dlolab seed=1 seq=seq0_end_stretch_low primitives=2 converged=2/2 straightness=0.6061->0.8356
+RUN sim=dlolab seed=1 seq=seq1_end_stretch_high_y_trim primitives=2 converged=2/2 straightness=0.6061->0.8768
+RUN sim=dlolab seed=1 seq=seq2_midline_then_right primitives=2 converged=2/2 straightness=0.6061->0.2732
+RUN sim=dlolab seed=1 seq=seq3_quarter_stretch_low primitives=2 converged=2/2 straightness=0.6061->0.5978
+RUN sim=dlolab seed=1 seq=seq4_midline_then_left primitives=2 converged=2/2 straightness=0.6061->0.5268
+RUN sim=dlolab seed=2 seq=seq0_end_stretch_low primitives=2 converged=2/2 straightness=0.6061->0.8356
+RUN sim=dlolab seed=2 seq=seq1_end_stretch_high_y_trim primitives=2 converged=2/2 straightness=0.6061->0.8563
+RUN sim=dlolab seed=2 seq=seq2_midline_then_right primitives=2 converged=2/2 straightness=0.6061->0.5294
+RUN sim=dlolab seed=2 seq=seq3_quarter_stretch_low primitives=2 converged=2/2 straightness=0.6061->0.7079
+RUN sim=dlolab seed=2 seq=seq4_midline_then_left primitives=2 converged=2/2 straightness=0.6061->0.2202
+AGG sim=mujoco primitives=30 wall_mean=5.8256 wall_max=6.6293 settle_rate=0.0% straightness_seq_mean=0.1612 nan_failures=0
+AGG sim=dlolab primitives=30 wall_mean=4.7724 wall_max=11.9963 settle_rate=100.0% straightness_seq_mean=0.0214 nan_failures=0
+metrics_json=outputs/metrics/sim_comparison_metrics.json
+report_md=outputs/reports/sim_comparison.md
+plots=outputs/plots/compare_mujoco_seq0_end_stretch_low.png, outputs/plots/compare_mujoco_seq1_end_stretch_high_y_trim.png, outputs/plots/compare_dlolab_seq0_end_stretch_low.png, outputs/plots/compare_dlolab_seq1_end_stretch_high_y_trim.png
+COMPARE_SIMS PASS

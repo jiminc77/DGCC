@@ -1,0 +1,29 @@
+seed: 0
+init_shape: straight
+rope:
+  length_m: 1.0
+  n_segments: 50
+  bend_stiffness: 1.0
+  twist_stiffness: 1.0
+  friction: 0.3
+  radius: 0.005
+physics:
+  gravity: [0.0, 0.0, -9.81]
+  ground_z: 0.0
+  air_viscosity: 0.0  # no hidden viscosity stabilization; settle uses gravity, plane contact/friction, and joint damping
+primitive:
+  p: 25
+  delta: [0.0, 0.005, 0.0]
+  lift: low
+thresholds:
+  track_distance_m: 0.03
+  settle_qvel: 0.001
+  settle_max_steps: 5000
+  nan_steps: 2000
+render:
+  width: 640
+  height: 480
+outputs:
+  stdout_log: outputs/reports/smoke_mujoco_stdout.log
+  frame_png: outputs/plots/smoke_mujoco_frame.png
+  meta_json: outputs/metrics/smoke_mujoco_meta.json

@@ -1,0 +1,110 @@
+{
+  "batch_reset_info": {
+    "backend": "2",
+    "bent_reset_converged": null,
+    "init_shape": "straight",
+    "interval_m": 0.02040816326530612,
+    "length_m": 1.0,
+    "mapped_parameters": {
+      "bending_stiffness_E": 100000.0,
+      "mu_k": 0.24,
+      "mu_s": 0.3,
+      "segment_mass": 0.001,
+      "segment_radius": 0.005,
+      "stretching_stiffness_K": 800000.0,
+      "twisting_stiffness_G": 10000.0
+    },
+    "n_envs": 4,
+    "n_vertices": 50,
+    "rope_params": {
+      "bend_stiffness": 1.0,
+      "friction": 1.0,
+      "length_m": 1.0,
+      "n_segments": 50,
+      "radius": 0.005,
+      "twist_stiffness": 1.0
+    },
+    "seed": 0,
+    "show_viewer": false,
+    "sim": "dlolab",
+    "stiffness_bases": {
+      "bend_base_E": 100000.0,
+      "mu_k_ratio": 0.8,
+      "mu_s_base": 0.3,
+      "segment_mass_base": 0.001,
+      "stretch_base_K": 800000.0,
+      "twist_base_G": 10000.0
+    }
+  },
+  "commit_hash": "4390ec79536473ca51e28ec61f07cdf91ba42113",
+  "config": {
+    "init_shape": "bent",
+    "outputs": {
+      "meta_json": "outputs/metrics/smoke_dlolab_meta.json",
+      "stdout_log": "outputs/reports/smoke_dlolab_stdout.log"
+    },
+    "primitive": {
+      "delta": [
+        0.08,
+        -0.04,
+        0.0
+      ],
+      "lift": "high",
+      "p": 25
+    },
+    "rope": {
+      "bend_stiffness": 1.0,
+      "friction": 1.0,
+      "length_m": 1.0,
+      "n_segments": 50,
+      "radius": 0.005,
+      "twist_stiffness": 1.0
+    },
+    "sim": {
+      "dt": 0.001,
+      "initial_settle_steps": 20,
+      "move_hold_steps": 20,
+      "move_step_size": 0.002,
+      "reset_settle_max_steps": 1000,
+      "rod_angular_damping": 5.0,
+      "rod_damping": 10.0,
+      "substeps": 5
+    },
+    "thresholds": {
+      "nan_steps": 2000,
+      "settle_max_steps": 12000,
+      "settle_vel": 0.001,
+      "track_distance_m": 0.01
+    }
+  },
+  "dependency_versions": {
+    "backend": "2",
+    "display": null,
+    "genesis": "1.0.0",
+    "numpy": "2.4.6",
+    "quadrants": [
+      0,
+      8,
+      0
+    ],
+    "scipy": "1.18.0",
+    "torch": "2.10.0+cu128",
+    "torch_cuda": "12.8",
+    "torch_cuda_available": true
+  },
+  "primitive_wall_time_s": 4.342581294942647,
+  "reference_primitive_settle_steps": 1293,
+  "seed": 0,
+  "settle_converged": true,
+  "smoke_passed": true,
+  "stiffness_bases": {
+    "bend_base_E": 100000.0,
+    "mu_k_ratio": 0.8,
+    "mu_s_base": 0.3,
+    "segment_mass_base": 0.001,
+    "stretch_base_K": 800000.0,
+    "twist_base_G": 10000.0
+  },
+  "stiffness_shape_diff_l2": 0.19597803415661882,
+  "track_distance_m": 9.98377799987793e-07
+}

@@ -1,0 +1,11 @@
+smoke_dlolab seed=0 config=configs/smoke_dlolab.yaml
+PASS 1 gs.init(backend=gs.gpu) headless succeeds — backend=gs.cuda DISPLAY=None
+PASS 2 rope scene builds with n_envs=4 — n_vertices=50 bases={'stretch_base_K': 800000.0, 'bend_base_E': 100000.0, 'twist_base_G': 10000.0, 'mu_s_base': 0.3, 'mu_k_ratio': 0.8, 'segment_mass_base': 0.001}
+PASS 3 sample_centerline(32) shape == (4,32,3) — shape=(4, 32, 3)
+PASS 4 set_bending_stiffness/set_mu_s change dynamics — final_shape_l2_diff=0.195978034
+PASS 5 attach→move→grasped vertex tracks the link — distance=9.983778e-07 tolerance=0.01 target=[0.09020408142358065, -0.04, 0.15]
+PASS 6 detach→settle converges — max_node_speed=0.000992921014 threshold=0.001 steps=7771
+PASS 7 2000 steps no NaN — steps=2000
+PASS 8 wall-time for one primitive — primitive_wall_time_s=4.342581 settle_steps=1293
+meta_json=outputs/metrics/smoke_dlolab_meta.json
+SMOKE_DLOLAB PASS
