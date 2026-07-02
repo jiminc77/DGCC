@@ -34,6 +34,8 @@ Measured by this comparison run around each grasp→move→release→settle prim
 
 Comparison threshold: velocity `< 0.001` with max 5000 steps per primitive. DLO-Lab smoke high-lift detach needed 7771 steps at the same 1e-3 threshold, hence smoke used max_steps 12000.
 
+**메트릭 정의 주의:** convergence는 sim별로 다른 속도 정의를 쓴다 — MuJoCo는 `max_abs_qvel`(관절공간, 153 DOF 혼합), DLO-Lab은 `max_node_speed`(노드 cartesian 속도). §5는 둘 다 허용하지만 0.0% vs 100.0% 수치는 부분적으로 정의 차이를 포함하므로 직접 비교에 주의가 필요하다 (M2 판단 시 참고).
+
 | sim | convergence rate | non-converged | settle steps mean | settle steps max | NaN failures | straightness Δ/sequence mean |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | MuJoCo cable | 0.0% | 30 | 5000.0 | 5000 | 0 | 0.1612 |

@@ -16,6 +16,22 @@ gjc ralplan --interactive "P0.md 명세를 읽고 실행 계획 수립"
 gjc ultragoal create-goals --brief-file P0.md
 ```
 
+## 재현 (P0-M1 기준)
+
+```bash
+uv venv --python 3.12 .venv && uv pip install -e .
+# DLO-Lab lane (M1): genesis-world 1.0.0은 로컬 clone에서 editable 설치
+git clone https://github.com/UMass-Embodied-AGI/DLO-Lab external/DLO-Lab
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+uv pip install -e "external/DLO-Lab[dlo-lab]"
+# smokes (headless)
+MUJOCO_GL=egl uv run python scripts/smoke_mujoco.py --seed 0
+uv run python scripts/smoke_dlolab.py --seed 0
+uv run python scripts/compare_sims.py --seed 0
+```
+
+주의: `outputs/` 산출물의 `commit_hash` 메타데이터는 실행 시점 HEAD를 기록하므로, 해당 코드가 포함된 커밋의 부모 해시일 수 있다 (run-then-commit).
+
 ## 구조 (P0-M0에서 생성됨)
 
 ```

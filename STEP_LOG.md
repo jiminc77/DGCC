@@ -13,3 +13,4 @@
 - 2026-07-02T18:13:46+00:00 — M1 comparison: 5 seq x 3 seeds x 2 sims; MuJoCo settle 0/30 converged @5000 steps vs DLO-Lab 30/30; report outputs/reports/sim_comparison.md.
 - 2026-07-02T18:13:47+00:00 — gh CLI 없음 — issue #2 수동 처리 필요.
 - 2026-07-02T18:13:47+00:00 — M1 complete.
+- 2026-07-02T18:27:43+00:00 — M1 gate fixes: [dlo-lab] extra + commented compat pins in pyproject, README 재현 section, settle metric-definition caveat in sim_comparison.md (architect MEDIUM advisories).

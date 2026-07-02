@@ -9,14 +9,28 @@ description = "Deformation-Grounded Contact Critic P0 workspace"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    # numpy<2.5: DLO-Lab compat pin — numba (via genesis-world 1.0.0 extras) requires numpy<2.5.
     "numpy<2.5",
     "scipy",
     "mujoco",
     "pytest",
     "pyyaml",
     "h5py",
+    # fsspec/packaging: DLO-Lab compat pins — datasets requires fsspec<=2026.2.0,
+    # lerobot requires packaging<26.0 (see outputs/reports/sim_comparison.md 설치 section).
     "fsspec<=2026.2.0",
     "packaging<26.0",
+]
+
+[project.optional-dependencies]
+# DLO-Lab lane (P0-M1). genesis-world==1.0.0 itself is NOT on PyPI in the fork we
+# need: it is installed EDITABLE from the local clone, together with torch from
+# the CUDA index. Reproduction (see README "재현"):
+#   git clone https://github.com/UMass-Embodied-AGI/DLO-Lab external/DLO-Lab
+#   uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+#   uv pip install -e "external/DLO-Lab[dlo-lab]"
+dlo-lab = [
+    "torch>=2.10",
 ]
 
 [tool.hatch.build.targets.wheel]
