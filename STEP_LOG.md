@@ -29,3 +29,6 @@ M1 비교 결과 요약 (outputs/reports/sim_comparison.md, 결정 문구 없음
 gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 
 - 2026-07-02T22:48:52+00:00 — **M2 HUMAN DECISION: (A) DLO-Lab primary.** 사람이 재개 지시로 명시. 이후 모든 파이프라인(M3~)은 DLOLabEnv adapter만 사용; MuJoCo adapter는 M1 상태로 동결(삭제 금지). issue #3 수동 처리 필요: 결정 코멘트 + close (gh CLI 없음).
+
+- 2026-07-02T22:51:11+00:00 — **북키핑 정정:** gh CLI 사용 가능해짐(/usr/bin/gh, jiminc77 인증). 이전 "gh CLI 없음 — issue #1/#2/#3 수동 처리 필요" 노트는 폐기. issue #1, #2는 evidence와 함께 close 완료 확인; issue #3은 인간 결정 코멘트(4871069692) 위에 evidence 코멘트(4871088553) 추가 후 close 완료. 이후 milestone부터 전역 규칙 6의 gh 경로 정상 사용.
+- 2026-07-02T22:51:11+00:00 — **운영 노트 (DLO-Lab asset):** assets/dlo-lab.zip 확보됨 (149MB, gitignore 대상 — 커밋 금지). 향후 DLO-Lab 렌더링/datagen 시 LuisaRender 경로를 올바르게 연결하고 공식 datagen을 --raytracer 플래그로 실행할 것.
