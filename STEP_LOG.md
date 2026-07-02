@@ -15,3 +15,17 @@
 - 2026-07-02T18:13:47+00:00 — M1 complete.
 - 2026-07-02T18:27:43+00:00 — M1 gate fixes: [dlo-lab] extra + commented compat pins in pyproject, README 재현 section, settle metric-definition caveat in sim_comparison.md (architect MEDIUM advisories).
 - 2026-07-02T18:31:35+00:00 — M1 code-lane LOW fixes: resample rejects degenerate zero-length centerline (+test), compare_sims raises on missing velocity metric, genesis one-shot seed semantics documented.
+
+## M2 HUMAN GATE — primary sim 결정 요청 (2026-07-02T18:45Z)
+
+M1 비교 결과 요약 (outputs/reports/sim_comparison.md, 결정 문구 없음 — 판단은 사람 몫):
+
+- **smoke:** 두 sim 모두 통과 (MuJoCo 7/7, DLO-Lab 8/8). MuJoCo 단독 통과 상황 아님 — 비대칭 없음.
+- **MuJoCo cable 장점:** 설치 단순(pip 1개), 성숙한 코드베이스, 결정성 검증됨(동일 seed 2회 bit-identical), 의존성 리스크 낮음. **단점:** compare 시나리오에서 settle 수렴 0/30 (5000 step, max_abs_qvel<1e-3 기준 — 관절공간 메트릭이라 DLO-Lab 수치와 정의가 다름, 보고서 캐비앳 참조), CPU 단일 프로세스(병렬화 없음, MJX cable 미지원), primitive 평균 5.8 s.
+- **DLO-Lab 장점:** settle 수렴 30/30 (평균 1472 step, max_node_speed 기준), GPU 배치(n_envs=4 검증) — 향후 RL 데이터 수집에 유리, 파라미터 런타임 setter 풍부(소성 포함, P0에선 비활성), primitive 평균 4.8 s. **단점:** 공개 5주차 외부 코드(ti_float 버그 런타임 alias 필요), asset SharePoint 401, 의존성 pin 취약성(torch/genesis/numpy/fsspec/packaging), wall-time 분산 큼(max 12 s).
+- **파라미터화:** 양쪽 모두 length/bend/twist/friction 커버. 소성은 DLO-Lab만 (미활성).
+- 상세 수치·플롯: outputs/reports/sim_comparison.md, outputs/metrics/sim_comparison_metrics.json, outputs/plots/compare_*.png
+
+gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
+
+- 2026-07-02T22:48:52+00:00 — **M2 HUMAN DECISION: (A) DLO-Lab primary.** 사람이 재개 지시로 명시. 이후 모든 파이프라인(M3~)은 DLOLabEnv adapter만 사용; MuJoCo adapter는 M1 상태로 동결(삭제 금지). issue #3 수동 처리 필요: 결정 코멘트 + close (gh CLI 없음).
