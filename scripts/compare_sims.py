@@ -115,7 +115,10 @@ def max_velocity_metric(env: Any) -> tuple[str, float]:
         return "max_abs_qvel", float(env.max_abs_qvel())
     if hasattr(env, "max_node_speed"):
         return "max_node_speed", float(env.max_node_speed())
-    return "max_velocity", float("nan")
+    raise TypeError(
+        f"{type(env).__name__} exposes neither max_abs_qvel nor max_node_speed; "
+        "adapters must provide a settle velocity metric"
+    )
 
 
 def make_env(sim_name: str, config: dict[str, Any]) -> Any:

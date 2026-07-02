@@ -25,3 +25,14 @@ def test_resample_25_points_returns_32_points() -> None:
     X = resample(X_raw)
 
     assert X.shape == (32, 3)
+
+
+def test_resample_rejects_degenerate_zero_length_centerline() -> None:
+    X_raw = np.zeros((10, 3))
+
+    try:
+        resample(X_raw)
+    except ValueError as exc:
+        assert "zero total arc length" in str(exc)
+    else:
+        raise AssertionError("resample must reject a zero-arc-length centerline")

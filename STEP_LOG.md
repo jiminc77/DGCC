@@ -14,3 +14,4 @@
 - 2026-07-02T18:13:47+00:00 — gh CLI 없음 — issue #2 수동 처리 필요.
 - 2026-07-02T18:13:47+00:00 — M1 complete.
 - 2026-07-02T18:27:43+00:00 — M1 gate fixes: [dlo-lab] extra + commented compat pins in pyproject, README 재현 section, settle metric-definition caveat in sim_comparison.md (architect MEDIUM advisories).
+- 2026-07-02T18:31:35+00:00 — M1 code-lane LOW fixes: resample rejects degenerate zero-length centerline (+test), compare_sims raises on missing velocity metric, genesis one-shot seed semantics documented.

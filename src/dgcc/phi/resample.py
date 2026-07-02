@@ -38,7 +38,10 @@ def resample(X_raw: np.ndarray) -> np.ndarray:
     total = cumulative[-1]
 
     if total <= 0.0:
-        return np.repeat(points[:1], K, axis=0)
+        raise ValueError(
+            "X_raw has zero total arc length (all points coincide); "
+            "a physical rope centerline cannot be degenerate"
+        )
 
     normalized = cumulative / total
     targets = np.linspace(0.0, 1.0, K)

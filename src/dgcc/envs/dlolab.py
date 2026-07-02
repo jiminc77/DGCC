@@ -36,6 +36,10 @@ def ensure_genesis_initialized(seed: int | None = None):
         raise DLOLabUnavailableError("DLO-Lab/Genesis is not installed in this environment") from exc
 
     if not getattr(gs, "_initialized", False):
+        # Genesis can only be initialized once per process, so the seed passed to
+        # the FIRST caller wins for gs-internal RNG. Per-seed reproducibility in
+        # this adapter therefore comes from numpy RNG in reset()/pre-bend, not
+        # from re-seeding Genesis. Documented for the M3 determinism test.
         gs.init(seed=seed, precision="32", logging_level="warning", backend=gs.gpu)
 
     # DLO-Lab 1.0.0's sample_centerline kernel references the legacy alias
