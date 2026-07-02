@@ -14,6 +14,14 @@ outputs/data/
 external/
 assets/
 
+# Local gjc runtime state (never commit)
+.gjc/
+
+# Keep empty output directories tracked while ignoring raw data contents
+!outputs/
+!outputs/data/
+outputs/data/*
+!outputs/data/.gitkeep
 # Sim/render artifacts
 *.mp4
 MUJOCO_LOG.TXT
