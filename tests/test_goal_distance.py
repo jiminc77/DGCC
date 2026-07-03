@@ -3,7 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from dgcc.goals.distance import D, chamfer, correspondence_l2
+from dgcc.goals.distance import (
+    D,
+    canonical_shape_flip,
+    chamfer,
+    correspondence_l2,
+    flip_consistent_shape_distance,
+    flip_consistent_shape_measurements,
+)
 from dgcc.goals.dual_goal import (
     ANCHOR_CHANNEL_COUNT,
     CG_DIM,
@@ -92,6 +99,85 @@ def test_correspondence_l2_exact_goal_zero() -> None:
     assert correspondence_l2(curve, curve, length, shape_only=True) == pytest.approx(0.0, abs=1.0e-12)
 
 
+
+def test_canonical_shape_flip_is_deterministic() -> None:
+    length = 1.2
+    goal = make_goal("s_curve", np.array([0.1, -0.2, 0.04]))
+    before = goal_curve(goal, length)[::-1] + np.column_stack(
+        (
+            np.zeros(32),
+            0.015 * np.sin(np.linspace(0.0, 2.0 * np.pi, 32)),
+            np.zeros(32),
+        )
+    )
+
+    first = canonical_shape_flip(before, goal, length)
+    second = canonical_shape_flip(before.copy(), goal, length)
+
+    assert isinstance(first, bool)
+    assert first is second
+
+
+def test_flip_consistent_shape_measurement_is_mirror_invariant() -> None:
+    length = 1.2
+    goal = make_goal("s_curve", np.array([0.1, -0.2, 0.04]))
+    before = goal_curve(goal, length)[::-1]
+    perturb = np.column_stack(
+        (
+            np.zeros(32),
+            0.02 * np.sin(np.linspace(0.0, 2.0 * np.pi, 32)),
+            0.01 * np.cos(np.linspace(0.0, np.pi, 32)),
+        )
+    )
+    after = before + perturb
+
+    forward = flip_consistent_shape_measurements(before, after, goal, length)
+    mirrored = flip_consistent_shape_measurements(before[::-1], after[::-1], goal, length)
+
+    assert forward["flip"] is not mirrored["flip"]
+    assert mirrored["delta_D_shape"] == pytest.approx(forward["delta_D_shape"], abs=1.0e-12)
+    assert mirrored["delta_c_g_shape_norm"] == pytest.approx(
+        forward["delta_c_g_shape_norm"],
+        abs=1.0e-12,
+    )
+
+
+def test_flip_consistent_shape_matches_min_flip_when_orientation_agrees() -> None:
+    length = 1.4
+    goal = make_goal("s_curve", np.array([0.2, 0.1, 0.05]))
+    curve = goal_curve(goal, length)
+    mode = np.sin(np.linspace(0.0, 2.0 * np.pi, 32))
+    before = curve + np.column_stack((np.zeros(32), 0.01 * mode, np.zeros(32)))
+    after = curve + np.column_stack((np.zeros(32), 0.02 * mode, np.zeros(32)))
+
+    measurement = flip_consistent_shape_measurements(before, after, goal, length)
+    g_curve = goal_curve(goal, length)
+
+    assert measurement["flip"] is False
+    assert measurement["D_shape_before"] == pytest.approx(
+        correspondence_l2(before, g_curve, length, shape_only=True),
+        abs=1.0e-12,
+    )
+    assert measurement["D_shape_after"] == pytest.approx(
+        correspondence_l2(after, g_curve, length, shape_only=True),
+        abs=1.0e-12,
+    )
+
+
+def test_flip_consistent_shape_exact_goal_zero() -> None:
+    length = 1.1
+    goal = make_goal("u_bend", np.array([-0.2, 0.3, 0.06]))
+    curve = goal_curve(goal, length)
+
+    forward = flip_consistent_shape_measurements(curve, curve, goal, length)
+    reversed_measurement = flip_consistent_shape_measurements(curve[::-1], curve[::-1], goal, length)
+
+    assert forward["D_shape_before"] == pytest.approx(0.0, abs=1.0e-12)
+    assert forward["D_shape_after"] == pytest.approx(0.0, abs=1.0e-12)
+    assert forward["delta_c_g_shape_norm"] == pytest.approx(0.0, abs=1.0e-12)
+    assert reversed_measurement["D_shape_before"] == pytest.approx(0.0, abs=1.0e-12)
+    assert reversed_measurement["D_shape_after"] == pytest.approx(0.0, abs=1.0e-12)
+    assert flip_consistent_shape_distance(curve, curve, length, flip=False) == pytest.approx(0.0, abs=1.0e-12)
 
 def test_c_g_dimension_and_documented_channel_split() -> None:
     goal = make_goal("u_bend", np.array([0.1, -0.2, 0.03]))

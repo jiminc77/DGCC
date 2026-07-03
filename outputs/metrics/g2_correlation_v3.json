@@ -1,0 +1,1401 @@
+{
+  "amended_definition_text": "correspondence L2 (K=32 canonical arc-length resample path): D(X,G) = min over orientation flip of (1/L)·sqrt((1/K)·Σ_k ||X̃_k − G̃_k||²) using absolute coordinates; D_shape removes each centroid before the same computation; orientation flip evaluates k↔k and k↔K+1−k correspondences; gate PASS = Spearman rho(ΔD, Δ||c_g_anchor||) >= 0.9 AND Spearman rho(ΔD_shape, Δ||c_g_shape||) >= 0.9.",
+  "c_g_layout": {
+    "anchor_channels": 3,
+    "anchor_component": "last 3 channels of c_g",
+    "order": "[Phi_shape(G)-Phi_shape(X) for mode>=1 channels, anchor(G)-anchor(X) xyz]",
+    "shape_channels": 21,
+    "shape_component": "first 21 channels of c_g",
+    "total_channels": 24
+  },
+  "case_determination": "A",
+  "channel_layout_id": "axis-major-xyz-modes-0-7-v1",
+  "commit_hash": "147a3bfcc7c2c72c22112d3e24686c803407f975",
+  "component_a": {
+    "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+    "delta_D_corr": {
+      "max": 0.7528636550487733,
+      "mean": 0.020552341111650087,
+      "min": -0.5004146600960864
+    },
+    "delta_c_g_anchor_norm": {
+      "max": 0.7514860536868877,
+      "mean": 0.014823838218031042,
+      "min": -0.5417935186825888
+    },
+    "n": 2445,
+    "name": "primary_component_a_anchor",
+    "passes": true,
+    "pvalue": 0.0,
+    "rho": 0.9846875811535779,
+    "threshold": 0.9
+  },
+  "component_b": {
+    "case_determination": "A",
+    "definition": "Spearman rho(ΔD_shape centroid-removed fixed-orientation correspondence L2, Δ||c_g_shape|| under the M5R2 Case A orientation convention)",
+    "delta_D_shape_flip_consistent": {
+      "max": 0.5372694397449947,
+      "mean": 0.07777528908059916,
+      "min": -0.19966623496203156
+    },
+    "delta_c_g_shape_norm_flip_consistent": {
+      "max": 3.038657521201446,
+      "mean": 0.4400907503412657,
+      "min": -1.1319022039495108
+    },
+    "n": 2445,
+    "name": "primary_component_b_shape_flip_consistent",
+    "orientation_convention": "orientation canonicalization 규약 (2026-07-03 M5R2 Case A로 편입 — 버그 수정, 파라미터 변경 아님): per transition, choose exactly one flip decision against the goal using X_before, selecting the orientation that minimizes the mode-1..7 residual versus the goal's shape Phi; apply that fixed decision identically to X_before and X_after in both c_g_shape and D_shape computations for the shape component. Component (a) absolute D keeps the existing correspondence_l2 min-flip unchanged.",
+    "passes": true,
+    "pvalue": 0.0,
+    "rho": 0.999994149532834,
+    "threshold": 0.9
+  },
+  "config_copy": {
+    "dataset": {
+      "dm_stats_json": "outputs/metrics/dm_stats.json",
+      "h5": "outputs/data/p0_random_transitions.h5"
+    },
+    "filters": {
+      "primary": "grasp_success AND settle_steps != settle_max_steps",
+      "settle_max_steps": 5000,
+      "variants": {
+        "all_success": "grasp_success",
+        "all_transitions": "no filter"
+      }
+    },
+    "goal_sampling": {
+      "anchor_box_unit_length": {
+        "high": [
+          1.25,
+          1.25,
+          0.18
+        ],
+        "low": [
+          -1.25,
+          -1.25,
+          0.02
+        ]
+      },
+      "anchor_mode": "centroid",
+      "random_stream": "numpy.default_rng(seed); one template index and one anchor per transition",
+      "templates": [
+        "straight",
+        "u_bend",
+        "s_curve"
+      ]
+    },
+    "outputs": {
+      "metrics_json": "outputs/metrics/g2_correlation.json",
+      "plots_dir": "outputs/plots",
+      "scatter_png": "outputs/plots/g2_scatter.png",
+      "stdout_log": "outputs/reports/gate_g2_stdout.log"
+    },
+    "qualitative": {
+      "anchor": [
+        0.0,
+        0.0,
+        0.04
+      ],
+      "anchor_mode": "centroid",
+      "boundary_radius_fraction_of_length": 0.05,
+      "initial_seed": 20260703,
+      "lengths_m": [
+        0.5,
+        1.0,
+        1.6
+      ]
+    },
+    "quantitative": {
+      "minimum_primary_n": 1000,
+      "threshold_rho": 0.9
+    }
+  },
+  "config_path": "configs/gate_g2.yaml",
+  "config_text": "dataset:\n  h5: outputs/data/p0_random_transitions.h5\n  dm_stats_json: outputs/metrics/dm_stats.json\nfilters:\n  settle_max_steps: 5000\n  primary: grasp_success AND settle_steps != settle_max_steps\n  variants:\n    all_success: grasp_success\n    all_transitions: no filter\ngoal_sampling:\n  anchor_mode: centroid\n  templates: [straight, u_bend, s_curve]\n  # Uniform anchor box in rope-length units.  Each transition samples\n  # low * length_m <= anchor <= high * length_m in world coordinates.\n  anchor_box_unit_length:\n    low: [-1.25, -1.25, 0.02]\n    high: [1.25, 1.25, 0.18]\n  random_stream: numpy.default_rng(seed); one template index and one anchor per transition\nquantitative:\n  threshold_rho: 0.9\n  minimum_primary_n: 1000\nqualitative:\n  lengths_m: [0.5, 1.0, 1.6]\n  initial_seed: 20260703\n  anchor_mode: centroid\n  anchor: [0.0, 0.0, 0.04]\n  boundary_radius_fraction_of_length: 0.05\noutputs:\n  metrics_json: outputs/metrics/g2_correlation.json\n  scatter_png: outputs/plots/g2_scatter.png\n  plots_dir: outputs/plots\n  stdout_log: outputs/reports/gate_g2_stdout.log\n",
+  "created_at": "2026-07-03T05:10:08Z",
+  "dataset_record_count": 5056,
+  "diagnostics": {
+    "D1": {
+      "delta_D_shape_full": {
+        "max": 0.5372694397449947,
+        "mean": 0.07777528908059916,
+        "min": -0.19966623496203156,
+        "std": 0.1138964650409116
+      },
+      "delta_c_g_shape_norm": {
+        "max": 3.038657521201446,
+        "mean": 0.4400907503412657,
+        "min": -1.1319022039495108,
+        "std": 0.6447587811075687
+      },
+      "fixed_flip_decision_margin_id_minus_flip": {
+        "max": 2.58550340987215,
+        "mean": -0.2488243752605437,
+        "min": -3.368383838616609,
+        "std": 1.338172151232471
+      },
+      "fixed_flip_fraction": 0.43476482617586915,
+      "n": 2445,
+      "pvalue": 0.0,
+      "rho": 0.999994149532834
+    },
+    "D2": {
+      "delta_D_shape_lowpass": {
+        "max": 0.5371638347362621,
+        "mean": 0.07779778847594623,
+        "min": -0.20009393101317438,
+        "std": 0.11397832658768367
+      },
+      "delta_D_shape_lowpass_raw_unlength_normalized": {
+        "max": 0.5371638347362621,
+        "mean": 0.07779778847594623,
+        "min": -0.20009393101317438,
+        "std": 0.11397832658768367
+      },
+      "parseval_abs_error": {
+        "after_max": 8.881784197001252e-16,
+        "after_mean": 1.7857789775437973e-16,
+        "before_max": 8.881784197001252e-16,
+        "before_mean": 1.323160774737781e-16
+      },
+      "raw_lowpass_sanity_pvalue_without_length_normalization": 0.0,
+      "raw_lowpass_sanity_rho_without_length_normalization": 0.9999999999999999,
+      "rho_trunc_delta_D_shape_full_vs_delta_D_shape_lowpass": 0.999994149532834,
+      "rho_trunc_pvalue": 0.0,
+      "sanity_deviation_from_1": 1.1102230246251565e-16,
+      "sanity_pvalue": 0.0,
+      "sanity_rho_delta_D_shape_lowpass_vs_delta_c_g_shape_norm": 0.9999999999999999
+    },
+    "case_suggestion": {
+      "case": "A",
+      "criteria": {
+        "A": "D1 rho >= 0.9",
+        "B": "D1 rho < 0.9 AND D2 sanity rho >= 0.99 AND rho_trunc < 0.9",
+        "C": "otherwise"
+      },
+      "reason": "D1 flip-consistent rho is at or above 0.9.",
+      "tail_dominates": false
+    },
+    "definitions": {
+      "D1": "Fixed orientation per transition: choose flip of X_before minimizing mode-1..7 residual to goal Phi, then apply same flip to X_before/X_after for c_g_shape and centroid-removed D_shape_full.",
+      "D2": "D_shape_lowpass is centroid-removed correspondence RMS between inverse-DCT reconstructions retaining modes 1..7 under the same fixed flip convention.",
+      "tail_energy": "Tail fraction is ||DCT modes >=8 residual||^2 / ||DCT modes >=1 residual||^2 with orthonormal DCT-II coefficients."
+    },
+    "flip_inconsistency_fractions": {
+      "all_transitions": {
+        "old_D_shape_before_vs_after": 0.3999208860759494,
+        "old_D_shape_vs_D1_fixed_after": 0.3999208860759494,
+        "old_D_shape_vs_D1_fixed_before": 0.0,
+        "old_D_shape_vs_c_g_stored_after": 0.489121835443038,
+        "old_D_shape_vs_c_g_stored_before": 0.46024525316455694,
+        "old_D_shape_vs_c_g_stored_either_before_or_after": 0.6746439873417721
+      },
+      "old_D_shape_before_vs_after": 0.4212678936605317,
+      "old_D_shape_vs_D1_fixed_after": 0.4212678936605317,
+      "old_D_shape_vs_D1_fixed_before": 0.0,
+      "old_D_shape_vs_c_g_stored_after": 0.4952965235173824,
+      "old_D_shape_vs_c_g_stored_before": 0.43476482617586915,
+      "old_D_shape_vs_c_g_stored_either_before_or_after": 0.6756646216768916,
+      "population": "primary"
+    },
+    "hypothetical_extended_M": {
+      "12": {
+        "M": 12,
+        "orientation_convention": "D1 fixed flip chosen from before curve modes 1..7",
+        "pvalue": 0.0,
+        "rho_delta_D_shape_full_vs_delta_c_g_shape_norm": 0.9999992101951425,
+        "shape_modes": "1..11"
+      },
+      "16": {
+        "M": 16,
+        "orientation_convention": "D1 fixed flip chosen from before curve modes 1..7",
+        "pvalue": 0.0,
+        "rho_delta_D_shape_full_vs_delta_c_g_shape_norm": 0.9999996436847108,
+        "shape_modes": "1..15"
+      }
+    },
+    "per_channel_residual_contribution_summary": {
+      "basis": "orthonormal DCT-II coefficients of centroid-removed fixed-orientation residuals; modes 1..31 only",
+      "lowpass_channels_mode_1_to_7": [
+        {
+          "axis": "x",
+          "channel": "x1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.3501574302438698,
+          "mean_before_energy_fraction": 0.5153903684081097,
+          "mean_delta_coeff": -0.17862282824879075,
+          "mean_delta_energy_fraction": 0.32318507995037926,
+          "median_before_energy_fraction": 0.5645354547358844,
+          "median_delta_energy_fraction": 0.24230934597296297,
+          "mode": 1,
+          "std_before_coeff": 0.9143464634196318,
+          "std_delta_coeff": 0.8736031886183653
+        },
+        {
+          "axis": "x",
+          "channel": "x2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.001996305468389226,
+          "mean_before_energy_fraction": 0.028293257795800327,
+          "mean_delta_coeff": 0.002548821911193795,
+          "mean_delta_energy_fraction": 0.09949100391442525,
+          "median_before_energy_fraction": 0.006163080901871986,
+          "median_delta_energy_fraction": 0.04363951200635512,
+          "mode": 2,
+          "std_before_coeff": 0.21250950343625455,
+          "std_delta_coeff": 0.34046560383452035
+        },
+        {
+          "axis": "x",
+          "channel": "x3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.11663423149006454,
+          "mean_before_energy_fraction": 0.0324439136272732,
+          "mean_delta_coeff": -0.00862380578635838,
+          "mean_delta_energy_fraction": 0.049238838285271265,
+          "median_before_energy_fraction": 0.015919120904445024,
+          "median_delta_energy_fraction": 0.018541518063131934,
+          "mode": 3,
+          "std_before_coeff": 0.17635085564504258,
+          "std_delta_coeff": 0.22027548837512836
+        },
+        {
+          "axis": "x",
+          "channel": "x4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0028172190705946197,
+          "mean_before_energy_fraction": 0.006678368847964941,
+          "mean_delta_coeff": -4.064652985701876e-05,
+          "mean_delta_energy_fraction": 0.024046783862343123,
+          "median_before_energy_fraction": 0.001468455944104124,
+          "median_delta_energy_fraction": 0.007614153644258118,
+          "mode": 4,
+          "std_before_coeff": 0.10038650631552334,
+          "std_delta_coeff": 0.13811275544419457
+        },
+        {
+          "axis": "x",
+          "channel": "x5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.030418507057186267,
+          "mean_before_energy_fraction": 0.0073621572035616045,
+          "mean_delta_coeff": 0.0019242629595614784,
+          "mean_delta_energy_fraction": 0.015215350477601341,
+          "median_before_energy_fraction": 0.0027262430182731765,
+          "median_delta_energy_fraction": 0.004239738258361395,
+          "mode": 5,
+          "std_before_coeff": 0.08618493511580103,
+          "std_delta_coeff": 0.10548446778450558
+        },
+        {
+          "axis": "x",
+          "channel": "x6",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0005636377710037597,
+          "mean_before_energy_fraction": 0.0018678105974178584,
+          "mean_delta_coeff": -0.0004061694646643768,
+          "mean_delta_energy_fraction": 0.007405806103880195,
+          "median_before_energy_fraction": 0.00040822361327842266,
+          "median_delta_energy_fraction": 0.002059807784693953,
+          "mode": 6,
+          "std_before_coeff": 0.04954739641157146,
+          "std_delta_coeff": 0.06983837494488457
+        },
+        {
+          "axis": "x",
+          "channel": "x7",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.01596434843799468,
+          "mean_before_energy_fraction": 0.003982538226543868,
+          "mean_delta_coeff": -0.0011155157507952871,
+          "mean_delta_energy_fraction": 0.004188585113235682,
+          "median_before_energy_fraction": 0.0005081489108654529,
+          "median_delta_energy_fraction": 0.0010744461649958258,
+          "mode": 7,
+          "std_before_coeff": 0.03705822178119917,
+          "std_delta_coeff": 0.05157434939494378
+        },
+        {
+          "axis": "y",
+          "channel": "y1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.12084820776641397,
+          "mean_before_energy_fraction": 0.1423878809247653,
+          "mean_delta_coeff": -0.02295855098336855,
+          "mean_delta_energy_fraction": 0.20062261465794287,
+          "median_before_energy_fraction": 0.06510579931867547,
+          "median_delta_energy_fraction": 0.12375693935388875,
+          "mode": 1,
+          "std_before_coeff": 0.4400369052187925,
+          "std_delta_coeff": 0.5628544461777362
+        },
+        {
+          "axis": "y",
+          "channel": "y2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.1556209876884052,
+          "mean_before_energy_fraction": 0.14792272537195067,
+          "mean_delta_coeff": -0.04799067466102932,
+          "mean_delta_energy_fraction": 0.1195388339724424,
+          "median_before_energy_fraction": 0.045697612432825954,
+          "median_delta_energy_fraction": 0.05812032903189465,
+          "mode": 2,
+          "std_before_coeff": 0.3788814473278117,
+          "std_delta_coeff": 0.3991661181211217
+        },
+        {
+          "axis": "y",
+          "channel": "y3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.08665684631075123,
+          "mean_before_energy_fraction": 0.04989136802040967,
+          "mean_delta_coeff": 0.013724749476495528,
+          "mean_delta_energy_fraction": 0.05256114234122794,
+          "median_before_energy_fraction": 0.01391009595076062,
+          "median_delta_energy_fraction": 0.02028601449013898,
+          "mode": 3,
+          "std_before_coeff": 0.2078875563296987,
+          "std_delta_coeff": 0.2231100662364501
+        },
+        {
+          "axis": "y",
+          "channel": "y4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.025276998748746286,
+          "mean_before_energy_fraction": 0.01749997928789017,
+          "mean_delta_coeff": -0.011001919420566648,
+          "mean_delta_energy_fraction": 0.027054340570647862,
+          "median_before_energy_fraction": 0.005695234299429935,
+          "median_delta_energy_fraction": 0.008888599359078422,
+          "mode": 4,
+          "std_before_coeff": 0.12305631452900992,
+          "std_delta_coeff": 0.1458279573784781
+        },
+        {
+          "axis": "y",
+          "channel": "y5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.027548047843481624,
+          "mean_before_energy_fraction": 0.009652501508955594,
+          "mean_delta_coeff": -0.00019244677073894243,
+          "mean_delta_energy_fraction": 0.01612093063194805,
+          "median_before_energy_fraction": 0.0024007627767324707,
+          "median_delta_energy_fraction": 0.003642191812994878,
+          "mode": 5,
+          "std_before_coeff": 0.08259387457119438,
+          "std_delta_coeff": 0.1019831490885399
+        },
+        {
+          "axis": "y",
+          "channel": "y6",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.012187381984014657,
+          "mean_before_energy_fraction": 0.006221259453947318,
+          "mean_delta_coeff": -0.0035825859468294405,
+          "mean_delta_energy_fraction": 0.008063505845101059,
+          "median_before_energy_fraction": 0.0011764640560285233,
+          "median_delta_energy_fraction": 0.0019310714195784995,
+          "mode": 6,
+          "std_before_coeff": 0.05459464870593211,
+          "std_delta_coeff": 0.07171294220073081
+        },
+        {
+          "axis": "y",
+          "channel": "y7",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.0048829091735980105,
+          "mean_before_energy_fraction": 0.0024954607299314028,
+          "mean_delta_coeff": -0.0016264407530149087,
+          "mean_delta_energy_fraction": 0.004334376866236284,
+          "median_before_energy_fraction": 0.0003008913390950557,
+          "median_delta_energy_fraction": 0.0008099280820423611,
+          "mode": 7,
+          "std_before_coeff": 0.03426221951367081,
+          "std_delta_coeff": 0.049092623004680105
+        },
+        {
+          "axis": "z",
+          "channel": "z1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0010274100295955817,
+          "mean_before_energy_fraction": 0.0013546006117959178,
+          "mean_delta_coeff": -0.0003429003475421404,
+          "mean_delta_energy_fraction": 0.011535340487290536,
+          "median_before_energy_fraction": 4.6592689089769233e-07,
+          "median_delta_energy_fraction": 3.3681971818399285e-06,
+          "mode": 1,
+          "std_before_coeff": 0.052493120285704756,
+          "std_delta_coeff": 0.051716946762299
+        },
+        {
+          "axis": "z",
+          "channel": "z2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.025959594744004062,
+          "mean_before_energy_fraction": 0.0031600977599195905,
+          "mean_delta_coeff": 0.0013854936759625707,
+          "mean_delta_energy_fraction": 0.006595367320776751,
+          "median_before_energy_fraction": 7.482896582796658e-06,
+          "median_delta_energy_fraction": 3.4613458242955946e-06,
+          "mode": 2,
+          "std_before_coeff": 0.053464020637797025,
+          "std_delta_coeff": 0.040383121185171345
+        },
+        {
+          "axis": "z",
+          "channel": "z3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.0004092900959571527,
+          "mean_before_energy_fraction": 0.00026032828299730917,
+          "mean_delta_coeff": -0.0004248724932435006,
+          "mean_delta_energy_fraction": 0.002350013512364157,
+          "median_before_energy_fraction": 3.4242699264543606e-07,
+          "median_delta_energy_fraction": 3.3386114381510843e-06,
+          "mode": 3,
+          "std_before_coeff": 0.022696370073084404,
+          "std_delta_coeff": 0.027483700634486748
+        },
+        {
+          "axis": "z",
+          "channel": "z4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.004414487643357625,
+          "mean_before_energy_fraction": 0.0002460992299702671,
+          "mean_delta_coeff": 0.0005611656541407949,
+          "mean_delta_energy_fraction": 0.0017592343712753515,
+          "median_before_energy_fraction": 5.669454935115113e-06,
+          "median_delta_energy_fraction": 2.8544496174137816e-06,
+          "mode": 4,
+          "std_before_coeff": 0.019245132768510656,
+          "std_delta_coeff": 0.02392280823929644
+        },
+        {
+          "axis": "z",
+          "channel": "z5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -6.554564914670415e-05,
+          "mean_before_energy_fraction": 0.00010667268989018552,
+          "mean_delta_coeff": 7.084580553983926e-05,
+          "mean_delta_energy_fraction": 0.0010057354389273177,
+          "median_before_energy_fraction": 4.0774425419171585e-07,
+          "median_delta_energy_fraction": 3.3931850741349805e-06,
+          "mode": 5,
+          "std_before_coeff": 0.014314301527793836,
+          "std_delta_coeff": 0.01786155208642714
+        },
+        {
+          "axis": "z",
+          "channel": "z6",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0004870307425762163,
+          "mean_before_energy_fraction": 6.302525234370192e-05,
+          "mean_delta_coeff": 0.00019802900469308835,
+          "mean_delta_energy_fraction": 0.0007372223132581972,
+          "median_before_energy_fraction": 2.2944079157006525e-06,
+          "median_delta_energy_fraction": 2.6967542550352344e-06,
+          "mode": 6,
+          "std_before_coeff": 0.010871855905734088,
+          "std_delta_coeff": 0.015021818880238376
+        },
+        {
+          "axis": "z",
+          "channel": "z7",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.00022970331380412417,
+          "mean_before_energy_fraction": 4.314069226685517e-05,
+          "mean_delta_coeff": -1.0674878188942478e-05,
+          "mean_delta_energy_fraction": 0.0005642351871252226,
+          "median_before_energy_fraction": 3.964067712221599e-07,
+          "median_delta_energy_fraction": 2.7406612266606256e-06,
+          "mode": 7,
+          "std_before_coeff": 0.008851256624195088,
+          "std_delta_coeff": 0.01209546400176269
+        }
+      ],
+      "population": "primary",
+      "top_channels_by_before_residual_energy_fraction": [
+        {
+          "axis": "x",
+          "channel": "x1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.3501574302438698,
+          "mean_before_energy_fraction": 0.5153903684081097,
+          "mean_delta_coeff": -0.17862282824879075,
+          "mean_delta_energy_fraction": 0.32318507995037926,
+          "median_before_energy_fraction": 0.5645354547358844,
+          "median_delta_energy_fraction": 0.24230934597296297,
+          "mode": 1,
+          "std_before_coeff": 0.9143464634196318,
+          "std_delta_coeff": 0.8736031886183653
+        },
+        {
+          "axis": "y",
+          "channel": "y2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.1556209876884052,
+          "mean_before_energy_fraction": 0.14792272537195067,
+          "mean_delta_coeff": -0.04799067466102932,
+          "mean_delta_energy_fraction": 0.1195388339724424,
+          "median_before_energy_fraction": 0.045697612432825954,
+          "median_delta_energy_fraction": 0.05812032903189465,
+          "mode": 2,
+          "std_before_coeff": 0.3788814473278117,
+          "std_delta_coeff": 0.3991661181211217
+        },
+        {
+          "axis": "y",
+          "channel": "y1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.12084820776641397,
+          "mean_before_energy_fraction": 0.1423878809247653,
+          "mean_delta_coeff": -0.02295855098336855,
+          "mean_delta_energy_fraction": 0.20062261465794287,
+          "median_before_energy_fraction": 0.06510579931867547,
+          "median_delta_energy_fraction": 0.12375693935388875,
+          "mode": 1,
+          "std_before_coeff": 0.4400369052187925,
+          "std_delta_coeff": 0.5628544461777362
+        },
+        {
+          "axis": "y",
+          "channel": "y3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.08665684631075123,
+          "mean_before_energy_fraction": 0.04989136802040967,
+          "mean_delta_coeff": 0.013724749476495528,
+          "mean_delta_energy_fraction": 0.05256114234122794,
+          "median_before_energy_fraction": 0.01391009595076062,
+          "median_delta_energy_fraction": 0.02028601449013898,
+          "mode": 3,
+          "std_before_coeff": 0.2078875563296987,
+          "std_delta_coeff": 0.2231100662364501
+        },
+        {
+          "axis": "x",
+          "channel": "x3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.11663423149006454,
+          "mean_before_energy_fraction": 0.0324439136272732,
+          "mean_delta_coeff": -0.00862380578635838,
+          "mean_delta_energy_fraction": 0.049238838285271265,
+          "median_before_energy_fraction": 0.015919120904445024,
+          "median_delta_energy_fraction": 0.018541518063131934,
+          "mode": 3,
+          "std_before_coeff": 0.17635085564504258,
+          "std_delta_coeff": 0.22027548837512836
+        },
+        {
+          "axis": "x",
+          "channel": "x2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.001996305468389226,
+          "mean_before_energy_fraction": 0.028293257795800327,
+          "mean_delta_coeff": 0.002548821911193795,
+          "mean_delta_energy_fraction": 0.09949100391442525,
+          "median_before_energy_fraction": 0.006163080901871986,
+          "median_delta_energy_fraction": 0.04363951200635512,
+          "mode": 2,
+          "std_before_coeff": 0.21250950343625455,
+          "std_delta_coeff": 0.34046560383452035
+        },
+        {
+          "axis": "y",
+          "channel": "y4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.025276998748746286,
+          "mean_before_energy_fraction": 0.01749997928789017,
+          "mean_delta_coeff": -0.011001919420566648,
+          "mean_delta_energy_fraction": 0.027054340570647862,
+          "median_before_energy_fraction": 0.005695234299429935,
+          "median_delta_energy_fraction": 0.008888599359078422,
+          "mode": 4,
+          "std_before_coeff": 0.12305631452900992,
+          "std_delta_coeff": 0.1458279573784781
+        },
+        {
+          "axis": "y",
+          "channel": "y5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.027548047843481624,
+          "mean_before_energy_fraction": 0.009652501508955594,
+          "mean_delta_coeff": -0.00019244677073894243,
+          "mean_delta_energy_fraction": 0.01612093063194805,
+          "median_before_energy_fraction": 0.0024007627767324707,
+          "median_delta_energy_fraction": 0.003642191812994878,
+          "mode": 5,
+          "std_before_coeff": 0.08259387457119438,
+          "std_delta_coeff": 0.1019831490885399
+        },
+        {
+          "axis": "x",
+          "channel": "x5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.030418507057186267,
+          "mean_before_energy_fraction": 0.0073621572035616045,
+          "mean_delta_coeff": 0.0019242629595614784,
+          "mean_delta_energy_fraction": 0.015215350477601341,
+          "median_before_energy_fraction": 0.0027262430182731765,
+          "median_delta_energy_fraction": 0.004239738258361395,
+          "mode": 5,
+          "std_before_coeff": 0.08618493511580103,
+          "std_delta_coeff": 0.10548446778450558
+        },
+        {
+          "axis": "x",
+          "channel": "x4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0028172190705946197,
+          "mean_before_energy_fraction": 0.006678368847964941,
+          "mean_delta_coeff": -4.064652985701876e-05,
+          "mean_delta_energy_fraction": 0.024046783862343123,
+          "median_before_energy_fraction": 0.001468455944104124,
+          "median_delta_energy_fraction": 0.007614153644258118,
+          "mode": 4,
+          "std_before_coeff": 0.10038650631552334,
+          "std_delta_coeff": 0.13811275544419457
+        },
+        {
+          "axis": "y",
+          "channel": "y6",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.012187381984014657,
+          "mean_before_energy_fraction": 0.006221259453947318,
+          "mean_delta_coeff": -0.0035825859468294405,
+          "mean_delta_energy_fraction": 0.008063505845101059,
+          "median_before_energy_fraction": 0.0011764640560285233,
+          "median_delta_energy_fraction": 0.0019310714195784995,
+          "mode": 6,
+          "std_before_coeff": 0.05459464870593211,
+          "std_delta_coeff": 0.07171294220073081
+        },
+        {
+          "axis": "x",
+          "channel": "x7",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.01596434843799468,
+          "mean_before_energy_fraction": 0.003982538226543868,
+          "mean_delta_coeff": -0.0011155157507952871,
+          "mean_delta_energy_fraction": 0.004188585113235682,
+          "median_before_energy_fraction": 0.0005081489108654529,
+          "median_delta_energy_fraction": 0.0010744461649958258,
+          "mode": 7,
+          "std_before_coeff": 0.03705822178119917,
+          "std_delta_coeff": 0.05157434939494378
+        }
+      ],
+      "top_channels_by_delta_residual_energy_fraction": [
+        {
+          "axis": "x",
+          "channel": "x1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.3501574302438698,
+          "mean_before_energy_fraction": 0.5153903684081097,
+          "mean_delta_coeff": -0.17862282824879075,
+          "mean_delta_energy_fraction": 0.32318507995037926,
+          "median_before_energy_fraction": 0.5645354547358844,
+          "median_delta_energy_fraction": 0.24230934597296297,
+          "mode": 1,
+          "std_before_coeff": 0.9143464634196318,
+          "std_delta_coeff": 0.8736031886183653
+        },
+        {
+          "axis": "y",
+          "channel": "y1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.12084820776641397,
+          "mean_before_energy_fraction": 0.1423878809247653,
+          "mean_delta_coeff": -0.02295855098336855,
+          "mean_delta_energy_fraction": 0.20062261465794287,
+          "median_before_energy_fraction": 0.06510579931867547,
+          "median_delta_energy_fraction": 0.12375693935388875,
+          "mode": 1,
+          "std_before_coeff": 0.4400369052187925,
+          "std_delta_coeff": 0.5628544461777362
+        },
+        {
+          "axis": "y",
+          "channel": "y2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.1556209876884052,
+          "mean_before_energy_fraction": 0.14792272537195067,
+          "mean_delta_coeff": -0.04799067466102932,
+          "mean_delta_energy_fraction": 0.1195388339724424,
+          "median_before_energy_fraction": 0.045697612432825954,
+          "median_delta_energy_fraction": 0.05812032903189465,
+          "mode": 2,
+          "std_before_coeff": 0.3788814473278117,
+          "std_delta_coeff": 0.3991661181211217
+        },
+        {
+          "axis": "x",
+          "channel": "x2",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.001996305468389226,
+          "mean_before_energy_fraction": 0.028293257795800327,
+          "mean_delta_coeff": 0.002548821911193795,
+          "mean_delta_energy_fraction": 0.09949100391442525,
+          "median_before_energy_fraction": 0.006163080901871986,
+          "median_delta_energy_fraction": 0.04363951200635512,
+          "mode": 2,
+          "std_before_coeff": 0.21250950343625455,
+          "std_delta_coeff": 0.34046560383452035
+        },
+        {
+          "axis": "y",
+          "channel": "y3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.08665684631075123,
+          "mean_before_energy_fraction": 0.04989136802040967,
+          "mean_delta_coeff": 0.013724749476495528,
+          "mean_delta_energy_fraction": 0.05256114234122794,
+          "median_before_energy_fraction": 0.01391009595076062,
+          "median_delta_energy_fraction": 0.02028601449013898,
+          "mode": 3,
+          "std_before_coeff": 0.2078875563296987,
+          "std_delta_coeff": 0.2231100662364501
+        },
+        {
+          "axis": "x",
+          "channel": "x3",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.11663423149006454,
+          "mean_before_energy_fraction": 0.0324439136272732,
+          "mean_delta_coeff": -0.00862380578635838,
+          "mean_delta_energy_fraction": 0.049238838285271265,
+          "median_before_energy_fraction": 0.015919120904445024,
+          "median_delta_energy_fraction": 0.018541518063131934,
+          "mode": 3,
+          "std_before_coeff": 0.17635085564504258,
+          "std_delta_coeff": 0.22027548837512836
+        },
+        {
+          "axis": "y",
+          "channel": "y4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.025276998748746286,
+          "mean_before_energy_fraction": 0.01749997928789017,
+          "mean_delta_coeff": -0.011001919420566648,
+          "mean_delta_energy_fraction": 0.027054340570647862,
+          "median_before_energy_fraction": 0.005695234299429935,
+          "median_delta_energy_fraction": 0.008888599359078422,
+          "mode": 4,
+          "std_before_coeff": 0.12305631452900992,
+          "std_delta_coeff": 0.1458279573784781
+        },
+        {
+          "axis": "x",
+          "channel": "x4",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0028172190705946197,
+          "mean_before_energy_fraction": 0.006678368847964941,
+          "mean_delta_coeff": -4.064652985701876e-05,
+          "mean_delta_energy_fraction": 0.024046783862343123,
+          "median_before_energy_fraction": 0.001468455944104124,
+          "median_delta_energy_fraction": 0.007614153644258118,
+          "mode": 4,
+          "std_before_coeff": 0.10038650631552334,
+          "std_delta_coeff": 0.13811275544419457
+        },
+        {
+          "axis": "y",
+          "channel": "y5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": 0.027548047843481624,
+          "mean_before_energy_fraction": 0.009652501508955594,
+          "mean_delta_coeff": -0.00019244677073894243,
+          "mean_delta_energy_fraction": 0.01612093063194805,
+          "median_before_energy_fraction": 0.0024007627767324707,
+          "median_delta_energy_fraction": 0.003642191812994878,
+          "mode": 5,
+          "std_before_coeff": 0.08259387457119438,
+          "std_delta_coeff": 0.1019831490885399
+        },
+        {
+          "axis": "x",
+          "channel": "x5",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.030418507057186267,
+          "mean_before_energy_fraction": 0.0073621572035616045,
+          "mean_delta_coeff": 0.0019242629595614784,
+          "mean_delta_energy_fraction": 0.015215350477601341,
+          "median_before_energy_fraction": 0.0027262430182731765,
+          "median_delta_energy_fraction": 0.004239738258361395,
+          "mode": 5,
+          "std_before_coeff": 0.08618493511580103,
+          "std_delta_coeff": 0.10548446778450558
+        },
+        {
+          "axis": "z",
+          "channel": "z1",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.0010274100295955817,
+          "mean_before_energy_fraction": 0.0013546006117959178,
+          "mean_delta_coeff": -0.0003429003475421404,
+          "mean_delta_energy_fraction": 0.011535340487290536,
+          "median_before_energy_fraction": 4.6592689089769233e-07,
+          "median_delta_energy_fraction": 3.3681971818399285e-06,
+          "mode": 1,
+          "std_before_coeff": 0.052493120285704756,
+          "std_delta_coeff": 0.051716946762299
+        },
+        {
+          "axis": "y",
+          "channel": "y6",
+          "in_base_c_g_shape": true,
+          "mean_before_coeff": -0.012187381984014657,
+          "mean_before_energy_fraction": 0.006221259453947318,
+          "mean_delta_coeff": -0.0035825859468294405,
+          "mean_delta_energy_fraction": 0.008063505845101059,
+          "median_before_energy_fraction": 0.0011764640560285233,
+          "median_delta_energy_fraction": 0.0019310714195784995,
+          "mode": 6,
+          "std_before_coeff": 0.05459464870593211,
+          "std_delta_coeff": 0.07171294220073081
+        }
+      ],
+      "top_tail_channels_by_before_residual_energy_fraction": [
+        {
+          "axis": "x",
+          "channel": "x9",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.011969989925148958,
+          "mean_before_energy_fraction": 0.0039325894634841315,
+          "mean_delta_coeff": -7.570410890507133e-05,
+          "mean_delta_energy_fraction": 0.001467101001428871,
+          "median_before_energy_fraction": 0.0002236550538566587,
+          "median_delta_energy_fraction": 0.00029126422535274277,
+          "mode": 9,
+          "std_before_coeff": 0.020505494115943657,
+          "std_delta_coeff": 0.027007351384797505
+        },
+        {
+          "axis": "x",
+          "channel": "x11",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.006912375549243661,
+          "mean_before_energy_fraction": 0.002779260572630613,
+          "mean_delta_coeff": -0.0008592866043495794,
+          "mean_delta_energy_fraction": 0.0005859559683335847,
+          "median_before_energy_fraction": 7.322367914929919e-05,
+          "median_delta_energy_fraction": 9.691726166054838e-05,
+          "mode": 11,
+          "std_before_coeff": 0.012572797737109977,
+          "std_delta_coeff": 0.016226809697971578
+        },
+        {
+          "axis": "y",
+          "channel": "y8",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.006779978410577334,
+          "mean_before_energy_fraction": 0.002218360621224555,
+          "mean_delta_coeff": -0.002057948998498841,
+          "mean_delta_energy_fraction": 0.002555631466176526,
+          "median_before_energy_fraction": 0.00030999995696012815,
+          "median_delta_energy_fraction": 0.000531091743936185,
+          "mode": 8,
+          "std_before_coeff": 0.029450416513769243,
+          "std_delta_coeff": 0.03688100917527654
+        },
+        {
+          "axis": "y",
+          "channel": "y9",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.0036981096634918866,
+          "mean_before_energy_fraction": 0.001470573168850921,
+          "mean_delta_coeff": 0.00035223153066983847,
+          "mean_delta_energy_fraction": 0.0013693053035751732,
+          "median_before_energy_fraction": 0.00013618785070651341,
+          "median_delta_energy_fraction": 0.00027705858387983484,
+          "mode": 9,
+          "std_before_coeff": 0.019215034907122786,
+          "std_delta_coeff": 0.026240644741280742
+        },
+        {
+          "axis": "x",
+          "channel": "x13",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.004464641864893391,
+          "mean_before_energy_fraction": 0.0014530598388345262,
+          "mean_delta_coeff": -0.00029202411684931017,
+          "mean_delta_energy_fraction": 0.0003396780079693342,
+          "median_before_energy_fraction": 3.424887641722025e-05,
+          "median_delta_energy_fraction": 4.506364243732296e-05,
+          "mode": 13,
+          "std_before_coeff": 0.008853320956453758,
+          "std_delta_coeff": 0.011272722937789104
+        },
+        {
+          "axis": "y",
+          "channel": "y10",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.004260736629238283,
+          "mean_before_energy_fraction": 0.0011531196205246475,
+          "mean_delta_coeff": -0.0017485078506273388,
+          "mean_delta_energy_fraction": 0.0009497841972389993,
+          "median_before_energy_fraction": 0.00011463998018006485,
+          "median_delta_energy_fraction": 0.00017877738238433662,
+          "mode": 10,
+          "std_before_coeff": 0.016678731783808385,
+          "std_delta_coeff": 0.0215035775140337
+        },
+        {
+          "axis": "y",
+          "channel": "y11",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.003610712596289375,
+          "mean_before_energy_fraction": 0.0008265953234698388,
+          "mean_delta_coeff": 0.00048319187628442935,
+          "mean_delta_energy_fraction": 0.0006260301694945971,
+          "median_before_energy_fraction": 6.060612005168404e-05,
+          "median_delta_energy_fraction": 9.812542280993526e-05,
+          "mode": 11,
+          "std_before_coeff": 0.012818711346610672,
+          "std_delta_coeff": 0.016510261004879546
+        },
+        {
+          "axis": "x",
+          "channel": "x15",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.0033269204699908753,
+          "mean_before_energy_fraction": 0.0008187773192538297,
+          "mean_delta_coeff": -0.00017325314819971525,
+          "mean_delta_energy_fraction": 0.00022237122172413148,
+          "median_before_energy_fraction": 1.6482032278493052e-05,
+          "median_delta_energy_fraction": 2.579358943184109e-05,
+          "mode": 15,
+          "std_before_coeff": 0.006722811835012364,
+          "std_delta_coeff": 0.008807232327304734
+        },
+        {
+          "axis": "x",
+          "channel": "x8",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -3.659659961041069e-05,
+          "mean_before_energy_fraction": 0.0008186047748888899,
+          "mean_delta_coeff": 0.0003056165495830807,
+          "mean_delta_energy_fraction": 0.0023767872172701108,
+          "median_before_energy_fraction": 0.00012240314904045556,
+          "median_delta_energy_fraction": 0.00048280565306744913,
+          "mode": 8,
+          "std_before_coeff": 0.025141363626482803,
+          "std_delta_coeff": 0.03586118147238072
+        },
+        {
+          "axis": "x",
+          "channel": "x10",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.0001548734298388937,
+          "mean_before_energy_fraction": 0.0006775176692123482,
+          "mean_delta_coeff": -0.00026502189857873653,
+          "mean_delta_energy_fraction": 0.0008370585920552652,
+          "median_before_energy_fraction": 3.685154817699642e-05,
+          "median_delta_energy_fraction": 0.00014303194037279694,
+          "mode": 10,
+          "std_before_coeff": 0.013894764075295692,
+          "std_delta_coeff": 0.019772210639430205
+        },
+        {
+          "axis": "y",
+          "channel": "y12",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.002778349709006496,
+          "mean_before_energy_fraction": 0.0006318473659927641,
+          "mean_delta_coeff": -0.0010365611517730456,
+          "mean_delta_energy_fraction": 0.0004913977766706709,
+          "median_before_energy_fraction": 4.844874306003264e-05,
+          "median_delta_energy_fraction": 7.1878765934061e-05,
+          "mode": 12,
+          "std_before_coeff": 0.011488300505654917,
+          "std_delta_coeff": 0.013924246728076507
+        },
+        {
+          "axis": "x",
+          "channel": "x17",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.0025387033331511033,
+          "mean_before_energy_fraction": 0.0005753735651455226,
+          "mean_delta_coeff": -0.00044019549260255304,
+          "mean_delta_energy_fraction": 0.00020241339175987885,
+          "median_before_energy_fraction": 1.096705255738185e-05,
+          "median_delta_energy_fraction": 1.5468860986565238e-05,
+          "mode": 17,
+          "std_before_coeff": 0.0056762518025632635,
+          "std_delta_coeff": 0.007474870708305951
+        }
+      ],
+      "top_tail_channels_by_delta_residual_energy_fraction": [
+        {
+          "axis": "y",
+          "channel": "y8",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.006779978410577334,
+          "mean_before_energy_fraction": 0.002218360621224555,
+          "mean_delta_coeff": -0.002057948998498841,
+          "mean_delta_energy_fraction": 0.002555631466176526,
+          "median_before_energy_fraction": 0.00030999995696012815,
+          "median_delta_energy_fraction": 0.000531091743936185,
+          "mode": 8,
+          "std_before_coeff": 0.029450416513769243,
+          "std_delta_coeff": 0.03688100917527654
+        },
+        {
+          "axis": "x",
+          "channel": "x8",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -3.659659961041069e-05,
+          "mean_before_energy_fraction": 0.0008186047748888899,
+          "mean_delta_coeff": 0.0003056165495830807,
+          "mean_delta_energy_fraction": 0.0023767872172701108,
+          "median_before_energy_fraction": 0.00012240314904045556,
+          "median_delta_energy_fraction": 0.00048280565306744913,
+          "mode": 8,
+          "std_before_coeff": 0.025141363626482803,
+          "std_delta_coeff": 0.03586118147238072
+        },
+        {
+          "axis": "x",
+          "channel": "x9",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.011969989925148958,
+          "mean_before_energy_fraction": 0.0039325894634841315,
+          "mean_delta_coeff": -7.570410890507133e-05,
+          "mean_delta_energy_fraction": 0.001467101001428871,
+          "median_before_energy_fraction": 0.0002236550538566587,
+          "median_delta_energy_fraction": 0.00029126422535274277,
+          "mode": 9,
+          "std_before_coeff": 0.020505494115943657,
+          "std_delta_coeff": 0.027007351384797505
+        },
+        {
+          "axis": "y",
+          "channel": "y9",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.0036981096634918866,
+          "mean_before_energy_fraction": 0.001470573168850921,
+          "mean_delta_coeff": 0.00035223153066983847,
+          "mean_delta_energy_fraction": 0.0013693053035751732,
+          "median_before_energy_fraction": 0.00013618785070651341,
+          "median_delta_energy_fraction": 0.00027705858387983484,
+          "mode": 9,
+          "std_before_coeff": 0.019215034907122786,
+          "std_delta_coeff": 0.026240644741280742
+        },
+        {
+          "axis": "y",
+          "channel": "y10",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.004260736629238283,
+          "mean_before_energy_fraction": 0.0011531196205246475,
+          "mean_delta_coeff": -0.0017485078506273388,
+          "mean_delta_energy_fraction": 0.0009497841972389993,
+          "median_before_energy_fraction": 0.00011463998018006485,
+          "median_delta_energy_fraction": 0.00017877738238433662,
+          "mode": 10,
+          "std_before_coeff": 0.016678731783808385,
+          "std_delta_coeff": 0.0215035775140337
+        },
+        {
+          "axis": "x",
+          "channel": "x10",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.0001548734298388937,
+          "mean_before_energy_fraction": 0.0006775176692123482,
+          "mean_delta_coeff": -0.00026502189857873653,
+          "mean_delta_energy_fraction": 0.0008370585920552652,
+          "median_before_energy_fraction": 3.685154817699642e-05,
+          "median_delta_energy_fraction": 0.00014303194037279694,
+          "mode": 10,
+          "std_before_coeff": 0.013894764075295692,
+          "std_delta_coeff": 0.019772210639430205
+        },
+        {
+          "axis": "y",
+          "channel": "y11",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.003610712596289375,
+          "mean_before_energy_fraction": 0.0008265953234698388,
+          "mean_delta_coeff": 0.00048319187628442935,
+          "mean_delta_energy_fraction": 0.0006260301694945971,
+          "median_before_energy_fraction": 6.060612005168404e-05,
+          "median_delta_energy_fraction": 9.812542280993526e-05,
+          "mode": 11,
+          "std_before_coeff": 0.012818711346610672,
+          "std_delta_coeff": 0.016510261004879546
+        },
+        {
+          "axis": "x",
+          "channel": "x11",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.006912375549243661,
+          "mean_before_energy_fraction": 0.002779260572630613,
+          "mean_delta_coeff": -0.0008592866043495794,
+          "mean_delta_energy_fraction": 0.0005859559683335847,
+          "median_before_energy_fraction": 7.322367914929919e-05,
+          "median_delta_energy_fraction": 9.691726166054838e-05,
+          "mode": 11,
+          "std_before_coeff": 0.012572797737109977,
+          "std_delta_coeff": 0.016226809697971578
+        },
+        {
+          "axis": "y",
+          "channel": "y12",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.002778349709006496,
+          "mean_before_energy_fraction": 0.0006318473659927641,
+          "mean_delta_coeff": -0.0010365611517730456,
+          "mean_delta_energy_fraction": 0.0004913977766706709,
+          "median_before_energy_fraction": 4.844874306003264e-05,
+          "median_delta_energy_fraction": 7.1878765934061e-05,
+          "mode": 12,
+          "std_before_coeff": 0.011488300505654917,
+          "std_delta_coeff": 0.013924246728076507
+        },
+        {
+          "axis": "x",
+          "channel": "x12",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -2.870885333779588e-05,
+          "mean_before_energy_fraction": 0.0003924700619479414,
+          "mean_delta_coeff": -0.00010086032548348667,
+          "mean_delta_energy_fraction": 0.0004518019708877683,
+          "median_before_energy_fraction": 1.7167214728070608e-05,
+          "median_delta_energy_fraction": 6.25025054411898e-05,
+          "mode": 12,
+          "std_before_coeff": 0.009478421249330233,
+          "std_delta_coeff": 0.013180880445541056
+        },
+        {
+          "axis": "z",
+          "channel": "z8",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": -0.0007604525568015193,
+          "mean_before_energy_fraction": 3.2286103094186016e-05,
+          "mean_delta_coeff": -0.0001603885858014698,
+          "mean_delta_energy_fraction": 0.0004081026532851031,
+          "median_before_energy_fraction": 2.545306799753937e-06,
+          "median_delta_energy_fraction": 2.6930396370972343e-06,
+          "mode": 8,
+          "std_before_coeff": 0.007368418421904844,
+          "std_delta_coeff": 0.009789718213639534
+        },
+        {
+          "axis": "y",
+          "channel": "y13",
+          "in_base_c_g_shape": false,
+          "mean_before_coeff": 0.002555015834498422,
+          "mean_before_energy_fraction": 0.00047275249591492523,
+          "mean_delta_coeff": -0.00038011384973375006,
+          "mean_delta_energy_fraction": 0.0003657614014569481,
+          "median_before_energy_fraction": 2.6237859232592987e-05,
+          "median_delta_energy_fraction": 4.415209556269083e-05,
+          "mode": 13,
+          "std_before_coeff": 0.008785269580261445,
+          "std_delta_coeff": 0.011625171993527425
+        }
+      ]
+    },
+    "tail_energy_quantiles": {
+      "before_basis": {
+        "q000": 5.037458616617144e-05,
+        "q001": 0.0004220639335437148,
+        "q005": 0.0008803367249072995,
+        "q010": 0.0011457019735662056,
+        "q025": 0.0018925854225404035,
+        "q050": 0.0031488397540415424,
+        "q075": 0.005302002526843492,
+        "q090": 0.009270885150198143,
+        "q095": 0.017691220071329627,
+        "q099": 0.7031736868483477,
+        "q100": 0.9201832923017462
+      },
+      "before_basis_summary": {
+        "max": 0.9201832923017462,
+        "mean": 0.022676445476294563,
+        "min": 5.037458616617144e-05,
+        "std": 0.10953707488242087
+      },
+      "delta_basis": {
+        "q000": 0.0001526076939818936,
+        "q001": 0.00031129607004579503,
+        "q005": 0.0006483483078529857,
+        "q010": 0.0010258369148384446,
+        "q025": 0.0022578970724453844,
+        "q050": 0.006393895087904635,
+        "q075": 0.0185792906019006,
+        "q090": 0.06159788108036921,
+        "q095": 0.13131479511179042,
+        "q099": 0.27840631562577123,
+        "q100": 0.5277902340396672
+      },
+      "delta_basis_summary": {
+        "max": 0.5277902340396672,
+        "mean": 0.024385658776299834,
+        "min": 0.0001526076939818936,
+        "std": 0.05180128765446619
+      },
+      "histogram_png": "outputs/plots/g2_tail_histogram_v3.png",
+      "population": "primary"
+    }
+  },
+  "goal_sampling_proof": {
+    "goal_stream_hash_sha256": "f3b89e1cb8188a3177a88ca7a5dc185ac4456911cc2fb9d4ed8f22ce2d9fb4da",
+    "matches_v2_goal_stream_hash": true,
+    "sample_goals_call": "sample_goals(seed=args.seed, lengths_m=data.length_m, sampling_cfg=config['goal_sampling'])",
+    "sampling_spec": {
+      "anchor_box_unit_length": {
+        "high": [
+          1.25,
+          1.25,
+          0.18
+        ],
+        "low": [
+          -1.25,
+          -1.25,
+          0.02
+        ]
+      },
+      "anchor_mode": "centroid",
+      "anchor_sampling": "uniform per axis; sampled_anchor = uniform(low, high) * transition.length_m",
+      "goal_per_transition": "one independently sampled template index and anchor per transition",
+      "rng": "numpy.default_rng(seed)",
+      "seed": 0,
+      "template_counts_all_transitions": {
+        "s_curve": 1696,
+        "straight": 1671,
+        "u_bend": 1689
+      },
+      "templates": [
+        "straight",
+        "u_bend",
+        "s_curve"
+      ]
+    },
+    "v2_metrics_path": "outputs/metrics/g2_correlation_v2.json",
+    "v2_recorded_goal_stream_hash_sha256": "f3b89e1cb8188a3177a88ca7a5dc185ac4456911cc2fb9d4ed8f22ce2d9fb4da",
+    "v2_recorded_sampling_spec_comparisons": {
+      "anchor_box_unit_length": true,
+      "anchor_mode": true,
+      "seed": true,
+      "template_counts_all_transitions": true,
+      "templates": true
+    },
+    "v2_recorded_sampling_spec_matches": true,
+    "v3_computed_goal_stream_hash_sha256": "f3b89e1cb8188a3177a88ca7a5dc185ac4456911cc2fb9d4ed8f22ce2d9fb4da"
+  },
+  "methodology": {
+    "component_a": "Unchanged v2 Spearman rho(ΔD_corr, Δ||c_g_anchor||) on primary population",
+    "component_b": "M5R2 Case A fixed-orientation Spearman rho(ΔD_shape, Δ||c_g_shape||)",
+    "delta_D_corr": "Absolute correspondence_l2 after-before; existing min-flip behavior unchanged",
+    "delta_D_shape": "Centroid-removed RMS after-before under one X_before-selected flip per transition",
+    "delta_c_g_shape_norm": "Mode-1..7 DCT residual norm after-before under the same fixed flip",
+    "physics_quality_note": "For gate/human review, prefer rates.success_and_converged (0.484) over the headline settle_converged rate: failed grasps are no-op transitions whose converged flag reflects the untouched rope, so the aggregate conflates populations. Settle non-convergence at the immutable 1e-3/5000 budget affects 2341 successful transitions; they are recorded honestly (settle_steps == max_steps) and excluded from the normalizer fit. Flagged for the M5/M6 human gates (plan A1).",
+    "threshold_rho": 0.9
+  },
+  "orientation_convention": "orientation canonicalization 규약 (2026-07-03 M5R2 Case A로 편입 — 버그 수정, 파라미터 변경 아님): per transition, choose exactly one flip decision against the goal using X_before, selecting the orientation that minimizes the mode-1..7 residual versus the goal's shape Phi; apply that fixed decision identically to X_before and X_after in both c_g_shape and D_shape computations for the shape component. Component (a) absolute D keeps the existing correspondence_l2 min-flip unchanged.",
+  "outputs": {
+    "metrics_json": "outputs/metrics/g2_correlation_v3.json",
+    "scatter_shape_png": "outputs/plots/g2_scatter_shape_v3.png",
+    "stdout_log": "outputs/reports/gate_g2_v3_stdout.log",
+    "tail_histogram_png": "outputs/plots/g2_tail_histogram_v3.png"
+  },
+  "pass_overall": true,
+  "primary_population": {
+    "definition": "grasp_success AND settle_steps != settle_max_steps",
+    "n": 2445,
+    "settle_max_steps": 5000
+  },
+  "schema_version": 3,
+  "seed": 0,
+  "source_dataset": "outputs/data/p0_random_transitions.h5",
+  "source_metrics_v2": "outputs/metrics/g2_correlation_v2.json",
+  "variants": {
+    "all_success": {
+      "component_a": {
+        "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+        "delta_D_corr": {
+          "max": 7.611125467097281,
+          "mean": 0.027053679477825224,
+          "min": -0.5099531000970832
+        },
+        "delta_c_g_anchor_norm": {
+          "max": 7.611132022627853,
+          "mean": 0.023454640583198804,
+          "min": -0.5514549654874328
+        },
+        "n": 4786,
+        "name": "all_success_component_a_anchor",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.9876126579280728,
+        "threshold": 0.9
+      },
+      "component_b": {
+        "case_determination": "A",
+        "definition": "Spearman rho(ΔD_shape centroid-removed fixed-orientation correspondence L2, Δ||c_g_shape|| under the M5R2 Case A orientation convention)",
+        "delta_D_shape_flip_consistent": {
+          "max": 1.6229848661761457,
+          "mean": 0.054800145092677374,
+          "min": -0.19966623496203156
+        },
+        "delta_c_g_shape_norm_flip_consistent": {
+          "max": 9.183486464448825,
+          "mean": 0.31008139902629217,
+          "min": -1.1319022039495108
+        },
+        "n": 4786,
+        "name": "all_success_component_b_shape_flip_consistent",
+        "orientation_convention": "orientation canonicalization 규약 (2026-07-03 M5R2 Case A로 편입 — 버그 수정, 파라미터 변경 아님): per transition, choose exactly one flip decision against the goal using X_before, selecting the orientation that minimizes the mode-1..7 residual versus the goal's shape Phi; apply that fixed decision identically to X_before and X_after in both c_g_shape and D_shape computations for the shape component. Component (a) absolute D keeps the existing correspondence_l2 min-flip unchanged.",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.999988974007198,
+        "threshold": 0.9
+      },
+      "pass_overall": true
+    },
+    "all_transitions": {
+      "component_a": {
+        "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+        "delta_D_corr": {
+          "max": 7.611125467097281,
+          "mean": 0.025608961625963513,
+          "min": -0.5099531000970832
+        },
+        "delta_c_g_anchor_norm": {
+          "max": 7.611132022627853,
+          "mean": 0.0222021182419283,
+          "min": -0.5514549654874328
+        },
+        "n": 5056,
+        "name": "all_transitions_component_a_anchor",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.9869961304048882,
+        "threshold": 0.9
+      },
+      "component_b": {
+        "case_determination": "A",
+        "definition": "Spearman rho(ΔD_shape centroid-removed fixed-orientation correspondence L2, Δ||c_g_shape|| under the M5R2 Case A orientation convention)",
+        "delta_D_shape_flip_consistent": {
+          "max": 1.6229848661761457,
+          "mean": 0.05187371329381999,
+          "min": -0.19966623496203156
+        },
+        "delta_c_g_shape_norm_flip_consistent": {
+          "max": 9.183486464448825,
+          "mean": 0.29352246355613815,
+          "min": -1.1319022039495108
+        },
+        "n": 5056,
+        "name": "all_transitions_component_b_shape_flip_consistent",
+        "orientation_convention": "orientation canonicalization 규약 (2026-07-03 M5R2 Case A로 편입 — 버그 수정, 파라미터 변경 아님): per transition, choose exactly one flip decision against the goal using X_before, selecting the orientation that minimizes the mode-1..7 residual versus the goal's shape Phi; apply that fixed decision identically to X_before and X_after in both c_g_shape and D_shape computations for the shape component. Component (a) absolute D keeps the existing correspondence_l2 min-flip unchanged.",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.9999691596050245,
+        "threshold": 0.9
+      },
+      "pass_overall": true
+    }
+  },
+  "verdict_source": "issue #6 comment 4872665607"
+}

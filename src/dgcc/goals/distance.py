@@ -6,8 +6,11 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
+from scipy.fft import dct
 
 from dgcc.goals.dual_goal import DualGoal, arc_length, canonical_centerline, goal_curve
+from dgcc.phi.dct import DCT_NORM, DCT_TYPE, M as DCT_MODE_COUNT
+from dgcc.phi.resample import K as RESAMPLED_POINTS
 
 
 def chamfer(X: np.ndarray, Y: np.ndarray) -> float:
@@ -74,8 +77,121 @@ def correspondence_l2(
     return min(identity, flipped) / length
 
 
+def canonical_shape_flip(
+    X_before: np.ndarray,
+    goal: DualGoal | Mapping[str, Any],
+    length_m: float,
+    *,
+    shape_modes: int = DCT_MODE_COUNT,
+) -> bool:
+    """Return the M5R2 fixed orientation decision for shape quantities.
+
+    The decision is made once per transition from ``X_before`` only: canonicalize
+    both orientations of ``X_before``, compare their mode-1..``shape_modes-1``
+    DCT residuals against the goal curve's shape coefficients, and choose the
+    flipped orientation only when its residual is strictly smaller.  The returned
+    decision is then applied identically to before/after curves for both
+    ``D_shape`` and ``c_g_shape`` measurements.
+    """
+
+    length = _validate_length(length_m)
+    shape_modes = _validate_shape_modes(shape_modes)
+    goal_shape = _canonical_shape(goal_curve(goal, length))
+    before_identity = _canonical_shape(X_before, flip=False)
+    before_flipped = _canonical_shape(X_before, flip=True)
+
+    goal_coeffs = _shape_coeff_vector(goal_shape, shape_modes)
+    identity_norm = float(np.linalg.norm(goal_coeffs - _shape_coeff_vector(before_identity, shape_modes)))
+    flipped_norm = float(np.linalg.norm(goal_coeffs - _shape_coeff_vector(before_flipped, shape_modes)))
+    return bool(flipped_norm < identity_norm)
+
+
+def flip_consistent_shape_distance(
+    X: np.ndarray,
+    G_curve: np.ndarray,
+    length_m: float,
+    *,
+    flip: bool,
+) -> float:
+    """Return centroid-removed correspondence L2 using a caller-fixed flip."""
+
+    length = _validate_length(length_m)
+    x = _canonical_shape(X, flip=flip)
+    g = _canonical_shape(G_curve, flip=False)
+    return _rms_pointwise_l2(x, g) / length
+
+
+def flip_consistent_shape_cg_norm(
+    X: np.ndarray,
+    goal: DualGoal | Mapping[str, Any],
+    length_m: float,
+    *,
+    flip: bool,
+    shape_modes: int = DCT_MODE_COUNT,
+) -> float:
+    """Return ``||c_g_shape||`` under the fixed M5R2 orientation convention."""
+
+    length = _validate_length(length_m)
+    shape_modes = _validate_shape_modes(shape_modes)
+    goal_shape = _canonical_shape(goal_curve(goal, length))
+    x_shape = _canonical_shape(X, flip=flip)
+    residual = _shape_coeff_vector(goal_shape, shape_modes) - _shape_coeff_vector(x_shape, shape_modes)
+    return float(np.linalg.norm(residual))
+
+
+def flip_consistent_shape_measurements(
+    X_before: np.ndarray,
+    X_after: np.ndarray,
+    goal: DualGoal | Mapping[str, Any],
+    length_m: float,
+    *,
+    shape_modes: int = DCT_MODE_COUNT,
+) -> dict[str, float | bool]:
+    """Return before/after fixed-orientation shape distances and norms."""
+
+    length = _validate_length(length_m)
+    flip = canonical_shape_flip(X_before, goal, length, shape_modes=shape_modes)
+    g_curve = goal_curve(goal, length)
+
+    d_before = flip_consistent_shape_distance(X_before, g_curve, length, flip=flip)
+    d_after = flip_consistent_shape_distance(X_after, g_curve, length, flip=flip)
+    cg_before = flip_consistent_shape_cg_norm(X_before, goal, length, flip=flip, shape_modes=shape_modes)
+    cg_after = flip_consistent_shape_cg_norm(X_after, goal, length, flip=flip, shape_modes=shape_modes)
+
+    return {
+        "flip": flip,
+        "D_shape_before": d_before,
+        "D_shape_after": d_after,
+        "c_g_shape_norm_before": cg_before,
+        "c_g_shape_norm_after": cg_after,
+        "delta_D_shape": d_after - d_before,
+        "delta_c_g_shape_norm": cg_after - cg_before,
+    }
+
+
 def _rms_pointwise_l2(X: np.ndarray, Y: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.sum((X - Y) ** 2, axis=1))))
+
+
+def _canonical_shape(X: np.ndarray, *, flip: bool = False) -> np.ndarray:
+    curve = canonical_centerline(_validate_centerline("X", X))
+    if flip:
+        curve = curve[::-1].copy()
+    return curve - curve.mean(axis=0, keepdims=True)
+
+
+def _shape_coeff_vector(shape_curve: np.ndarray, shape_modes: int) -> np.ndarray:
+    coeffs = dct(shape_curve, type=DCT_TYPE, norm=DCT_NORM, axis=0)
+    return coeffs[1:shape_modes, :].T.reshape(3 * (shape_modes - 1))
+
+
+def _validate_shape_modes(shape_modes: int) -> int:
+    modes = int(shape_modes)
+    if modes < 2:
+        raise ValueError("shape_modes must include at least mode 1")
+    if modes > RESAMPLED_POINTS:
+        raise ValueError("shape_modes cannot exceed the canonical point count")
+    return modes
 
 
 
@@ -109,4 +225,13 @@ def _validate_length(length_m: float) -> float:
     return length
 
 
-__all__ = ["D", "chamfer", "chamfer_distance", "correspondence_l2"]
+__all__ = [
+    "D",
+    "canonical_shape_flip",
+    "chamfer",
+    "chamfer_distance",
+    "correspondence_l2",
+    "flip_consistent_shape_cg_norm",
+    "flip_consistent_shape_distance",
+    "flip_consistent_shape_measurements",
+]

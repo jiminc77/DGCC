@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 from matplotlib.patches import Circle
 import numpy as np
+from scipy.fft import dct, idct
 from scipy.stats import pearsonr, spearmanr
 import yaml
 _PREFERRED_PLOT_FONTS = ("Noto Sans CJK KR", "Noto Sans CJK JP", "Droid Sans Fallback")
@@ -37,19 +38,20 @@ _PLOT_FONT_FAMILY = next(
 plt.rcParams["font.family"] = [_PLOT_FONT_FAMILY, "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-from dgcc.goals.distance import D, chamfer_distance, correspondence_l2
+from dgcc.goals.distance import D, canonical_shape_flip, chamfer_distance, correspondence_l2
 from dgcc.goals.dual_goal import (
     CG_DIM,
     SHAPE_CHANNEL_COUNT,
     TEMPLATE_NAMES,
     DualGoal,
     c_g,
+    canonical_centerline,
     goal_curve,
     make_goal,
     make_shape_template,
     normalize_shape_template,
 )
-from dgcc.phi.dct import CHANNEL_LAYOUT_ID
+from dgcc.phi.dct import CHANNEL_LAYOUT_ID, DCT_NORM, DCT_TYPE
 from dgcc.phi.resample import resample
 from dgcc.utils.meta import get_git_commit_hash
 
@@ -61,6 +63,19 @@ AMENDED_DEFINITION_TEXT = (
     "orientation flip evaluates k↔k and k↔K+1−k correspondences; gate PASS = "
     "Spearman rho(ΔD, Δ||c_g_anchor||) >= 0.9 AND "
     "Spearman rho(ΔD_shape, Δ||c_g_shape||) >= 0.9."
+)
+V3_VERDICT_SOURCE = "issue #6 comment 4872665607"
+V3_CASE_DETERMINATION = "A"
+V3_BASE_M = 8
+V3_EXTRA_MS = (12, 16)
+V3_AXES = ("x", "y", "z")
+V3_QUANTILE_POINTS = (0.0, 0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 1.0)
+V3_ORIENTATION_CONVENTION_TEXT = (
+    "orientation canonicalization 규약 (2026-07-03 M5R2 Case A로 편입 — 버그 수정, 파라미터 변경 아님): "
+    "per transition, choose exactly one flip decision against the goal using X_before, selecting the "
+    "orientation that minimizes the mode-1..7 residual versus the goal's shape Phi; apply that fixed "
+    "decision identically to X_before and X_after in both c_g_shape and D_shape computations for the "
+    "shape component. Component (a) absolute D keeps the existing correspondence_l2 min-flip unchanged."
 )
 
 
@@ -103,6 +118,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Run the amended component-split correspondence-L2 re-measurement and "
             "Chamfer sensitivity diagnostic, writing only new *_v2/new artifacts."
+        ),
+    )
+    parser.add_argument(
+        "--v3",
+        action="store_true",
+        help=(
+            "Run the M5R2 Case A fixed-orientation shape re-measurement, writing only "
+            "*_v3 artifacts."
         ),
     )
     return parser
@@ -761,18 +784,307 @@ def run_chamfer_sensitivity_experiment(metrics_path: Path, scatter_path: Path) -
     return payload
 
 
+def v3_centered(curve: np.ndarray) -> np.ndarray:
+    arr = np.asarray(curve, dtype=float)
+    return arr - arr.mean(axis=0, keepdims=True)
+
+
+def v3_canonical_shape(raw_curve: np.ndarray, *, flip: bool = False) -> np.ndarray:
+    curve = canonical_centerline(raw_curve)
+    if flip:
+        curve = curve[::-1].copy()
+    return v3_centered(curve)
+
+
+def v3_coeffs_full(shape_curve: np.ndarray) -> np.ndarray:
+    return dct(shape_curve, type=DCT_TYPE, norm=DCT_NORM, axis=0)
+
+
+def v3_coeff_vector_from_coeffs(coeffs: np.ndarray, modes: int) -> np.ndarray:
+    return coeffs[1:modes, :].T.reshape(3 * (modes - 1))
+
+
+def v3_reconstruct_lowpass_from_coeffs(coeffs: np.ndarray, modes: int) -> np.ndarray:
+    truncated = np.zeros_like(coeffs)
+    truncated[1:modes, :] = coeffs[1:modes, :]
+    return idct(truncated, type=DCT_TYPE, norm=DCT_NORM, axis=0)
+
+
+def v3_rms_pointwise_l2(x: np.ndarray, y: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.sum((x - y) ** 2, axis=1))))
+
+
+def v3_spearman(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    result = spearmanr(x, y)
+    return float(result.statistic), float(result.pvalue)
+
+
+def v3_series_summary(values: np.ndarray) -> dict[str, float | None]:
+    arr = np.asarray(values, dtype=float)
+    if arr.size == 0:
+        return {"min": None, "mean": None, "std": None, "max": None}
+    return {
+        "min": float(np.min(arr)),
+        "mean": float(np.mean(arr)),
+        "std": float(np.std(arr)),
+        "max": float(np.max(arr)),
+    }
+
+
+def v3_quantiles(values: np.ndarray) -> dict[str, float | None]:
+    arr = np.asarray(values, dtype=float)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return {f"q{int(q * 100):03d}": None for q in V3_QUANTILE_POINTS}
+    qs = np.quantile(arr, V3_QUANTILE_POINTS)
+    return {f"q{int(q * 100):03d}": float(v) for q, v in zip(V3_QUANTILE_POINTS, qs, strict=True)}
+
+
+def v3_safe_ratio(numerator: float, denominator: float) -> float:
+    if denominator <= 0.0 or not np.isfinite(denominator):
+        return 0.0
+    return float(numerator / denominator)
+
+
+def v3_per_channel_summary(
+    before_coeff_residuals: np.ndarray,
+    delta_coeff_residuals: np.ndarray,
+    primary_mask: np.ndarray,
+) -> dict[str, Any]:
+    before = before_coeff_residuals[primary_mask]
+    delta = delta_coeff_residuals[primary_mask]
+    before_energy_total = np.sum(before[:, 1:, :] ** 2, axis=(1, 2))
+    delta_energy_total = np.sum(delta[:, 1:, :] ** 2, axis=(1, 2))
+
+    rows: list[dict[str, Any]] = []
+    for axis_index, axis in enumerate(V3_AXES):
+        for mode in range(1, before_coeff_residuals.shape[1]):
+            before_e = before[:, mode, axis_index] ** 2
+            delta_e = delta[:, mode, axis_index] ** 2
+            before_frac = np.divide(
+                before_e,
+                before_energy_total,
+                out=np.zeros_like(before_e),
+                where=before_energy_total > 0.0,
+            )
+            delta_frac = np.divide(
+                delta_e,
+                delta_energy_total,
+                out=np.zeros_like(delta_e),
+                where=delta_energy_total > 0.0,
+            )
+            rows.append(
+                {
+                    "channel": f"{axis}{mode}",
+                    "axis": axis,
+                    "mode": mode,
+                    "in_base_c_g_shape": bool(mode < V3_BASE_M),
+                    "mean_before_energy_fraction": float(np.mean(before_frac)),
+                    "median_before_energy_fraction": float(np.median(before_frac)),
+                    "mean_delta_energy_fraction": float(np.mean(delta_frac)),
+                    "median_delta_energy_fraction": float(np.median(delta_frac)),
+                    "mean_before_coeff": float(np.mean(before[:, mode, axis_index])),
+                    "std_before_coeff": float(np.std(before[:, mode, axis_index])),
+                    "mean_delta_coeff": float(np.mean(delta[:, mode, axis_index])),
+                    "std_delta_coeff": float(np.std(delta[:, mode, axis_index])),
+                }
+            )
+
+    lowpass_rows = [row for row in rows if row["in_base_c_g_shape"]]
+    before_top = sorted(rows, key=lambda row: row["mean_before_energy_fraction"], reverse=True)[:12]
+    delta_top = sorted(rows, key=lambda row: row["mean_delta_energy_fraction"], reverse=True)[:12]
+    before_tail_top = sorted(
+        [row for row in rows if not row["in_base_c_g_shape"]],
+        key=lambda row: row["mean_before_energy_fraction"],
+        reverse=True,
+    )[:12]
+    delta_tail_top = sorted(
+        [row for row in rows if not row["in_base_c_g_shape"]],
+        key=lambda row: row["mean_delta_energy_fraction"],
+        reverse=True,
+    )[:12]
+    return {
+        "basis": "orthonormal DCT-II coefficients of centroid-removed fixed-orientation residuals; modes 1..31 only",
+        "population": "primary",
+        "lowpass_channels_mode_1_to_7": lowpass_rows,
+        "top_channels_by_before_residual_energy_fraction": before_top,
+        "top_channels_by_delta_residual_energy_fraction": delta_top,
+        "top_tail_channels_by_before_residual_energy_fraction": before_tail_top,
+        "top_tail_channels_by_delta_residual_energy_fraction": delta_tail_top,
+    }
+
+
+def make_v3_shape_scatter(path: Path, x: np.ndarray, y: np.ndarray, mask: np.ndarray, rho: float) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7.2, 5.6), constrained_layout=True)
+    ax.scatter(x[mask], y[mask], s=9, alpha=0.45, linewidths=0)
+    ax.axhline(0.0, color="0.72", linewidth=0.8)
+    ax.axvline(0.0, color="0.72", linewidth=0.8)
+    ax.set_xlabel("ΔD_shape_full fixed orientation")
+    ax.set_ylabel("Δ||c_g_shape|| fixed orientation (modes 1..7)")
+    ax.set_title(f"M5R2 D1 flip-consistent primary shape coupling, Spearman ρ={rho:.6f}")
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+
+def make_v3_tail_hist(path: Path, before_tail: np.ndarray, delta_tail: np.ndarray, mask: np.ndarray) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(1, 2, figsize=(11.2, 4.7), constrained_layout=True, sharey=True)
+    bins = np.linspace(0.0, 1.0, 41)
+    axes[0].hist(before_tail[mask], bins=bins, color="tab:blue", alpha=0.82)
+    axes[0].set_title("Before residual tail energy")
+    axes[0].set_xlabel("||modes >=8||² / ||modes >=1||²")
+    axes[0].set_ylabel("primary transition count")
+    axes[1].hist(delta_tail[mask], bins=bins, color="tab:orange", alpha=0.82)
+    axes[1].set_title("Delta residual tail energy")
+    axes[1].set_xlabel("||modes >=8||² / ||modes >=1||²")
+    for ax in axes:
+        ax.set_xlim(0.0, 1.0)
+        ax.grid(axis="y", alpha=0.22)
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+
+def compute_measurements_v3(data: TransitionArrays, goals: list[DualGoal]) -> dict[str, Any]:
+    if len(goals) != data.X_before.shape[0]:
+        raise ValueError("number of sampled goals must equal transition count")
+    n = len(goals)
+    k = int(data.X_before.shape[1])
+    out: dict[str, Any] = {
+        "delta_d_corr": np.empty(n, dtype=float),
+        "delta_anchor_norm": np.empty(n, dtype=float),
+        "delta_d_shape_flip_consistent": np.empty(n, dtype=float),
+        "delta_d_lowpass_flip_consistent": np.empty(n, dtype=float),
+        "delta_d_lowpass_raw_flip_consistent": np.empty(n, dtype=float),
+        "delta_shape_norm_flip_consistent": np.empty(n, dtype=float),
+        "delta_shape_norm_extra": {modes: np.empty(n, dtype=float) for modes in V3_EXTRA_MS},
+        "fixed_flip": np.empty(n, dtype=bool),
+        "old_dshape_flip_before": np.empty(n, dtype=bool),
+        "old_dshape_flip_after": np.empty(n, dtype=bool),
+        "d1_decision_margin": np.empty(n, dtype=float),
+        "parseval_before_abs_err": np.empty(n, dtype=float),
+        "parseval_after_abs_err": np.empty(n, dtype=float),
+        "tail_fraction_before": np.empty(n, dtype=float),
+        "tail_fraction_delta": np.empty(n, dtype=float),
+        "before_coeff_residuals": np.empty((n, k, 3), dtype=float),
+        "delta_coeff_residuals": np.empty((n, k, 3), dtype=float),
+    }
+
+    for idx, goal in enumerate(goals):
+        length = float(data.length_m[idx])
+        g_curve = goal_curve(goal, length)
+        g_shape = v3_canonical_shape(g_curve)
+        g_coeffs = v3_coeffs_full(g_shape)
+        g_phi8 = v3_coeff_vector_from_coeffs(g_coeffs, V3_BASE_M)
+
+        corr_before = correspondence_l2(data.X_before[idx], g_curve, length)
+        corr_after = correspondence_l2(data.X_after[idx], g_curve, length)
+        cg_before = c_g(data.X_before[idx], goal, length)
+        cg_after = c_g(data.X_after[idx], goal, length)
+        out["delta_d_corr"][idx] = corr_after - corr_before
+        out["delta_anchor_norm"][idx] = float(
+            np.linalg.norm(cg_after[-3:]) - np.linalg.norm(cg_before[-3:])
+        )
+
+        xb_identity = v3_canonical_shape(data.X_before[idx], flip=False)
+        xb_flipped = v3_canonical_shape(data.X_before[idx], flip=True)
+        xa_identity = v3_canonical_shape(data.X_after[idx], flip=False)
+        xa_flipped = v3_canonical_shape(data.X_after[idx], flip=True)
+
+        xb_id_coeffs = v3_coeffs_full(xb_identity)
+        xb_flip_coeffs = v3_coeffs_full(xb_flipped)
+        id_residual_norm = float(np.linalg.norm(g_phi8 - v3_coeff_vector_from_coeffs(xb_id_coeffs, V3_BASE_M)))
+        flip_residual_norm = float(
+            np.linalg.norm(g_phi8 - v3_coeff_vector_from_coeffs(xb_flip_coeffs, V3_BASE_M))
+        )
+        choose_flip = bool(flip_residual_norm < id_residual_norm)
+        helper_flip = canonical_shape_flip(data.X_before[idx], goal, length, shape_modes=V3_BASE_M)
+        if helper_flip != choose_flip:
+            raise RuntimeError(f"canonical_shape_flip helper mismatch at transition {idx}")
+        out["fixed_flip"][idx] = choose_flip
+        out["d1_decision_margin"][idx] = id_residual_norm - flip_residual_norm
+
+        xb = xb_flipped if choose_flip else xb_identity
+        xa = xa_flipped if choose_flip else xa_identity
+        xb_coeffs = xb_flip_coeffs if choose_flip else xb_id_coeffs
+        xa_coeffs = v3_coeffs_full(xa)
+
+        before_identity = v3_rms_pointwise_l2(xb_identity, g_shape)
+        before_flipped = v3_rms_pointwise_l2(xb_flipped, g_shape)
+        after_identity = v3_rms_pointwise_l2(xa_identity, g_shape)
+        after_flipped = v3_rms_pointwise_l2(xa_flipped, g_shape)
+        out["old_dshape_flip_before"][idx] = bool(before_flipped < before_identity)
+        out["old_dshape_flip_after"][idx] = bool(after_flipped < after_identity)
+
+        d_full_before = v3_rms_pointwise_l2(xb, g_shape) / length
+        d_full_after = v3_rms_pointwise_l2(xa, g_shape) / length
+        out["delta_d_shape_flip_consistent"][idx] = d_full_after - d_full_before
+
+        g_low = v3_reconstruct_lowpass_from_coeffs(g_coeffs, V3_BASE_M)
+        xb_low = v3_reconstruct_lowpass_from_coeffs(xb_coeffs, V3_BASE_M)
+        xa_low = v3_reconstruct_lowpass_from_coeffs(xa_coeffs, V3_BASE_M)
+        d_low_before_raw = v3_rms_pointwise_l2(xb_low, g_low)
+        d_low_after_raw = v3_rms_pointwise_l2(xa_low, g_low)
+        d_low_before = d_low_before_raw / length
+        d_low_after = d_low_after_raw / length
+        out["delta_d_lowpass_raw_flip_consistent"][idx] = d_low_after_raw - d_low_before_raw
+        out["delta_d_lowpass_flip_consistent"][idx] = d_low_after - d_low_before
+
+        residual_before_phi8 = g_phi8 - v3_coeff_vector_from_coeffs(xb_coeffs, V3_BASE_M)
+        residual_after_phi8 = g_phi8 - v3_coeff_vector_from_coeffs(xa_coeffs, V3_BASE_M)
+        norm_before_phi8 = float(np.linalg.norm(residual_before_phi8))
+        norm_after_phi8 = float(np.linalg.norm(residual_after_phi8))
+        out["delta_shape_norm_flip_consistent"][idx] = norm_after_phi8 - norm_before_phi8
+        out["parseval_before_abs_err"][idx] = abs(d_low_before_raw * np.sqrt(k) - norm_before_phi8)
+        out["parseval_after_abs_err"][idx] = abs(d_low_after_raw * np.sqrt(k) - norm_after_phi8)
+
+        for modes in V3_EXTRA_MS:
+            residual_before = v3_coeff_vector_from_coeffs(g_coeffs, modes) - v3_coeff_vector_from_coeffs(
+                xb_coeffs,
+                modes,
+            )
+            residual_after = v3_coeff_vector_from_coeffs(g_coeffs, modes) - v3_coeff_vector_from_coeffs(
+                xa_coeffs,
+                modes,
+            )
+            out["delta_shape_norm_extra"][modes][idx] = float(
+                np.linalg.norm(residual_after) - np.linalg.norm(residual_before)
+            )
+
+        residual_before_coeffs = g_coeffs - xb_coeffs
+        residual_after_coeffs = g_coeffs - xa_coeffs
+        residual_delta_coeffs = residual_after_coeffs - residual_before_coeffs
+        out["before_coeff_residuals"][idx] = residual_before_coeffs
+        out["delta_coeff_residuals"][idx] = residual_delta_coeffs
+
+        before_total_energy = float(np.sum(residual_before_coeffs[1:, :] ** 2))
+        before_tail_energy = float(np.sum(residual_before_coeffs[V3_BASE_M:, :] ** 2))
+        delta_total_energy = float(np.sum(residual_delta_coeffs[1:, :] ** 2))
+        delta_tail_energy = float(np.sum(residual_delta_coeffs[V3_BASE_M:, :] ** 2))
+        out["tail_fraction_before"][idx] = v3_safe_ratio(before_tail_energy, before_total_energy)
+        out["tail_fraction_delta"][idx] = v3_safe_ratio(delta_tail_energy, delta_total_energy)
+
+    return out
+
+
 def main() -> None:
     args = build_parser().parse_args()
     config_path = Path(args.config)
     config, config_text = load_config(config_path)
+    if args.v2 and args.v3:
+        raise ValueError("--v2 and --v3 are mutually exclusive")
     outputs = config.get("outputs", {})
-    if args.v2:
+    if args.v3:
+        log_path = Path(outputs.get("stdout_log_v3", "outputs/reports/gate_g2_v3_stdout.log"))
+    elif args.v2:
         log_path = Path(outputs.get("stdout_log_v2", "outputs/reports/gate_g2_v2_stdout.log"))
     else:
         log_path = Path(outputs.get("stdout_log", "outputs/reports/gate_g2_stdout.log"))
 
     with tee_stdout(log_path):
-        if args.v2:
+        if args.v3:
+            run_v3(args=args, config=config, config_text=config_text, config_path=config_path, log_path=log_path)
+        elif args.v2:
             run_v2(args=args, config=config, config_text=config_text, config_path=config_path, log_path=log_path)
         else:
             run(args=args, config=config, config_text=config_text, config_path=config_path, log_path=log_path)
@@ -972,6 +1284,371 @@ def run_v2(
     print(f"wrote anchor scatter: {anchor_scatter_path}")
     print(f"wrote shape scatter: {shape_scatter_path}")
     print(f"wrote chamfer sensitivity: {sanity_metrics_path}, {sanity_scatter_path}")
+    print(f"stdout log: {log_path}")
+
+
+def run_v3(
+    *,
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    config_text: str,
+    config_path: Path,
+    log_path: Path,
+) -> None:
+    dataset_cfg = config.get("dataset", {})
+    outputs = config.get("outputs", {})
+    quantitative = config.get("quantitative", {})
+    filters = config.get("filters", {})
+
+    dataset_path = Path(dataset_cfg.get("h5", "outputs/data/p0_random_transitions.h5"))
+    dm_stats_path = Path(dataset_cfg.get("dm_stats_json", "outputs/metrics/dm_stats.json"))
+    v2_metrics_path = Path(outputs.get("metrics_json_v2", "outputs/metrics/g2_correlation_v2.json"))
+    metrics_path = Path(outputs.get("metrics_json_v3", "outputs/metrics/g2_correlation_v3.json"))
+    plots_dir = Path(outputs.get("plots_dir", "outputs/plots"))
+    shape_scatter_path = Path(outputs.get("scatter_shape_png_v3", plots_dir / "g2_scatter_shape_v3.png"))
+    tail_hist_path = Path(outputs.get("tail_histogram_png_v3", plots_dir / "g2_tail_histogram_v3.png"))
+
+    threshold = float(quantitative.get("threshold_rho", 0.9))
+    if threshold != 0.9:
+        raise ValueError("G2 v3 threshold is immutable and must remain 0.9")
+    min_primary_n = int(quantitative.get("minimum_primary_n", 1000))
+    settle_max_steps = int(filters.get("settle_max_steps", 5000))
+
+    if not v2_metrics_path.exists():
+        raise FileNotFoundError(f"v3 requires v2 goal-stream proof at {v2_metrics_path}")
+    v2_metrics = json.loads(v2_metrics_path.read_text(encoding="utf-8"))
+    recorded_goal_hash = str(v2_metrics["goal_sampling_proof"]["goal_stream_hash_sha256"])
+
+    print(f"G2 v3 measurement start seed={int(args.seed)} config={config_path}")
+    print(f"verdict_source: {V3_VERDICT_SOURCE}")
+    print(f"case_determination: {V3_CASE_DETERMINATION}")
+    data = load_transitions(dataset_path)
+    goals, sampling_spec = sample_goals(
+        seed=int(args.seed),
+        lengths_m=data.length_m,
+        sampling_cfg=config.get("goal_sampling", {}),
+    )
+    computed_goal_hash = goal_stream_hash(goals)
+    if computed_goal_hash != recorded_goal_hash:
+        raise RuntimeError(
+            f"goal stream hash mismatch: computed {computed_goal_hash}, recorded {recorded_goal_hash}"
+        )
+
+    measurements = compute_measurements_v3(data, goals)
+    masks = population_masks(data, settle_max_steps)
+    primary_mask = masks["primary"]
+    if int(primary_mask.sum()) < min_primary_n:
+        raise RuntimeError(
+            f"primary population has n={int(primary_mask.sum())}, below required {min_primary_n}"
+        )
+
+    component_a = summarize_component_a("primary_component_a_anchor", primary_mask, measurements, threshold)
+    component_b = summarize_correlation(
+        "primary_component_b_shape_flip_consistent",
+        primary_mask,
+        measurements["delta_d_shape_flip_consistent"],
+        measurements["delta_shape_norm_flip_consistent"],
+        threshold,
+        x_key="delta_D_shape_flip_consistent",
+        y_key="delta_c_g_shape_norm_flip_consistent",
+        definition=(
+            "Spearman rho(ΔD_shape centroid-removed fixed-orientation correspondence L2, "
+            "Δ||c_g_shape|| under the M5R2 Case A orientation convention)"
+        ),
+    )
+    component_b["orientation_convention"] = V3_ORIENTATION_CONVENTION_TEXT
+    component_b["case_determination"] = V3_CASE_DETERMINATION
+    pass_overall = bool(component_a["passes"] and component_b["passes"])
+
+    variants = {
+        name: {
+            "component_a": summarize_component_a(f"{name}_component_a_anchor", mask, measurements, threshold),
+            "component_b": summarize_correlation(
+                f"{name}_component_b_shape_flip_consistent",
+                mask,
+                measurements["delta_d_shape_flip_consistent"],
+                measurements["delta_shape_norm_flip_consistent"],
+                threshold,
+                x_key="delta_D_shape_flip_consistent",
+                y_key="delta_c_g_shape_norm_flip_consistent",
+                definition=(
+                    "Spearman rho(ΔD_shape centroid-removed fixed-orientation correspondence L2, "
+                    "Δ||c_g_shape|| under the M5R2 Case A orientation convention)"
+                ),
+            ),
+        }
+        for name, mask in masks.items()
+        if name != "primary"
+    }
+    for rows in variants.values():
+        rows["component_b"]["orientation_convention"] = V3_ORIENTATION_CONVENTION_TEXT
+        rows["component_b"]["case_determination"] = V3_CASE_DETERMINATION
+        rows["pass_overall"] = bool(rows["component_a"]["passes"] and rows["component_b"]["passes"])
+
+    d1_rho = float(component_b["rho"])
+    d1_p = float(component_b["pvalue"])
+    d2_sanity_rho, d2_sanity_p = v3_spearman(
+        measurements["delta_d_lowpass_flip_consistent"][primary_mask],
+        measurements["delta_shape_norm_flip_consistent"][primary_mask],
+    )
+    d2_sanity_raw_rho, d2_sanity_raw_p = v3_spearman(
+        measurements["delta_d_lowpass_raw_flip_consistent"][primary_mask],
+        measurements["delta_shape_norm_flip_consistent"][primary_mask],
+    )
+    rho_trunc, rho_trunc_p = v3_spearman(
+        measurements["delta_d_shape_flip_consistent"][primary_mask],
+        measurements["delta_d_lowpass_flip_consistent"][primary_mask],
+    )
+
+    hypothetical_extended_m: dict[str, Any] = {}
+    for modes in V3_EXTRA_MS:
+        rho, pvalue = v3_spearman(
+            measurements["delta_d_shape_flip_consistent"][primary_mask],
+            measurements["delta_shape_norm_extra"][modes][primary_mask],
+        )
+        hypothetical_extended_m[str(modes)] = {
+            "M": modes,
+            "rho_delta_D_shape_full_vs_delta_c_g_shape_norm": rho,
+            "pvalue": pvalue,
+            "shape_modes": f"1..{modes - 1}",
+            "orientation_convention": "D1 fixed flip chosen from before curve modes 1..7",
+        }
+
+    fixed_flip = measurements["fixed_flip"]
+    old_dshape_flip_before = measurements["old_dshape_flip_before"]
+    old_dshape_flip_after = measurements["old_dshape_flip_after"]
+    old_before_after_inconsistent = old_dshape_flip_before != old_dshape_flip_after
+    old_dshape_vs_cg_before = old_dshape_flip_before.copy()
+    old_dshape_vs_cg_after = old_dshape_flip_after.copy()
+    old_dshape_vs_cg_either = old_dshape_vs_cg_before | old_dshape_vs_cg_after
+    old_dshape_vs_fixed_before = old_dshape_flip_before != fixed_flip
+    old_dshape_vs_fixed_after = old_dshape_flip_after != fixed_flip
+
+    tail_dominates = bool(d1_rho < threshold and d2_sanity_rho >= 0.99 and rho_trunc < threshold)
+    if d1_rho >= threshold:
+        suggested_case = "A"
+        suggested_case_reason = "D1 flip-consistent rho is at or above 0.9."
+    elif tail_dominates:
+        suggested_case = "B"
+        suggested_case_reason = (
+            "D1 remains below 0.9, D2 lowpass sanity is >=0.99, and rho_trunc is below 0.9, "
+            "identifying the mode>=8 tail as the rank bottleneck."
+        )
+    else:
+        suggested_case = "C"
+        suggested_case_reason = "D1 remains below 0.9 without rho_trunc clearly isolating truncation as the bottleneck."
+
+    if suggested_case != V3_CASE_DETERMINATION:
+        raise RuntimeError(f"v3 Case A promotion expected, but diagnostics suggested case {suggested_case}")
+
+    make_v3_shape_scatter(
+        shape_scatter_path,
+        measurements["delta_d_shape_flip_consistent"],
+        measurements["delta_shape_norm_flip_consistent"],
+        primary_mask,
+        d1_rho,
+    )
+    make_v3_tail_hist(
+        tail_hist_path,
+        measurements["tail_fraction_before"],
+        measurements["tail_fraction_delta"],
+        primary_mask,
+    )
+    physics_note = read_physics_quality_note(dm_stats_path)
+    v2_sampling_spec = v2_metrics.get("goal_sampling_proof", {}).get("sampling_spec", {})
+    v2_sampling_comparisons = {
+        "seed": v2_sampling_spec.get("seed") == sampling_spec.get("seed"),
+        "templates": v2_sampling_spec.get("templates") == sampling_spec.get("templates"),
+        "template_counts_all_transitions": v2_sampling_spec.get("template_counts_all_transitions")
+        == sampling_spec.get("template_counts_all_transitions"),
+        "anchor_mode": v2_sampling_spec.get("anchor_mode") == sampling_spec.get("anchor_mode"),
+        "anchor_box_unit_length": v2_sampling_spec.get("anchor_box_unit_length")
+        == sampling_spec.get("anchor_box_unit_length"),
+    }
+    goal_sampling_proof = {
+        "sample_goals_call": "sample_goals(seed=args.seed, lengths_m=data.length_m, sampling_cfg=config['goal_sampling'])",
+        "goal_stream_hash_sha256": computed_goal_hash,
+        "sampling_spec": sampling_spec,
+        "v2_metrics_path": str(v2_metrics_path),
+        "v2_recorded_goal_stream_hash_sha256": recorded_goal_hash,
+        "v3_computed_goal_stream_hash_sha256": computed_goal_hash,
+        "matches_v2_goal_stream_hash": bool(computed_goal_hash == recorded_goal_hash),
+        "v2_recorded_sampling_spec_comparisons": v2_sampling_comparisons,
+        "v2_recorded_sampling_spec_matches": all(v2_sampling_comparisons.values()),
+    }
+
+    primary_count = int(primary_mask.sum())
+    diagnostics = {
+        "definitions": {
+            "D1": (
+                "Fixed orientation per transition: choose flip of X_before minimizing mode-1..7 "
+                "residual to goal Phi, then apply same flip to X_before/X_after for c_g_shape and "
+                "centroid-removed D_shape_full."
+            ),
+            "D2": (
+                "D_shape_lowpass is centroid-removed correspondence RMS between inverse-DCT "
+                "reconstructions retaining modes 1..7 under the same fixed flip convention."
+            ),
+            "tail_energy": (
+                "Tail fraction is ||DCT modes >=8 residual||^2 / ||DCT modes >=1 residual||^2 "
+                "with orthonormal DCT-II coefficients."
+            ),
+        },
+        "D1": {
+            "rho": d1_rho,
+            "pvalue": d1_p,
+            "n": primary_count,
+            "delta_D_shape_full": v3_series_summary(
+                measurements["delta_d_shape_flip_consistent"][primary_mask]
+            ),
+            "delta_c_g_shape_norm": v3_series_summary(
+                measurements["delta_shape_norm_flip_consistent"][primary_mask]
+            ),
+            "fixed_flip_fraction": float(np.mean(fixed_flip[primary_mask])),
+            "fixed_flip_decision_margin_id_minus_flip": v3_series_summary(
+                measurements["d1_decision_margin"][primary_mask]
+            ),
+        },
+        "flip_inconsistency_fractions": {
+            "population": "primary",
+            "old_D_shape_before_vs_after": float(np.mean(old_before_after_inconsistent[primary_mask])),
+            "old_D_shape_vs_c_g_stored_before": float(np.mean(old_dshape_vs_cg_before[primary_mask])),
+            "old_D_shape_vs_c_g_stored_after": float(np.mean(old_dshape_vs_cg_after[primary_mask])),
+            "old_D_shape_vs_c_g_stored_either_before_or_after": float(
+                np.mean(old_dshape_vs_cg_either[primary_mask])
+            ),
+            "old_D_shape_vs_D1_fixed_before": float(np.mean(old_dshape_vs_fixed_before[primary_mask])),
+            "old_D_shape_vs_D1_fixed_after": float(np.mean(old_dshape_vs_fixed_after[primary_mask])),
+            "all_transitions": {
+                "old_D_shape_before_vs_after": float(np.mean(old_before_after_inconsistent)),
+                "old_D_shape_vs_c_g_stored_before": float(np.mean(old_dshape_vs_cg_before)),
+                "old_D_shape_vs_c_g_stored_after": float(np.mean(old_dshape_vs_cg_after)),
+                "old_D_shape_vs_c_g_stored_either_before_or_after": float(np.mean(old_dshape_vs_cg_either)),
+                "old_D_shape_vs_D1_fixed_before": float(np.mean(old_dshape_vs_fixed_before)),
+                "old_D_shape_vs_D1_fixed_after": float(np.mean(old_dshape_vs_fixed_after)),
+            },
+        },
+        "D2": {
+            "sanity_rho_delta_D_shape_lowpass_vs_delta_c_g_shape_norm": d2_sanity_rho,
+            "sanity_pvalue": d2_sanity_p,
+            "sanity_deviation_from_1": float(abs(1.0 - d2_sanity_rho)),
+            "rho_trunc_delta_D_shape_full_vs_delta_D_shape_lowpass": rho_trunc,
+            "rho_trunc_pvalue": rho_trunc_p,
+            "delta_D_shape_lowpass": v3_series_summary(
+                measurements["delta_d_lowpass_flip_consistent"][primary_mask]
+            ),
+            "delta_D_shape_lowpass_raw_unlength_normalized": v3_series_summary(
+                measurements["delta_d_lowpass_raw_flip_consistent"][primary_mask]
+            ),
+            "raw_lowpass_sanity_rho_without_length_normalization": d2_sanity_raw_rho,
+            "raw_lowpass_sanity_pvalue_without_length_normalization": d2_sanity_raw_p,
+            "parseval_abs_error": {
+                "before_max": float(np.max(measurements["parseval_before_abs_err"][primary_mask])),
+                "after_max": float(np.max(measurements["parseval_after_abs_err"][primary_mask])),
+                "before_mean": float(np.mean(measurements["parseval_before_abs_err"][primary_mask])),
+                "after_mean": float(np.mean(measurements["parseval_after_abs_err"][primary_mask])),
+            },
+        },
+        "tail_energy_quantiles": {
+            "population": "primary",
+            "before_basis": v3_quantiles(measurements["tail_fraction_before"][primary_mask]),
+            "delta_basis": v3_quantiles(measurements["tail_fraction_delta"][primary_mask]),
+            "before_basis_summary": v3_series_summary(measurements["tail_fraction_before"][primary_mask]),
+            "delta_basis_summary": v3_series_summary(measurements["tail_fraction_delta"][primary_mask]),
+            "histogram_png": str(tail_hist_path),
+        },
+        "hypothetical_extended_M": hypothetical_extended_m,
+        "case_suggestion": {
+            "case": suggested_case,
+            "criteria": {
+                "A": "D1 rho >= 0.9",
+                "B": "D1 rho < 0.9 AND D2 sanity rho >= 0.99 AND rho_trunc < 0.9",
+                "C": "otherwise",
+            },
+            "tail_dominates": tail_dominates,
+            "reason": suggested_case_reason,
+        },
+        "per_channel_residual_contribution_summary": v3_per_channel_summary(
+            measurements["before_coeff_residuals"],
+            measurements["delta_coeff_residuals"],
+            primary_mask,
+        ),
+    }
+
+    payload = {
+        "schema_version": 3,
+        "created_at": utc_now(),
+        "verdict_source": V3_VERDICT_SOURCE,
+        "case_determination": V3_CASE_DETERMINATION,
+        "orientation_convention": V3_ORIENTATION_CONVENTION_TEXT,
+        "amended_definition_text": AMENDED_DEFINITION_TEXT,
+        "seed": int(args.seed),
+        "config_path": str(config_path),
+        "config_copy": config,
+        "config_text": config_text,
+        "commit_hash": get_git_commit_hash(),
+        "channel_layout_id": CHANNEL_LAYOUT_ID,
+        "c_g_layout": {
+            "total_channels": CG_DIM,
+            "shape_channels": SHAPE_CHANNEL_COUNT,
+            "anchor_channels": 3,
+            "shape_component": "first 21 channels of c_g",
+            "anchor_component": "last 3 channels of c_g",
+            "order": "[Phi_shape(G)-Phi_shape(X) for mode>=1 channels, anchor(G)-anchor(X) xyz]",
+        },
+        "source_dataset": str(dataset_path),
+        "source_metrics_v2": str(v2_metrics_path),
+        "dataset_record_count": int(data.X_before.shape[0]),
+        "primary_population": {
+            "definition": "grasp_success AND settle_steps != settle_max_steps",
+            "settle_max_steps": settle_max_steps,
+            "n": primary_count,
+        },
+        "component_a": component_a,
+        "component_b": component_b,
+        "pass_overall": pass_overall,
+        "variants": variants,
+        "goal_sampling_proof": goal_sampling_proof,
+        "diagnostics": diagnostics,
+        "methodology": {
+            "component_a": "Unchanged v2 Spearman rho(ΔD_corr, Δ||c_g_anchor||) on primary population",
+            "component_b": "M5R2 Case A fixed-orientation Spearman rho(ΔD_shape, Δ||c_g_shape||)",
+            "delta_D_corr": "Absolute correspondence_l2 after-before; existing min-flip behavior unchanged",
+            "delta_D_shape": "Centroid-removed RMS after-before under one X_before-selected flip per transition",
+            "delta_c_g_shape_norm": "Mode-1..7 DCT residual norm after-before under the same fixed flip",
+            "threshold_rho": threshold,
+            "physics_quality_note": physics_note,
+        },
+        "outputs": {
+            "metrics_json": str(metrics_path),
+            "scatter_shape_png": str(shape_scatter_path),
+            "tail_histogram_png": str(tail_hist_path),
+            "stdout_log": str(log_path),
+        },
+    }
+    write_json(metrics_path, payload)
+
+    status_a = "PASS" if component_a["passes"] else "FAIL"
+    status_b = "PASS" if component_b["passes"] else "FAIL"
+    status_overall = "PASS" if pass_overall else "FAIL"
+    print(f"goal_stream_hash_verified={computed_goal_hash == recorded_goal_hash}")
+    print(f"COMPONENT_A {status_a}: rho={_format_rho(component_a['rho'])} n={component_a['n']} threshold={threshold:.3f}")
+    print(f"COMPONENT_B {status_b}: rho={_format_rho(component_b['rho'])} n={component_b['n']} threshold={threshold:.3f}")
+    print(f"OVERALL {status_overall}: component_a AND component_b")
+    print(
+        "diagnostics: "
+        f"D1_rho={d1_rho:.12f} D2_sanity={d2_sanity_rho:.12f} rho_trunc={rho_trunc:.12f} "
+        f"M12={hypothetical_extended_m['12']['rho_delta_D_shape_full_vs_delta_c_g_shape_norm']:.12f} "
+        f"M16={hypothetical_extended_m['16']['rho_delta_D_shape_full_vs_delta_c_g_shape_norm']:.12f}"
+    )
+    for name, rows in variants.items():
+        print(
+            f"variant {name}: component_a rho={_format_rho(rows['component_a']['rho'])} "
+            f"component_b rho={_format_rho(rows['component_b']['rho'])}"
+        )
+    print(f"wrote metrics: {metrics_path}")
+    print(f"wrote shape scatter: {shape_scatter_path}")
+    print(f"wrote tail histogram: {tail_hist_path}")
     print(f"stdout log: {log_path}")
 
 def run(

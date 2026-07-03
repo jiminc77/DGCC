@@ -1,0 +1,14 @@
+G2 v3 measurement start seed=0 config=configs/gate_g2.yaml
+verdict_source: issue #6 comment 4872665607
+case_determination: A
+goal_stream_hash_verified=True
+COMPONENT_A PASS: rho=0.984688 n=2445 threshold=0.900
+COMPONENT_B PASS: rho=0.999994 n=2445 threshold=0.900
+OVERALL PASS: component_a AND component_b
+diagnostics: D1_rho=0.999994149533 D2_sanity=1.000000000000 rho_trunc=0.999994149533 M12=0.999999210195 M16=0.999999643685
+variant all_success: component_a rho=0.987613 component_b rho=0.999989
+variant all_transitions: component_a rho=0.986996 component_b rho=0.999969
+wrote metrics: outputs/metrics/g2_correlation_v3.json
+wrote shape scatter: outputs/plots/g2_scatter_shape_v3.png
+wrote tail histogram: outputs/plots/g2_tail_histogram_v3.png
+stdout log: outputs/reports/gate_g2_v3_stdout.log
