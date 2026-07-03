@@ -1,0 +1,51 @@
+[Quadrants] version 0.8.0, llvm 22.1.0, commit a22cc2de, linux, python 3.12.13
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /home/simx2204/Workspaces/DGCC/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/simx2204/Workspaces/DGCC
+configfile: pyproject.toml
+plugins: anyio-4.14.1, quadrants-0.8.0
+collecting ... collected 40 items
+
+tests/test_tasks.py::test_p1_rope_domain_pinned_field_by_field PASSED    [  2%]
+tests/test_tasks.py::test_t2_generation_deterministic PASSED             [  5%]
+tests/test_tasks.py::test_t2_committed_split_matches_regeneration PASSED [  7%]
+tests/test_tasks.py::test_t2_split_sizes_and_disjointness PASSED         [ 10%]
+tests/test_tasks.py::test_t2_splits_cover_families_and_include_asymmetric_goals PASSED [ 12%]
+tests/test_tasks.py::test_t2_goal_reconstruction_finite PASSED           [ 15%]
+tests/test_tasks.py::test_t1_samplers_deterministic_and_in_spec PASSED   [ 17%]
+tests/test_tasks.py::test_reward_sign_sanity PASSED                      [ 20%]
+tests/test_tasks.py::test_success_judgment_consistent_with_reward_bonus PASSED [ 22%]
+tests/test_tasks.py::test_reward_module_imports_only_correspondence_l2 PASSED [ 25%]
+tests/test_tasks.py::test_reward_path_never_calls_chamfer_family PASSED  [ 27%]
+tests/test_tasks.py::test_metric_is_correspondence_not_chamfer PASSED    [ 30%]
+tests/test_tasks.py::test_settle_budget_10000_on_every_settle_bearing_call PASSED [ 32%]
+tests/test_tasks.py::test_runner_never_uses_step_primitive_single_path PASSED [ 35%]
+tests/test_tasks.py::test_episode_terminates_at_horizon_without_success PASSED [ 37%]
+tests/test_tasks.py::test_episode_early_termination_on_success PASSED    [ 40%]
+tests/test_tasks.py::test_active_mask_freezes_finished_episodes PASSED   [ 42%]
+tests/test_tasks.py::test_nan_covenant_discards_reseeds_and_counts PASSED [ 45%]
+tests/test_tasks.py::test_build_batch_init_vertices_shapes_and_determinism PASSED [ 47%]
+tests/test_tasks.py::test_nan_covenant_covers_reset_settle_path PASSED   [ 50%]
+tests/test_tasks.py::test_nan_covenant_catches_nonfinite_valueerror PASSED [ 52%]
+tests/test_tasks.py::test_auto_reset_keeps_all_envs_active PASSED        [ 55%]
+tests/test_rl_units.py::test_select_p_star_hand_table PASSED             [ 57%]
+tests/test_rl_units.py::test_td_target_hand_computed PASSED              [ 60%]
+tests/test_rl_units.py::test_smooth_target_u_clips_noise_and_box PASSED  [ 62%]
+tests/test_rl_units.py::test_decoupling_selection_critic_differs_from_evaluation PASSED [ 65%]
+tests/test_rl_units.py::test_epsilon_schedule_linear_first_30_percent PASSED [ 67%]
+tests/test_rl_units.py::test_compute_target_ignores_online_and_uses_target_nets PASSED [ 70%]
+tests/test_rl_units.py::test_compute_target_matches_manual_formula PASSED [ 72%]
+tests/test_rl_units.py::test_actor_gradient_flows_only_through_u PASSED  [ 75%]
+tests/test_rl_units.py::test_critic_update_trains_encoder_and_critic PASSED [ 77%]
+tests/test_rl_units.py::test_encoder_features_goal_sensitivity PASSED    [ 80%]
+tests/test_rl_units.py::test_encoder_flip_consistency_matches_canonical_shape_flip PASSED [ 82%]
+tests/test_rl_units.py::test_parameter_count_recorded_range PASSED       [ 85%]
+tests/test_rl_units.py::test_replay_v2_roundtrip PASSED                  [ 87%]
+tests/test_rl_units.py::test_replay_v2_rejects_missing_field PASSED      [ 90%]
+tests/test_rl_units.py::test_replay_v1_migration_filters_and_flags PASSED [ 92%]
+tests/test_rl_units.py::test_replay_buffer_wraps_and_samples PASSED      [ 95%]
+tests/test_rl_units.py::test_checkpoint_save_load_equality PASSED        [ 97%]
+tests/test_rl_units.py::test_nan_halt_raises_before_optimizer_step PASSED [100%]
+
+============================== 40 passed in 0.76s ==============================
