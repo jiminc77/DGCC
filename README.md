@@ -2,10 +2,10 @@
 
 **Deformation-Grounded Contact Critic** 구현 코드 레포. 연구 관리·문서는 [research-dashboard](https://github.com/jiminc77/research-dashboard) 참조.
 
-## 현재 단계: P1 진행 중 (M0)
+## 현재 단계: P1 진행 중 (M0–M2 완료, M3 진행)
 
 - 실행 명세: [`P1.md`](P1.md) — P0 위에 HACMan-style black-box contact critic baseline을 구축하는 P1 brief. Milestone = `@goal` 블록 (M0–M6), GitHub issue #9–#15 대응. 커밋 규약 `P1-M<k>: <요약>`.
-- P1-M0 산출물: `src/dgcc/tasks/` (T1 3종 + T2 절차적 goal 생성기 + episode wrapper + reward), 커밋된 T2 분할 파일 `src/dgcc/tasks/splits/t2_v1.json` (train 500 / val 50 / held-out 100), `outputs/reports/p1_throughput.md` (n_envs 권고), `outputs/reports/p1_rollout_demo.log` (random policy 10 episodes).
+- P1 산출물 (M0–M2): `src/dgcc/tasks/` (T1/T2 task·episode·reward), `src/dgcc/models/`+`src/dgcc/rl/` (§6 네트워크, §7 TD3 decoupled double-Q, replay v2, §8 계측), 커밋된 T2 분할 `src/dgcc/tasks/splits/t2_v1.json`, `outputs/reports/p1_throughput.md` (권고 n_envs=256), `outputs/metrics/p1_random_reference.json` (random 바닥선), `outputs/metrics/p1_smoke_judgment.json` (T1-a 스모크 사전 등록 판정 PASS).
 - 수치 정책 (issue #8 sign-off 승계): 불변 — ε_succ=0.05·L, settle 1e-3/10000, grasp realism ±1node/5%, D = 길이 정규화 correspondence L2 + orientation canonicalization (Chamfer는 보고용), K=32, M=8. 조정 허용 (STEP_LOG 기록, M6 잠금) — α=10, c_step=0.1, R_succ=5, RL 하이퍼파라미터.
 - HUMAN GATE: M2 (스모크 2회 실패 시), M3/M4 (판정 미달 분기 + M4 HER 중간 체크), M6 (sign-off + reward 상수 잠금).
 

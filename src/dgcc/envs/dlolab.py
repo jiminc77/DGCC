@@ -394,16 +394,25 @@ class DLOLabEnv(DLOEnvBase):
             )
         )
 
-    def place_rod_vertices_batch(self, vertices: np.ndarray) -> None:
+    def place_rod_vertices_batch(
+        self, vertices: np.ndarray, *, reinit_env_indices: np.ndarray | None = None
+    ) -> None:
         """Light-reset all environments from explicit per-env native vertices.
 
         ``vertices`` may be either ``(N, 3)`` (broadcast to every environment) or
         ``(n_envs, N, 3)`` (distinct curve per environment).  Existing batched
         attachments are cleared, positions are written through
         ``rod_entity.set_position``, and velocities are zeroed.
+
+        ``reinit_env_indices`` scopes the full edge/frame state
+        re-initialization (M2 gate F2): only the listed environments get their
+        twist/frame/internal state rebuilt from the placed positions; other
+        environments keep their evolved twist state (their positions are
+        rewritten with identical values).  ``None`` re-initializes every
+        environment (fresh placement contract).
         """
 
-        self._place_rod_vertices_batched(vertices)
+        self._place_rod_vertices_batched(vertices, reinit_env_indices=reinit_env_indices)
 
     def light_reset(
         self,
@@ -411,10 +420,11 @@ class DLOLabEnv(DLOEnvBase):
         *,
         vel_threshold: float = 1e-3,
         max_steps: int = 5000,
+        reinit_env_indices: np.ndarray | None = None,
     ) -> dict[str, np.ndarray]:
         """Re-place batched native vertices and settle without rebuilding the scene."""
 
-        self.place_rod_vertices_batch(vertices)
+        self.place_rod_vertices_batch(vertices, reinit_env_indices=reinit_env_indices)
         converged, settle_steps = self.settle_batch(
             vel_threshold=vel_threshold,
             max_steps=max_steps,
@@ -830,7 +840,9 @@ class DLOLabEnv(DLOEnvBase):
         assert self.rod_entity is not None
         return np.asarray(self.rod_entity.get_all_verts(), dtype=float)
 
-    def _place_rod_vertices_batched(self, vertices: np.ndarray) -> None:
+    def _place_rod_vertices_batched(
+        self, vertices: np.ndarray, *, reinit_env_indices: np.ndarray | None = None
+    ) -> None:
         self._require_reset()
         assert self.rod_entity is not None
         n_vertices = self._n_vertices()
@@ -860,10 +872,12 @@ class DLOLabEnv(DLOEnvBase):
         safe_gripper = np.zeros((self.n_envs, 3), dtype=float)
         safe_gripper[:, 2] = LIFT_HEIGHTS["high"]
         self._set_gripper_positions(safe_gripper)
-        self._reinitialize_edge_state(batched)
+        self._reinitialize_edge_state(batched, env_indices=reinit_env_indices)
         self._step_scene()
 
-    def _reinitialize_edge_state(self, batched_positions: np.ndarray) -> None:
+    def _reinitialize_edge_state(
+        self, batched_positions: np.ndarray, *, env_indices: np.ndarray | None = None
+    ) -> None:
         """Recompute the rod's full edge/frame state from placed positions.
 
         Adapter-internal P1 addition (interface unchanged): the public
@@ -940,7 +954,13 @@ class DLOLabEnv(DLOEnvBase):
         n_internal = kb.shape[1]
         zeros_e = np.zeros_like(length)
         substep = self.rod_entity._sim.cur_substep_local
-        envs_idx = torch.arange(n_envs, dtype=torch.int32, device=device)
+        if env_indices is None:
+            envs_idx = torch.arange(n_envs, dtype=torch.int32, device=device)
+        else:
+            scoped = np.asarray(env_indices, dtype=np.int32).reshape(-1)
+            if scoped.size == 0:
+                return
+            envs_idx = torch.as_tensor(scoped, dtype=torch.int32, device=device)
         # One atomic per-env full-state write (pos, vel, fixed, theta, omega,
         # edge, length, frames, kb, twist, kappa_rest).  kappa_rest is zero
         # because the rod is built with rest_state="straight" (zero rest

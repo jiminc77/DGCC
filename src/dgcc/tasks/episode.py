@@ -339,7 +339,9 @@ class BatchedEpisodeRunner:
             self.init_shapes[env_idx] = shape
 
         centerlines, _, reseeded = self._settle_finite(
-            replacement, reason="non-finite state during auto-reset settle"
+            replacement,
+            reason="non-finite state during auto-reset settle",
+            reinit_env_indices=done_envs,
         )
         for env_idx in np.union1d(done_envs, reseeded):
             i = int(env_idx)
@@ -395,7 +397,9 @@ class BatchedEpisodeRunner:
             bad_envs = np.union1d(bad_envs, extra)
 
         centerlines, _, recovery_reseeded = self._settle_finite(
-            replacement, reason=f"recovery settle after: {reason}"
+            replacement,
+            reason=f"recovery settle after: {reason}",
+            reinit_env_indices=bad_envs,
         )
         bad_envs = np.union1d(bad_envs, recovery_reseeded)
 
@@ -445,6 +449,7 @@ class BatchedEpisodeRunner:
         vertices: np.ndarray,
         *,
         reason: str,
+        reinit_env_indices: np.ndarray | None = None,
     ) -> tuple[np.ndarray, dict[str, Any], np.ndarray]:
         """``light_reset`` with the immutable budget plus finiteness enforcement.
 
@@ -453,16 +458,36 @@ class BatchedEpisodeRunner:
         retried (NaN covenant, counted as incidents).  Raises
         ``FloatingPointError`` when states remain non-finite after
         ``MAX_RESEED_ATTEMPTS`` retries — silent continuation is forbidden.
+
+        ``reinit_env_indices`` scopes the adapter's full state
+        re-initialization to the re-placed environments (M2 gate F2);
+        ``None`` re-initializes every environment.  Environments reseeded by
+        the retry loop are added to the scope automatically.
         """
 
         current = np.asarray(vertices, dtype=float).copy()
         reseeded: set[int] = set()
+        scope = (
+            None
+            if reinit_env_indices is None
+            else {int(i) for i in np.asarray(reinit_env_indices).reshape(-1)}
+        )
         for attempt in range(MAX_RESEED_ATTEMPTS + 1):
-            reset_result = self.env.light_reset(
-                current,
-                vel_threshold=self.config.vel_threshold,
-                max_steps=self.config.settle_max_steps,
-            )
+            reinit = None if scope is None else np.asarray(sorted(scope | reseeded), dtype=int)
+            try:
+                reset_result = self.env.light_reset(
+                    current,
+                    vel_threshold=self.config.vel_threshold,
+                    max_steps=self.config.settle_max_steps,
+                    reinit_env_indices=reinit,
+                )
+            except TypeError:
+                # Older duck-typed envs without the scoping kwarg.
+                reset_result = self.env.light_reset(
+                    current,
+                    vel_threshold=self.config.vel_threshold,
+                    max_steps=self.config.settle_max_steps,
+                )
             raw = np.asarray(self.env.get_centerline_raw_batch(), dtype=float)
             centerlines = np.asarray(self.env.get_centerline_batch(), dtype=float)
             bad = ~(
