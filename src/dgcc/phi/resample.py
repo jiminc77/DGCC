@@ -1,9 +1,10 @@
-"""Arc-length centerline resampling.
+"""Arc-length centerline resampling for the §7 Phi/δm pipeline.
 
-P0-M1 provides the minimal real ``resample(X_raw) -> (32, 3)`` implementation
-needed by the MuJoCo smoke test: normalized arc-length uniform sampling with
-linear interpolation. P0-M4 finalizes this module with the full invariance test
-suite from the §7 deformation-feature specification.
+``resample(X_raw) -> (32, 3)`` converts any finite, non-degenerate rope
+centerline with at least two samples into the canonical 32-node representation
+used by ``Phi_DCT``.  Samples are placed uniformly in normalized cumulative arc
+length with per-axis linear interpolation; no simulator or GPU dependencies are
+used.
 """
 
 from __future__ import annotations
@@ -15,14 +16,16 @@ K = 32
 
 
 def resample(X_raw: np.ndarray) -> np.ndarray:
-    """Return a 32-node normalized arc-length resampling of ``X_raw``.
+    """Return the M4-final 32-node normalized arc-length resampling.
 
     Args:
         X_raw: Rope centerline samples with shape ``(N, 3)``. ``N`` must be at
-            least 2.
+            least 2, all coordinates must be finite, and total arc length must
+            be non-zero.
 
     Returns:
-        A ``(32, 3)`` float array sampled uniformly in normalized arc length.
+        A ``(32, 3)`` float array sampled uniformly in normalized arc length,
+        preserving the first and last input endpoints.
     """
 
     points = np.asarray(X_raw, dtype=float)

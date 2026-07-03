@@ -1,0 +1,42 @@
+rope:
+  length_m: 1.0
+  n_segments: 32
+  bend_stiffness: 1.0
+  twist_stiffness: 1.0
+  friction: 1.0
+  radius: 0.005
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 5000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
+collection:
+  n_envs: auto
+  n_env_candidates: [16, 32, 64]
+  K: 4
+  target_count: 5000
+  max_records: 5300
+  init_shapes: [straight, u_bend, s_curve, random_smooth]
+  p_low: 1
+  p_high_margin: 1
+  delta_min_m: 0.02
+  delta_max_m: 0.15
+  lift_choices: [low, high]
+  vel_threshold: 0.001
+  settle_max_steps: 5000
+  progress_every_rounds: 1
+probe:
+  enabled: true
+  rounds: 2
+outputs:
+  h5: outputs/data/p0_random_transitions.h5
+  dm_stats_json: outputs/metrics/dm_stats.json
+  dm_normalizer_json: outputs/metrics/dm_normalizer.json
+  dm_hist_png: outputs/plots/dm_hist_all_channels.png
+  dm_norm_hist_png: outputs/plots/dm_hist_norms.png
+  stdout_log: outputs/reports/collect_random_stdout.log

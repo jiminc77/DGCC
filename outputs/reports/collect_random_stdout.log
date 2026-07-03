@@ -1,0 +1,352 @@
+timing_probe start candidates=[16, 32, 64] rounds=2
+/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/_test_tools/warnings_helper.py:11: UserWarning: cannot create weak reference to 'tuple' object. Template mapper caching disabled.
+  warnings.warn(message)
+[38;5;226m[Genesis] [10:11:36] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:11:36] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:11:39] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:11:39] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/_test_tools/warnings_helper.py:11: UserWarning: cannot create weak reference to 'numpy.int32' object. Template mapper caching disabled.
+  warnings.warn(message)
+timing_probe n_envs=16 mean_s_per_round=17.581280 transitions_per_s=0.910 success_rate=1.000 convergence_rate=0.781
+[38;5;226m[Genesis] [10:12:33] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:12:33] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:12:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:12:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:08] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:08] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+timing_probe n_envs=32 mean_s_per_round=17.618594 transitions_per_s=1.816 success_rate=0.953 convergence_rate=0.781
+[38;5;226m[Genesis] [10:13:27] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:27] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:13:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:14:06] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:14:06] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:14:23] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:14:23] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+timing_probe n_envs=64 mean_s_per_round=17.735794 transitions_per_s=3.609 success_rate=0.969 convergence_rate=0.812
+timing_probe chosen_n_envs=64
+[38;5;226m[Genesis] [10:14:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:14:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+collect_random start seed=0 config=configs/collect_random.yaml n_envs=64 K=4 target_count=5000 commit_hash=d2f148dd3fbc0014dc0edd34e73e148907be3cce
+grasp_mode=per-env evidence=external/DLO-Lab/genesis/engine/entities/rod_entity.py:attach_to_rigid_link_with_envs_idx
+reset_info n_vertices=32 length_m=1.0
+[38;5;226m[Genesis] [10:14:28] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:14:28] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=0 wall_s=17.532 settle_steps_max=5000 converged_rate=0.984
+[38;5;226m[Genesis] [10:15:04] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:15:04] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0001 appended=64 count=64 wall_s=17.788 success_rate_batch=0.938 converged_rate_batch=0.844 settle_steps_max=5000 eta=00:45:25
+[38;5;226m[Genesis] [10:15:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:15:21] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0002 appended=64 count=128 wall_s=17.743 success_rate_batch=0.906 converged_rate_batch=0.812 settle_steps_max=5000 eta=00:33:40
+[38;5;226m[Genesis] [10:15:39] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:15:39] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0003 appended=64 count=192 wall_s=17.804 success_rate_batch=0.891 converged_rate_batch=0.766 settle_steps_max=5000 eta=00:29:35
+[38;5;226m[Genesis] [10:15:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:15:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0004 appended=64 count=256 wall_s=17.808 success_rate_batch=0.875 converged_rate_batch=0.766 settle_steps_max=5000 eta=00:27:24
+[38;5;226m[Genesis] [10:15:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:15:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=1 wall_s=17.573 settle_steps_max=5000 converged_rate=0.969
+[38;5;226m[Genesis] [10:16:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:16:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0005 appended=64 count=320 wall_s=17.857 success_rate_batch=0.906 converged_rate_batch=0.812 settle_steps_max=5000 eta=00:30:15
+[38;5;226m[Genesis] [10:16:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:16:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0006 appended=64 count=384 wall_s=17.839 success_rate_batch=0.953 converged_rate_batch=0.797 settle_steps_max=5000 eta=00:28:27
+[38;5;226m[Genesis] [10:17:08] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:17:08] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0007 appended=64 count=448 wall_s=17.819 success_rate_batch=0.969 converged_rate_batch=0.750 settle_steps_max=5000 eta=00:27:04
+[38;5;226m[Genesis] [10:17:26] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:17:26] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0008 appended=64 count=512 wall_s=17.855 success_rate_batch=0.891 converged_rate_batch=0.703 settle_steps_max=5000 eta=00:25:57
+[38;5;226m[Genesis] [10:17:26] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:17:26] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=2 wall_s=17.584 settle_steps_max=5000 converged_rate=0.922
+[38;5;226m[Genesis] [10:18:01] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:18:01] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0009 appended=64 count=576 wall_s=17.790 success_rate_batch=0.906 converged_rate_batch=0.719 settle_steps_max=5000 eta=00:27:16
+[38;5;226m[Genesis] [10:18:19] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:18:19] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0010 appended=64 count=640 wall_s=17.786 success_rate_batch=0.984 converged_rate_batch=0.750 settle_steps_max=5000 eta=00:26:12
+[38;5;226m[Genesis] [10:18:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:18:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0011 appended=64 count=704 wall_s=17.710 success_rate_batch=0.953 converged_rate_batch=0.734 settle_steps_max=5000 eta=00:25:17
+[38;5;226m[Genesis] [10:18:55] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:18:55] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0012 appended=64 count=768 wall_s=17.835 success_rate_batch=0.938 converged_rate_batch=0.578 settle_steps_max=5000 eta=00:24:28
+[38;5;226m[Genesis] [10:18:55] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:18:55] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=3 wall_s=17.582 settle_steps_max=5000 converged_rate=0.484
+round 0013 appended=64 count=832 wall_s=17.764 success_rate_batch=1.000 converged_rate_batch=0.438 settle_steps_max=5000 eta=00:25:12
+[38;5;226m[Genesis] [10:19:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:19:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0014 appended=64 count=896 wall_s=17.788 success_rate_batch=0.953 converged_rate_batch=0.422 settle_steps_max=5000 eta=00:24:23
+[38;5;226m[Genesis] [10:20:06] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:20:06] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0015 appended=64 count=960 wall_s=17.796 success_rate_batch=0.938 converged_rate_batch=0.344 settle_steps_max=5000 eta=00:23:40
+round 0016 appended=64 count=1024 wall_s=17.738 success_rate_batch=1.000 converged_rate_batch=0.297 settle_steps_max=5000 eta=00:22:59
+[38;5;226m[Genesis] [10:20:23] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:20:23] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=4 wall_s=17.577 settle_steps_max=5000 converged_rate=0.234
+[38;5;226m[Genesis] [10:20:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:20:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0017 appended=64 count=1088 wall_s=17.827 success_rate_batch=0.938 converged_rate_batch=0.266 settle_steps_max=5000 eta=00:23:24
+[38;5;226m[Genesis] [10:21:16] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:21:16] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0018 appended=64 count=1152 wall_s=17.808 success_rate_batch=0.953 converged_rate_batch=0.203 settle_steps_max=5000 eta=00:22:44
+[38;5;226m[Genesis] [10:21:34] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:21:34] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0019 appended=64 count=1216 wall_s=17.827 success_rate_batch=0.906 converged_rate_batch=0.234 settle_steps_max=5000 eta=00:22:06
+[38;5;226m[Genesis] [10:21:52] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:21:52] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0020 appended=64 count=1280 wall_s=17.815 success_rate_batch=0.938 converged_rate_batch=0.234 settle_steps_max=5000 eta=00:21:30
+[38;5;226m[Genesis] [10:21:52] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:21:52] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=5 wall_s=17.657 settle_steps_max=5000 converged_rate=0.109
+[38;5;226m[Genesis] [10:22:28] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:22:28] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0021 appended=64 count=1344 wall_s=17.868 success_rate_batch=0.969 converged_rate_batch=0.125 settle_steps_max=5000 eta=00:21:44
+[38;5;226m[Genesis] [10:22:45] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:22:45] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0022 appended=64 count=1408 wall_s=17.829 success_rate_batch=0.984 converged_rate_batch=0.156 settle_steps_max=5000 eta=00:21:09
+[38;5;226m[Genesis] [10:23:03] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:23:03] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0023 appended=64 count=1472 wall_s=17.856 success_rate_batch=0.953 converged_rate_batch=0.188 settle_steps_max=5000 eta=00:20:35
+[38;5;226m[Genesis] [10:23:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:23:21] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0024 appended=64 count=1536 wall_s=17.869 success_rate_batch=0.984 converged_rate_batch=0.141 settle_steps_max=5000 eta=00:20:02
+[38;5;226m[Genesis] [10:23:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:23:21] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=6 wall_s=17.611 settle_steps_max=5000 converged_rate=0.141
+[38;5;226m[Genesis] [10:23:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:23:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0025 appended=64 count=1600 wall_s=17.754 success_rate_batch=0.953 converged_rate_batch=0.234 settle_steps_max=5000 eta=00:20:08
+[38;5;226m[Genesis] [10:24:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:24:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0026 appended=64 count=1664 wall_s=17.765 success_rate_batch=0.938 converged_rate_batch=0.250 settle_steps_max=5000 eta=00:19:35
+[38;5;226m[Genesis] [10:24:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:24:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0027 appended=64 count=1728 wall_s=17.735 success_rate_batch=0.938 converged_rate_batch=0.234 settle_steps_max=5000 eta=00:19:03
+[38;5;226m[Genesis] [10:24:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:24:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0028 appended=64 count=1792 wall_s=17.843 success_rate_batch=0.953 converged_rate_batch=0.188 settle_steps_max=5000 eta=00:18:33
+[38;5;226m[Genesis] [10:24:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:24:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=7 wall_s=17.568 settle_steps_max=5000 converged_rate=0.078
+[38;5;226m[Genesis] [10:25:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:25:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0029 appended=64 count=1856 wall_s=17.804 success_rate_batch=0.938 converged_rate_batch=0.172 settle_steps_max=5000 eta=00:18:33
+[38;5;226m[Genesis] [10:25:43] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:25:43] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0030 appended=64 count=1920 wall_s=17.856 success_rate_batch=0.969 converged_rate_batch=0.156 settle_steps_max=5000 eta=00:18:03
+[38;5;226m[Genesis] [10:26:01] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:26:01] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0031 appended=64 count=1984 wall_s=17.811 success_rate_batch=0.906 converged_rate_batch=0.109 settle_steps_max=5000 eta=00:17:33
+[38;5;226m[Genesis] [10:26:19] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:26:19] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0032 appended=64 count=2048 wall_s=17.802 success_rate_batch=0.906 converged_rate_batch=0.219 settle_steps_max=5000 eta=00:17:04
+[38;5;226m[Genesis] [10:26:19] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:26:19] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=8 wall_s=17.657 settle_steps_max=5000 converged_rate=0.062
+[38;5;226m[Genesis] [10:26:54] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:26:54] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0033 appended=64 count=2112 wall_s=17.791 success_rate_batch=0.922 converged_rate_batch=0.188 settle_steps_max=5000 eta=00:17:00
+[38;5;226m[Genesis] [10:27:12] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:27:12] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0034 appended=64 count=2176 wall_s=17.790 success_rate_batch=0.922 converged_rate_batch=0.109 settle_steps_max=5000 eta=00:16:31
+[38;5;226m[Genesis] [10:27:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:27:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0035 appended=64 count=2240 wall_s=17.767 success_rate_batch=0.953 converged_rate_batch=0.094 settle_steps_max=5000 eta=00:16:03
+[38;5;226m[Genesis] [10:27:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:27:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0036 appended=64 count=2304 wall_s=17.858 success_rate_batch=0.984 converged_rate_batch=0.125 settle_steps_max=5000 eta=00:15:35
+[38;5;226m[Genesis] [10:27:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:27:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=9 wall_s=17.592 settle_steps_max=5000 converged_rate=0.016
+[38;5;226m[Genesis] [10:28:23] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:28:23] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0037 appended=64 count=2368 wall_s=17.849 success_rate_batch=0.938 converged_rate_batch=0.172 settle_steps_max=5000 eta=00:15:28
+[38;5;226m[Genesis] [10:28:41] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:28:41] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0038 appended=64 count=2432 wall_s=17.892 success_rate_batch=0.984 converged_rate_batch=0.094 settle_steps_max=5000 eta=00:15:01
+[38;5;226m[Genesis] [10:28:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:28:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0039 appended=64 count=2496 wall_s=17.800 success_rate_batch=0.969 converged_rate_batch=0.109 settle_steps_max=5000 eta=00:14:33
+round_recovery attempted_round=40 episode=9 error=FloatingPointError: DLO-Lab rod vertices contain non-finite values action=full_scene_rebuild
+[38;5;226m[Genesis] [10:29:01] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:29:01] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:29:04] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:29:04] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=10 wall_s=16.185 settle_steps_max=4570 converged_rate=1.000
+[38;5;226m[Genesis] [10:29:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:29:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0040 appended=64 count=2560 wall_s=17.869 success_rate_batch=0.969 converged_rate_batch=0.844 settle_steps_max=5000 eta=00:14:27
+[38;5;226m[Genesis] [10:29:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:29:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0041 appended=64 count=2624 wall_s=17.871 success_rate_batch=0.938 converged_rate_batch=0.812 settle_steps_max=5000 eta=00:14:00
+[38;5;226m[Genesis] [10:30:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:30:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0042 appended=64 count=2688 wall_s=17.785 success_rate_batch=0.922 converged_rate_batch=0.891 settle_steps_max=5000 eta=00:13:33
+[38;5;226m[Genesis] [10:30:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:30:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0043 appended=64 count=2752 wall_s=17.858 success_rate_batch=0.969 converged_rate_batch=0.797 settle_steps_max=5000 eta=00:13:07
+[38;5;226m[Genesis] [10:30:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:30:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=11 wall_s=17.618 settle_steps_max=5000 converged_rate=0.953
+[38;5;226m[Genesis] [10:31:07] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:31:07] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0044 appended=64 count=2816 wall_s=17.876 success_rate_batch=0.891 converged_rate_batch=0.812 settle_steps_max=5000 eta=00:12:55
+[38;5;226m[Genesis] [10:31:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:31:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0045 appended=64 count=2880 wall_s=17.926 success_rate_batch=0.969 converged_rate_batch=0.797 settle_steps_max=5000 eta=00:12:28
+[38;5;226m[Genesis] [10:31:43] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:31:43] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0046 appended=64 count=2944 wall_s=17.859 success_rate_batch=0.953 converged_rate_batch=0.719 settle_steps_max=5000 eta=00:12:03
+[38;5;226m[Genesis] [10:32:01] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:32:01] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0047 appended=64 count=3008 wall_s=17.883 success_rate_batch=0.969 converged_rate_batch=0.781 settle_steps_max=5000 eta=00:11:37
+[38;5;226m[Genesis] [10:32:01] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:32:01] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=12 wall_s=17.646 settle_steps_max=5000 converged_rate=0.719
+[38;5;226m[Genesis] [10:32:36] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:32:36] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0048 appended=64 count=3072 wall_s=17.888 success_rate_batch=0.969 converged_rate_batch=0.594 settle_steps_max=5000 eta=00:11:23
+[38;5;226m[Genesis] [10:32:54] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:32:54] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0049 appended=64 count=3136 wall_s=17.849 success_rate_batch=0.969 converged_rate_batch=0.547 settle_steps_max=5000 eta=00:10:57
+[38;5;226m[Genesis] [10:33:12] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:33:12] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0050 appended=64 count=3200 wall_s=17.858 success_rate_batch=0.953 converged_rate_batch=0.469 settle_steps_max=5000 eta=00:10:32
+[38;5;226m[Genesis] [10:33:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:33:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0051 appended=64 count=3264 wall_s=17.850 success_rate_batch=0.969 converged_rate_batch=0.453 settle_steps_max=5000 eta=00:10:07
+[38;5;226m[Genesis] [10:33:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:33:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=13 wall_s=17.611 settle_steps_max=5000 converged_rate=0.406
+[38;5;226m[Genesis] [10:34:05] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:34:05] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0052 appended=64 count=3328 wall_s=17.862 success_rate_batch=0.953 converged_rate_batch=0.328 settle_steps_max=5000 eta=00:09:51
+[38;5;226m[Genesis] [10:34:23] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:34:23] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0053 appended=64 count=3392 wall_s=17.836 success_rate_batch=0.938 converged_rate_batch=0.297 settle_steps_max=5000 eta=00:09:26
+[38;5;226m[Genesis] [10:34:41] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:34:41] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0054 appended=64 count=3456 wall_s=17.884 success_rate_batch=0.938 converged_rate_batch=0.234 settle_steps_max=5000 eta=00:09:02
+[38;5;226m[Genesis] [10:34:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:34:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0055 appended=64 count=3520 wall_s=17.864 success_rate_batch=0.953 converged_rate_batch=0.266 settle_steps_max=5000 eta=00:08:37
+[38;5;226m[Genesis] [10:34:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:34:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=14 wall_s=17.675 settle_steps_max=5000 converged_rate=0.266
+round_recovery attempted_round=56 episode=14 error=ValueError: cannot convert float NaN to integer action=full_scene_rebuild
+[38;5;226m[Genesis] [10:35:18] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:35:18] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:35:22] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:35:22] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=15 wall_s=17.721 settle_steps_max=5000 converged_rate=0.969
+[38;5;226m[Genesis] [10:35:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:35:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0056 appended=64 count=3584 wall_s=17.881 success_rate_batch=0.938 converged_rate_batch=0.766 settle_steps_max=5000 eta=00:08:29
+[38;5;226m[Genesis] [10:36:15] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:36:15] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0057 appended=64 count=3648 wall_s=17.860 success_rate_batch=0.906 converged_rate_batch=0.844 settle_steps_max=5000 eta=00:08:04
+[38;5;226m[Genesis] [10:36:33] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:36:33] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0058 appended=64 count=3712 wall_s=17.898 success_rate_batch=0.938 converged_rate_batch=0.797 settle_steps_max=5000 eta=00:07:40
+[38;5;226m[Genesis] [10:36:51] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:36:51] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0059 appended=64 count=3776 wall_s=17.870 success_rate_batch=0.984 converged_rate_batch=0.672 settle_steps_max=5000 eta=00:07:15
+[38;5;226m[Genesis] [10:36:51] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:36:51] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=16 wall_s=17.633 settle_steps_max=5000 converged_rate=0.719
+[38;5;226m[Genesis] [10:37:26] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:37:26] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0060 appended=64 count=3840 wall_s=17.947 success_rate_batch=0.938 converged_rate_batch=0.750 settle_steps_max=5000 eta=00:06:56
+[38;5;226m[Genesis] [10:37:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:37:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0061 appended=64 count=3904 wall_s=17.838 success_rate_batch=0.938 converged_rate_batch=0.672 settle_steps_max=5000 eta=00:06:32
+round 0062 appended=64 count=3968 wall_s=17.819 success_rate_batch=1.000 converged_rate_batch=0.625 settle_steps_max=5000 eta=00:06:08
+[38;5;226m[Genesis] [10:38:20] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:38:20] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0063 appended=64 count=4032 wall_s=17.859 success_rate_batch=0.969 converged_rate_batch=0.656 settle_steps_max=5000 eta=00:05:44
+[38;5;226m[Genesis] [10:38:20] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:38:20] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=17 wall_s=17.673 settle_steps_max=5000 converged_rate=0.781
+[38;5;226m[Genesis] [10:38:55] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:38:55] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round_recovery attempted_round=64 episode=17 error=FloatingPointError: DLO-Lab rod vertices contain non-finite values action=full_scene_rebuild
+[38;5;226m[Genesis] [10:38:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:38:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:39:03] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:39:03] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=18 wall_s=17.745 settle_steps_max=5000 converged_rate=0.969
+[38;5;226m[Genesis] [10:39:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:39:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0064 appended=64 count=4096 wall_s=18.054 success_rate_batch=0.938 converged_rate_batch=0.906 settle_steps_max=5000 eta=00:05:33
+[38;5;226m[Genesis] [10:39:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:39:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0065 appended=64 count=4160 wall_s=17.915 success_rate_batch=0.953 converged_rate_batch=0.844 settle_steps_max=5000 eta=00:05:09
+[38;5;226m[Genesis] [10:40:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:40:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0066 appended=64 count=4224 wall_s=17.970 success_rate_batch=0.969 converged_rate_batch=0.781 settle_steps_max=5000 eta=00:04:44
+round_recovery attempted_round=67 episode=18 error=FloatingPointError: DLO-Lab rod vertices contain non-finite values action=full_scene_rebuild
+[38;5;226m[Genesis] [10:40:18] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:40:18] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:40:22] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:40:22] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=19 wall_s=10.395 settle_steps_max=2932 converged_rate=1.000
+[38;5;226m[Genesis] [10:40:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:40:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0067 appended=64 count=4288 wall_s=18.047 success_rate_batch=0.938 converged_rate_batch=0.797 settle_steps_max=5000 eta=00:04:23
+[38;5;226m[Genesis] [10:41:08] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:41:08] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0068 appended=64 count=4352 wall_s=17.969 success_rate_batch=0.938 converged_rate_batch=0.828 settle_steps_max=5000 eta=00:03:58
+[38;5;226m[Genesis] [10:41:26] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:41:26] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0069 appended=64 count=4416 wall_s=17.965 success_rate_batch=0.938 converged_rate_batch=0.812 settle_steps_max=5000 eta=00:03:34
+[38;5;226m[Genesis] [10:41:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:41:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0070 appended=64 count=4480 wall_s=17.920 success_rate_batch=0.922 converged_rate_batch=0.766 settle_steps_max=5000 eta=00:03:10
+[38;5;226m[Genesis] [10:41:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:41:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=20 wall_s=17.687 settle_steps_max=5000 converged_rate=0.984
+[38;5;226m[Genesis] [10:42:20] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:42:20] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0071 appended=64 count=4544 wall_s=17.939 success_rate_batch=0.938 converged_rate_batch=0.859 settle_steps_max=5000 eta=00:02:48
+[38;5;226m[Genesis] [10:42:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:42:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0072 appended=64 count=4608 wall_s=17.944 success_rate_batch=0.906 converged_rate_batch=0.859 settle_steps_max=5000 eta=00:02:24
+[38;5;226m[Genesis] [10:42:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:42:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0073 appended=64 count=4672 wall_s=18.004 success_rate_batch=0.938 converged_rate_batch=0.750 settle_steps_max=5000 eta=00:02:00
+[38;5;226m[Genesis] [10:43:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:43:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0074 appended=64 count=4736 wall_s=17.941 success_rate_batch=0.969 converged_rate_batch=0.812 settle_steps_max=5000 eta=00:01:36
+[38;5;226m[Genesis] [10:43:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:43:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=21 wall_s=17.697 settle_steps_max=5000 converged_rate=0.828
+[38;5;226m[Genesis] [10:43:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:43:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0075 appended=64 count=4800 wall_s=17.927 success_rate_batch=0.906 converged_rate_batch=0.703 settle_steps_max=5000 eta=00:01:13
+[38;5;226m[Genesis] [10:44:07] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:44:07] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0076 appended=64 count=4864 wall_s=17.991 success_rate_batch=0.969 converged_rate_batch=0.688 settle_steps_max=5000 eta=00:00:50
+[38;5;226m[Genesis] [10:44:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:44:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0077 appended=64 count=4928 wall_s=17.971 success_rate_batch=0.984 converged_rate_batch=0.641 settle_steps_max=5000 eta=00:00:26
+[38;5;226m[Genesis] [10:44:43] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:44:43] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0078 appended=64 count=4992 wall_s=17.900 success_rate_batch=0.969 converged_rate_batch=0.672 settle_steps_max=5000 eta=00:00:03
+[38;5;226m[Genesis] [10:44:43] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:44:43] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+light_reset episode=22 wall_s=17.718 settle_steps_max=5000 converged_rate=0.781
+[38;5;226m[Genesis] [10:45:19] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [10:45:19] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+round 0079 appended=64 count=5056 wall_s=17.958 success_rate_batch=0.984 converged_rate_batch=0.750 settle_steps_max=5000 eta=00:00:00
+collection complete records>=5000 dataset=outputs/data/p0_random_transitions.h5 total_wall_s=1850.652 rounds=79 mean_s_per_round=17.858
+dm_stats complete records=5056 success_rate=0.947 converged_rate=0.537 normalizer_fit_count=2445 stats=outputs/metrics/dm_stats.json normalizer=outputs/metrics/dm_normalizer.json
+dm_histograms outputs/plots/dm_hist_all_channels.png outputs/plots/dm_hist_norms.png
+COLLECT_RANDOM PASS

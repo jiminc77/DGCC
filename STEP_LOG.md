@@ -38,3 +38,7 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 - 2026-07-02T23:16:58+00:00 — M3 complete (게이트 검증 후 issue #4 close).
 - 2026-07-02T23:34:01+00:00 — M3 정정: 'test_primitive.py 14 passed' 표기는 전체 tests/ 스위트 기준(14) — test_primitive.py 자체는 8개(현재 9개, friction 응답 테스트 A4 추가)였음 (architect A8).
 - 2026-07-02T23:34:01+00:00 — M3 gate 후속 fix: sample_grasp 경계 클램프 semantics docstring(A3), grasp 실패 분기 settle_converged 실측정(A5), move 이중 클램프 제거 _move_prepared(A7), friction 동역학 응답 테스트(A4). M4 설계 입력으로 기록: 비수렴 transition은 settle_steps==max_steps로 판별해 필터/플래그(A1, 스키마 변경 없이), 대량 수집 전 경량 reset 경로/scene teardown 필요(A2).
+- 2026-07-03T01:50:07+00:00 — M4 start: §7 Φ/δm 파이프라인 + transition 수집.
+- 2026-07-03T01:50:07+00:00 — M4 phi: DCT-II ortho, layout axis-major-xyz-modes-0-7-v1 (mode0=centroid 분리, mode≥1 21ch), 불변성 실측 max rel err 1.73% < 2% (N=25 vs 100). normalize: mode≥1만 std 스케일, tiny-std는 raise.
+- 2026-07-03T01:50:07+00:00 — M4 writer: h5py 컬럼형 레이아웃, TransitionWriter 증분 append, config+commit meta, round-trip/slice-read 테스트 8개.
+- 2026-07-03T01:50:07+00:00 — M4 수집: 5,056 transitions (n_envs=64 배치, per-env grasp via attach_to_rigid_link_with_envs_idx, 31분). success 94.7%, settle 수렴 53.7% (A1: settle_steps==max로 판별, 통계 분리; normalizer는 converged-success 2,445건 fit). outputs/data/p0_random_transitions.h5 (gitignore). 실패 env는 계약대로 X_after==X_before 정확 복원 (문서화).

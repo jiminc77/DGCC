@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import asdict
 from math import ceil
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -227,6 +227,11 @@ class DLOLabEnv(DLOEnvBase):
         self.last_grasp_success = False
         self._rng = np.random.default_rng(0)
         self.last_reset_settle_converged: bool | None = None
+        self.last_grasp_actual_nodes: np.ndarray | None = None
+        self.last_grasp_successes: np.ndarray | None = None
+        self.last_settle_steps_batch: np.ndarray | None = None
+        self.last_settle_converged_batch: np.ndarray | None = None
+        self._batched_active_nodes: np.ndarray | None = None
 
     def reset(self, params: RopeParams, init_shape: str, seed: int) -> dict[str, Any]:
         self._validate_params(params)
@@ -245,6 +250,11 @@ class DLOLabEnv(DLOEnvBase):
         self.last_settle_steps = 0
         self.last_settle_converged = False
         self.last_reset_settle_converged = None
+        self.last_grasp_actual_nodes = None
+        self.last_grasp_successes = None
+        self.last_settle_steps_batch = None
+        self.last_settle_converged_batch = None
+        self._batched_active_nodes = None
 
         mapped = mapped_parameters(params)
         length = float(params.length_m)
@@ -358,6 +368,62 @@ class DLOLabEnv(DLOEnvBase):
         sampled = np.asarray(self.rod_entity.sample_centerline(self.K), dtype=float)
         return sampled[0].copy() if self.n_envs == 1 else sampled.copy()
 
+    def get_centerline_raw_batch(self) -> np.ndarray:
+        """Return native rope vertices with explicit ``(n_envs, N, 3)`` batch axis."""
+
+        return self._raw_batch().copy()
+
+    def get_centerline_batch(self) -> np.ndarray:
+        """Return resampled centerlines with explicit ``(n_envs, 32, 3)`` batch axis."""
+
+        self._require_reset()
+        assert self.rod_entity is not None
+        sampled = np.asarray(self.rod_entity.sample_centerline(self.K), dtype=float)
+        return sampled.reshape(self.n_envs, self.K, 3).copy()
+
+    def supports_per_env_grasp(self) -> bool:
+        """Return whether DLO-Lab exposes per-environment attach/detach hooks."""
+
+        self._require_reset()
+        assert self.rod_entity is not None
+        return all(
+            hasattr(self.rod_entity, name)
+            for name in (
+                "attach_to_rigid_link_with_envs_idx",
+                "detach_from_rigid_link_with_envs_idx",
+            )
+        )
+
+    def place_rod_vertices_batch(self, vertices: np.ndarray) -> None:
+        """Light-reset all environments from explicit per-env native vertices.
+
+        ``vertices`` may be either ``(N, 3)`` (broadcast to every environment) or
+        ``(n_envs, N, 3)`` (distinct curve per environment).  Existing batched
+        attachments are cleared, positions are written through
+        ``rod_entity.set_position``, and velocities are zeroed.
+        """
+
+        self._place_rod_vertices_batched(vertices)
+
+    def light_reset(
+        self,
+        vertices: np.ndarray,
+        *,
+        vel_threshold: float = 1e-3,
+        max_steps: int = 5000,
+    ) -> dict[str, np.ndarray]:
+        """Re-place batched native vertices and settle without rebuilding the scene."""
+
+        self.place_rod_vertices_batch(vertices)
+        converged, settle_steps = self.settle_batch(
+            vel_threshold=vel_threshold,
+            max_steps=max_steps,
+        )
+        return {
+            "settle_converged": converged,
+            "settle_steps": settle_steps,
+        }
+
     def grasp(self, p: int) -> bool:
         self._require_reset()
         assert self.rod_entity is not None and self.gripper_link is not None
@@ -421,6 +487,45 @@ class DLOLabEnv(DLOEnvBase):
             self._step_scene()
         self._assert_finite()
         return target[0].copy() if self.n_envs == 1 else target.copy()
+
+    def _move_prepared_batch(self, delta_vecs: np.ndarray, lift_values: Sequence[str]) -> np.ndarray:
+        """Run batched waypoint moves with one target per environment."""
+
+        self._require_reset()
+        if self._batched_active_nodes is None:
+            raise RuntimeError("batched move called before batched grasp")
+
+        deltas = np.asarray(delta_vecs, dtype=float)
+        if deltas.shape != (self.n_envs, 3):
+            raise ValueError(f"delta_vecs must have shape ({self.n_envs}, 3), got {deltas.shape}")
+        lifts = [str(value) for value in lift_values]
+        if len(lifts) != self.n_envs:
+            raise ValueError(f"lift_values must contain {self.n_envs} entries")
+        for lift in lifts:
+            if lift not in LIFT_HEIGHTS:
+                raise ValueError(f"lift must be one of {sorted(LIFT_HEIGHTS)}, got {lift!r}")
+
+        start = self._gripper_positions()
+        lifted = start.copy()
+        lifted[:, 2] = np.asarray([LIFT_HEIGHTS[lift] for lift in lifts], dtype=float)
+        target = lifted + deltas
+        self.last_move_target = target.copy()
+
+        current = start
+        for waypoint in (lifted, target):
+            max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
+            n_steps = max(20, int(ceil(max_distance / self.move_step_size)))
+            for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
+                pos = (1.0 - alpha) * current + alpha * waypoint
+                self._set_gripper_positions(pos)
+                self._step_scene()
+            current = waypoint.copy()
+
+        for _ in range(max(0, self.move_hold_steps)):
+            self._set_gripper_positions(target)
+            self._step_scene()
+        self._assert_finite()
+        return target.copy()
 
     def release(self, vel_threshold: float = 1e-3, max_steps: int = 5000) -> bool:
         self._require_reset()
@@ -489,6 +594,135 @@ class DLOLabEnv(DLOEnvBase):
             },
         }
 
+    def step_primitive_batch(
+        self,
+        p: np.ndarray,
+        delta: np.ndarray,
+        lift: Sequence[str],
+        *,
+        vel_threshold: float = 1e-3,
+        max_steps: int = 5000,
+        rng: np.random.Generator | None = None,
+    ) -> dict[str, Any]:
+        """Execute one batched primitive with per-env p/delta/lift/grasp outcomes."""
+
+        self._require_reset()
+        assert self.rod_entity is not None and self.gripper_link is not None
+        if not self.supports_per_env_grasp():
+            raise RuntimeError("DLO-Lab rod_entity lacks per-env attach/detach hooks")
+
+        n_vertices = self._n_vertices()
+        p_array = np.asarray(p, dtype=int)
+        if p_array.shape != (self.n_envs,):
+            raise ValueError(f"p must have shape ({self.n_envs},), got {p_array.shape}")
+        if np.any((p_array < 0) | (p_array >= n_vertices)):
+            raise IndexError(f"grasp nodes must be inside [0, {n_vertices})")
+
+        delta_array = np.asarray(delta, dtype=float)
+        if delta_array.shape != (self.n_envs, 3):
+            raise ValueError(f"delta must have shape ({self.n_envs}, 3), got {delta_array.shape}")
+        if not np.all(np.isfinite(delta_array)):
+            raise ValueError("delta contains non-finite values")
+        norms = np.linalg.norm(delta_array, axis=1)
+        scale = np.ones_like(norms)
+        over = norms > MAX_DELTA_NORM
+        scale[over] = MAX_DELTA_NORM / norms[over]
+        delta_clamped = delta_array * scale[:, None]
+
+        lift_values = [str(value) for value in lift]
+        if len(lift_values) != self.n_envs:
+            raise ValueError(f"lift must contain {self.n_envs} entries")
+        for lift_value in lift_values:
+            if lift_value not in LIFT_HEIGHTS:
+                raise ValueError(f"lift must be one of {sorted(LIFT_HEIGHTS)}, got {lift_value!r}")
+
+        X_before = self.get_centerline_batch()
+        grasp_rng = self._rng if rng is None else rng
+        raw_before = self.get_centerline_raw_batch()
+
+        sampled = [
+            sample_grasp(int(node), n_vertices, grasp_rng, self.grasp_realism)
+            for node in p_array
+        ]
+        p_actual = np.asarray([item[0] for item in sampled], dtype=int)
+        grasp_success = np.asarray([item[1] for item in sampled], dtype=bool)
+        self.last_grasp_actual_nodes = p_actual.copy()
+        self.last_grasp_successes = grasp_success.copy()
+        self.last_grasp_actual_node = int(p_actual[0]) if self.n_envs == 1 else None
+        self.last_grasp_success = bool(np.all(grasp_success))
+
+        env_indices = np.arange(self.n_envs)
+        self._set_gripper_positions(raw_before[env_indices, p_actual, :])
+        self._step_scene()
+
+        self._batched_active_nodes = np.full(self.n_envs, -1, dtype=int)
+        for env_idx, (node, success) in enumerate(zip(p_actual, grasp_success, strict=True)):
+            if not success:
+                continue
+            self.rod_entity.attach_to_rigid_link_with_envs_idx(
+                self.gripper_link,
+                [int(node)],
+                int(env_idx),
+            )
+            self._batched_active_nodes[env_idx] = int(node)
+        self._step_scene()
+
+        target = self._move_prepared_batch(delta_clamped, lift_values)
+
+        for env_idx, node in enumerate(self._batched_active_nodes):
+            if int(node) < 0:
+                continue
+            self.rod_entity.detach_from_rigid_link_with_envs_idx([int(node)], int(env_idx))
+        self._batched_active_nodes = None
+        self._step_scene()
+
+        settle_converged, settle_steps = self.settle_batch(
+            vel_threshold=vel_threshold,
+            max_steps=max_steps,
+        )
+        X_after = self.get_centerline_batch()
+
+        if not np.all(grasp_success):
+            raw_after = self.get_centerline_raw_batch()
+            raw_after[~grasp_success] = raw_before[~grasp_success]
+            self.place_rod_vertices_batch(raw_after)
+            X_after = self.get_centerline_batch()
+            X_after[~grasp_success] = X_before[~grasp_success]
+            settle_steps = settle_steps.copy()
+            settle_converged = settle_converged.copy()
+            settle_steps[~grasp_success] = 0
+            settle_converged[~grasp_success] = self.max_node_speed_batch()[~grasp_success] <= float(
+                vel_threshold
+            )
+
+        self.last_delta_clamped = delta_clamped[0].copy() if self.n_envs == 1 else delta_clamped.copy()
+        self.last_settle_steps_batch = settle_steps.copy()
+        self.last_settle_converged_batch = settle_converged.copy()
+        self.last_settle_steps = int(np.max(settle_steps)) if settle_steps.size else 0
+        self.last_settle_converged = bool(np.all(settle_converged))
+        self._assert_finite()
+
+        return {
+            "X_before": X_before,
+            "X_after": X_after,
+            "grasp_success": grasp_success,
+            "settle_steps": settle_steps,
+            "info": {
+                "p": p_array.copy(),
+                "p_actual": p_actual,
+                "grasp_realism": bool(self.grasp_realism),
+                "grasp_failure_prob": GRASP_FAILURE_PROB,
+                "grasp_noise": p_actual - p_array,
+                "delta_clamped": delta_clamped,
+                "lift": np.asarray(lift_values, dtype=object),
+                "gripper_target": target,
+                "settle_converged": settle_converged,
+                "max_node_speed": self.max_node_speed_batch(),
+                "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
+                "grasp_mode": "per-env",
+            },
+        }
+
     def settle(self, vel_threshold: float = 1e-3, max_steps: int = 5000) -> bool:
         self._require_reset()
         threshold = float(vel_threshold)
@@ -508,19 +742,102 @@ class DLOLabEnv(DLOEnvBase):
         self.last_settle_converged = False
         return False
 
-    def max_node_speed(self) -> float:
+    def settle_batch(
+        self,
+        vel_threshold: float = 1e-3,
+        max_steps: int = 5000,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Settle all envs together while recording per-env first-converged steps."""
+
+        self._require_reset()
+        threshold = float(vel_threshold)
+        if threshold < 0:
+            raise ValueError("vel_threshold must be non-negative")
+        budget = int(max_steps)
+        if budget < 0:
+            raise ValueError("max_steps must be non-negative")
+
+        steps = np.full(self.n_envs, budget, dtype=int)
+        converged = np.zeros(self.n_envs, dtype=bool)
+        for step in range(budget + 1):
+            speeds = self.max_node_speed_batch()
+            newly = (~converged) & (speeds < threshold)
+            if np.any(newly):
+                steps[newly] = step
+                converged[newly] = True
+            if bool(np.all(converged)):
+                break
+            if step == budget:
+                break
+            self._step_scene()
+
+        self.last_settle_steps_batch = steps.copy()
+        self.last_settle_converged_batch = converged.copy()
+        self.last_settle_steps = int(np.max(steps)) if steps.size else 0
+        self.last_settle_converged = bool(np.all(converged))
+        return converged, steps
+
+    def max_node_speed_batch(self) -> np.ndarray:
+        """Return per-environment maximum rod vertex speed."""
+
         self._require_reset()
         assert self.rod_entity is not None
         vels = np.asarray(self.rod_entity.get_all_vels(), dtype=float)
         if vels.size == 0:
-            return 0.0
-        return float(np.max(np.linalg.norm(vels, axis=-1)))
+            return np.zeros(self.n_envs, dtype=float)
+        if vels.ndim == 2:
+            vels = vels.reshape(1, *vels.shape)
+        speeds = np.linalg.norm(vels, axis=-1)
+        return np.max(speeds, axis=1).reshape(self.n_envs)
+
+    def max_node_speed(self) -> float:
+        speeds = self.max_node_speed_batch()
+        return float(np.max(speeds)) if speeds.size else 0.0
 
 
     def _raw_batch(self) -> np.ndarray:
         self._require_reset()
         assert self.rod_entity is not None
         return np.asarray(self.rod_entity.get_all_verts(), dtype=float)
+
+    def _place_rod_vertices_batched(self, vertices: np.ndarray) -> None:
+        self._require_reset()
+        assert self.rod_entity is not None
+        n_vertices = self._n_vertices()
+        verts = np.asarray(vertices, dtype=float)
+        if verts.shape == (n_vertices, 3):
+            batched = np.broadcast_to(verts, (self.n_envs, n_vertices, 3)).copy()
+        elif verts.shape == (self.n_envs, n_vertices, 3):
+            batched = verts.copy()
+        else:
+            raise ValueError(
+                "vertices must have shape "
+                f"({n_vertices}, 3) or ({self.n_envs}, {n_vertices}, 3), got {verts.shape}"
+            )
+        if not np.all(np.isfinite(batched)):
+            raise ValueError("vertices contain non-finite values")
+
+        self._detach_existing_attachments()
+        zeros = np.zeros_like(batched)
+        self.rod_entity.set_position(batched)
+        self.rod_entity.set_velocity(zeros)
+        self._step_scene()
+
+    def _detach_existing_attachments(self) -> None:
+        if self.rod_entity is None:
+            return
+        if self.active_node is not None:
+            self.rod_entity.detach_from_rigid_link([self.active_node])
+            self.active_node = None
+        if self._batched_active_nodes is not None:
+            for env_idx, node in enumerate(self._batched_active_nodes):
+                if int(node) < 0:
+                    continue
+                if self.supports_per_env_grasp():
+                    self.rod_entity.detach_from_rigid_link_with_envs_idx([int(node)], int(env_idx))
+                else:
+                    self.rod_entity.detach_from_rigid_link([int(node)])
+            self._batched_active_nodes = None
 
     def _place_rod_vertices(self, vertices: np.ndarray) -> None:
         self._require_reset()
