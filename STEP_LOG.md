@@ -60,3 +60,5 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 - 2026-07-03T05:14:40+00:00 — **M5R2 Case A (정본: issue #6 코멘트 4872665607):** D1 진단 — flip-정합 ρ=0.999994 (기존 flip 불일치율 67.6%), D2 — Parseval sanity 정확, ρ_trunc=0.999994, tail 무시 가능(M=12/16 가정 계산도 무차별). 사전 등록 Case A 발동: orientation canonicalization 규약을 §8·구현 정식 편입(버그 수정, 파라미터 불변). **G2 최종: component (a) ρ=0.9847 PASS, (b) flip-정합 ρ=0.999994 PASS → OVERALL PASS.** v1/v2 산출물 18종 byte-identical 보존, staging과 bit-match, tests 49 passed.
 - 2026-07-03T05:14:40+00:00 — v1 판정문 정정 (M5R2 지시): 'std-정규화 지배' 서술은 부정확 — c_g는 raw DCT였음; 성분 분해 조치 자체는 유효.
 - 2026-07-03T05:30:21+00:00 — M5R2 gate 후속: 비대칭 flip 단일-결정 잠금 테스트 추가, P0.md M5 Exit 체크리스트 완료 표기 (architect P3 2건).
+- 2026-07-03T05:54:59+00:00 — M6 start (G014, G007 대체): G1 stiffness 파일럿.
+- 2026-07-03T05:54:59+00:00 — M6 측정 완료: 20 고정 시퀀스 × seed 3 × bend/twist {×0.5,×1,×2} (+friction 부속), per-env setter 배치(72env, 7.3분). Cohen's d (stiffness): 0.5v1=0.061, 1v2=-0.034, 0.5v2=0.236 — 전 구간 95% CI가 0 포함, between≈within noise floor. friction: d=-0.41~-0.52 (CI 0 제외, 음수). 판단 문구 없음 — 사람 판정 대기. grasp realism off (교란 제거, config 명시). 소성 미활성(검색 확인). tests 50 passed.

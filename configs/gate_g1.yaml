@@ -1,0 +1,166 @@
+# P0-M6 G1 stiffness-validity pilot fixture.
+# The 20 primitive sequences below were generated once with numpy.default_rng(42)
+# and are intentionally frozen here; this config is the measurement fixture.
+rope:
+  length_m: 1.0
+  n_segments: 50
+  bend_stiffness: 1.0
+  twist_stiffness: 1.0
+  friction: 1.0
+  radius: 0.005
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 5000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  # Controlled G1 experiment: grasp realism is off so p/delta/lift are fixed and
+  # stiffness/friction effects are not confounded by grasp failure or node jitter.
+  grasp_realism: false
+measurement:
+  fixture_generation_seed: 42
+  init_seeds: [0, 1, 2]
+  stiffness_multipliers: [0.5, 1.0, 2.0]
+  friction_multipliers: [0.5, 1.0, 2.0]
+  condition_pairs:
+    - [0.5, 1.0]
+    - [1.0, 2.0]
+    - [0.5, 2.0]
+  vel_threshold: 0.001
+  settle_max_steps: 5000
+  bootstrap_replicates: 5000
+  bootstrap_ci: 0.95
+  max_mixed_batch_envs: 90
+  timing_probe:
+    enabled: true
+    axis: stiffness
+    sequence_id: straight_01
+    condition: 1.0
+    primitive_index: 0
+sequences:
+  - id: straight_01
+    init_shape: straight
+    primitives:
+      - {p: 8, delta: [-0.011002, 0.064548, 0.018355], lift: high}
+      - {p: 35, delta: [0.085612, 0.047005, 0.023234], lift: high}
+  - id: straight_02
+    init_shape: straight
+    primitives:
+      - {p: 38, delta: [-0.023256, 0.076818, 0.015413], lift: low}
+      - {p: 23, delta: [-0.010185, -0.049097, 0.010502], lift: high}
+      - {p: 39, delta: [0.0237, 0.046456, -0.000501], lift: low}
+  - id: straight_03
+    init_shape: straight
+    primitives:
+      - {p: 38, delta: [0.070762, 0.050109, -0.009295], lift: low}
+      - {p: 24, delta: [-0.062228, 0.032949, 0.020962], lift: low}
+      - {p: 6, delta: [-0.031351, -0.023317, 0.005826], lift: high}
+      - {p: 23, delta: [-0.004373, -0.049156, 0.01684], lift: high}
+  - id: straight_04
+    init_shape: straight
+    primitives:
+      - {p: 10, delta: [0.059882, 0.036048, -0.00282], lift: low}
+      - {p: 22, delta: [-0.020254, -0.038101, 0.017537], lift: high}
+  - id: straight_05
+    init_shape: straight
+    primitives:
+      - {p: 37, delta: [-0.054017, -0.088675, 0.023281], lift: low}
+      - {p: 23, delta: [0.050531, -0.007395, 0.011281], lift: high}
+      - {p: 33, delta: [-0.069385, 0.030313, 0.00591], lift: low}
+  - id: u_bend_01
+    init_shape: u_bend
+    primitives:
+      - {p: 8, delta: [-0.035289, -0.084453, 0.004019], lift: high}
+      - {p: 35, delta: [-0.016465, 0.063613, -0.007133], lift: high}
+  - id: u_bend_02
+    init_shape: u_bend
+    primitives:
+      - {p: 39, delta: [-0.037153, 0.029145, 0.010637], lift: low}
+      - {p: 16, delta: [0.029576, -0.01685, 0.024771], lift: high}
+      - {p: 18, delta: [-0.073791, 0.040025, 0.005403], lift: high}
+  - id: u_bend_03
+    init_shape: u_bend
+    primitives:
+      - {p: 5, delta: [0.000188, -0.062584, 0.018298], lift: high}
+      - {p: 11, delta: [-0.035728, 0.023451, -0.0001], lift: high}
+      - {p: 20, delta: [-0.068759, 0.083142, 0.029972], lift: low}
+      - {p: 23, delta: [0.084452, 0.050175, 0.019429], lift: high}
+  - id: u_bend_04
+    init_shape: u_bend
+    primitives:
+      - {p: 15, delta: [-0.040997, -0.07265, 0.029643], lift: low}
+      - {p: 33, delta: [-0.034928, 0.01426, -0.010277], lift: low}
+  - id: u_bend_05
+    init_shape: u_bend
+    primitives:
+      - {p: 13, delta: [0.046534, 0.039503, 0.003765], lift: low}
+      - {p: 10, delta: [0.026972, -0.0748, 0.002869], lift: high}
+      - {p: 28, delta: [-0.071387, 0.015776, -0.010617], lift: low}
+  - id: s_curve_01
+    init_shape: s_curve
+    primitives:
+      - {p: 44, delta: [-0.027563, 0.016365, -0.018746], lift: low}
+      - {p: 28, delta: [-0.003185, 0.050892, -0.01545], lift: low}
+  - id: s_curve_02
+    init_shape: s_curve
+    primitives:
+      - {p: 31, delta: [0.078809, 0.012911, 0.006042], lift: high}
+      - {p: 24, delta: [-0.08611, 0.058733, 0.029289], lift: high}
+      - {p: 17, delta: [-0.070456, 0.031003, -0.004532], lift: low}
+  - id: s_curve_03
+    init_shape: s_curve
+    primitives:
+      - {p: 27, delta: [0.040859, 0.048357, -0.014074], lift: low}
+      - {p: 44, delta: [-0.083266, 0.009873, 0.000401], lift: low}
+      - {p: 14, delta: [0.055485, -0.032915, 0.032409], lift: high}
+      - {p: 29, delta: [-0.043926, 0.078488, -0.010947], lift: high}
+  - id: s_curve_04
+    init_shape: s_curve
+    primitives:
+      - {p: 25, delta: [-0.011683, 0.088628, 0.029042], lift: low}
+      - {p: 38, delta: [0.07082, 0.003395, -0.002624], lift: low}
+  - id: s_curve_05
+    init_shape: s_curve
+    primitives:
+      - {p: 40, delta: [0.029099, -0.022742, -0.014804], lift: low}
+      - {p: 20, delta: [0.078626, -0.046625, -0.013248], lift: low}
+      - {p: 15, delta: [-0.062409, -0.057732, 0.012966], lift: low}
+  - id: random_smooth_01
+    init_shape: random_smooth
+    primitives:
+      - {p: 6, delta: [-0.034142, 0.049933, 0.03345], lift: low}
+      - {p: 12, delta: [-0.064098, -0.087491, -0.007369], lift: high}
+  - id: random_smooth_02
+    init_shape: random_smooth
+    primitives:
+      - {p: 5, delta: [-0.06807, 0.001139, 0.018184], lift: low}
+      - {p: 32, delta: [-0.05404, 0.054742, 0.019347], lift: low}
+      - {p: 38, delta: [-0.067724, 0.076961, 0.001867], lift: high}
+  - id: random_smooth_03
+    init_shape: random_smooth
+    primitives:
+      - {p: 10, delta: [-0.002055, 0.029316, 0.032559], lift: high}
+      - {p: 43, delta: [-0.085525, 0.009936, 0.014869], lift: high}
+      - {p: 41, delta: [-0.064739, -0.014559, 0.033143], lift: low}
+      - {p: 12, delta: [0.054785, -0.005871, 0.023162], lift: high}
+  - id: random_smooth_04
+    init_shape: random_smooth
+    primitives:
+      - {p: 42, delta: [-0.070354, 0.059297, 0.023825], lift: high}
+      - {p: 18, delta: [0.019083, 0.066193, 0.013171], lift: high}
+  - id: random_smooth_05
+    init_shape: random_smooth
+    primitives:
+      - {p: 26, delta: [0.066148, -0.008299, -0.006369], lift: high}
+      - {p: 44, delta: [0.056982, -0.07105, -0.016339], lift: low}
+      - {p: 34, delta: [-0.063689, 0.05844, -0.002932], lift: high}
+outputs:
+  metrics_json: outputs/metrics/g1_effect_size.json
+  stiffness_plot_png: outputs/plots/g1_stiffness_distributions.png
+  friction_plot_png: outputs/plots/g1_friction_distributions.png
+  report_md: outputs/reports/g1_report.md
+  stdout_log: outputs/reports/gate_g1_stdout.log
+  dm_stats_json: outputs/metrics/dm_stats.json

@@ -1,0 +1,67 @@
+g1_start created_at=2026-07-03T05:43:28Z seed=42 config=configs/gate_g1.yaml
+fixture sequences=20 init_seeds=[0, 1, 2] generation_seed=42
+setter_signature_source external/DLO-Lab/genesis/engine/entities/rod_entity.py:1288-1423
+[38;5;226m[Genesis] [14:43:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:43:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:43:43] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:43:43] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+timing_probe axis=stiffness condition=1.0 n_envs=3 round_wall_s=18.053 per_env_round_s=6.018 param_envs_idx=True
+full_run_start groups=6 total_env_runs=360 mixed_conditions=True
+batch_start group=1/6 axis=friction primitive_count=2 n_envs=72 conditions=[0.5, 1.0, 2.0]
+[38;5;226m[Genesis] [14:44:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:44:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:44:12] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:44:12] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+batch_step axis=friction group=1 primitive=1/2 n_envs=72 wall_s=18.055 converged_rate=0.875
+batch_step axis=friction group=1 primitive=2/2 n_envs=72 wall_s=17.874 converged_rate=0.861
+batch_done axis=friction group=1 primitive_count=2 n_envs=72 reset_converged_rate=1.000
+batch_start group=2/6 axis=friction primitive_count=3 n_envs=72 conditions=[0.5, 1.0, 2.0]
+[38;5;226m[Genesis] [14:44:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:44:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:45:01] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:45:01] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+batch_step axis=friction group=2 primitive=1/3 n_envs=72 wall_s=18.087 converged_rate=0.653
+batch_step axis=friction group=2 primitive=2/3 n_envs=72 wall_s=17.930 converged_rate=0.819
+batch_step axis=friction group=2 primitive=3/3 n_envs=72 wall_s=17.984 converged_rate=0.792
+batch_done axis=friction group=2 primitive_count=3 n_envs=72 reset_converged_rate=1.000
+batch_start group=3/6 axis=friction primitive_count=4 n_envs=36 conditions=[0.5, 1.0, 2.0]
+[38;5;226m[Genesis] [14:46:04] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:46:04] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:46:08] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:46:08] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+batch_step axis=friction group=3 primitive=1/4 n_envs=36 wall_s=18.019 converged_rate=0.972
+batch_step axis=friction group=3 primitive=2/4 n_envs=36 wall_s=17.880 converged_rate=0.694
+batch_step axis=friction group=3 primitive=3/4 n_envs=36 wall_s=17.923 converged_rate=0.889
+batch_step axis=friction group=3 primitive=4/4 n_envs=36 wall_s=17.869 converged_rate=0.806
+batch_done axis=friction group=3 primitive_count=4 n_envs=36 reset_converged_rate=1.000
+batch_start group=4/6 axis=stiffness primitive_count=2 n_envs=72 conditions=[0.5, 1.0, 2.0]
+[38;5;226m[Genesis] [14:47:29] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:47:29] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:47:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:47:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+batch_step axis=stiffness group=4 primitive=1/2 n_envs=72 wall_s=18.193 converged_rate=0.917
+batch_step axis=stiffness group=4 primitive=2/2 n_envs=72 wall_s=18.050 converged_rate=0.778
+batch_done axis=stiffness group=4 primitive_count=2 n_envs=72 reset_converged_rate=1.000
+batch_start group=5/6 axis=stiffness primitive_count=3 n_envs=72 conditions=[0.5, 1.0, 2.0]
+[38;5;226m[Genesis] [14:48:18] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:48:18] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:48:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:48:21] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+batch_step axis=stiffness group=5 primitive=1/3 n_envs=72 wall_s=18.236 converged_rate=0.653
+batch_step axis=stiffness group=5 primitive=2/3 n_envs=72 wall_s=18.713 converged_rate=0.778
+batch_step axis=stiffness group=5 primitive=3/3 n_envs=72 wall_s=18.042 converged_rate=0.819
+batch_done axis=stiffness group=5 primitive_count=3 n_envs=72 reset_converged_rate=1.000
+batch_start group=6/6 axis=stiffness primitive_count=4 n_envs=36 conditions=[0.5, 1.0, 2.0]
+[38;5;226m[Genesis] [14:49:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:49:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:49:29] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [14:49:29] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+batch_step axis=stiffness group=6 primitive=1/4 n_envs=36 wall_s=18.112 converged_rate=0.917
+batch_step axis=stiffness group=6 primitive=2/4 n_envs=36 wall_s=18.030 converged_rate=0.667
+batch_step axis=stiffness group=6 primitive=3/4 n_envs=36 wall_s=17.925 converged_rate=0.778
+batch_step axis=stiffness group=6 primitive=4/4 n_envs=36 wall_s=17.987 converged_rate=0.583
+batch_done axis=stiffness group=6 primitive_count=4 n_envs=36 reset_converged_rate=1.000
+wrote metrics outputs/metrics/g1_effect_size.json
+wrote report outputs/reports/g1_report.md
+wrote plots outputs/plots/g1_stiffness_distributions.png outputs/plots/g1_friction_distributions.png
+g1_done wall_time_s=438.608
