@@ -395,7 +395,7 @@ class TrainingRun:
                         f"nan_env={self.runner.nan_incidents} rebuilds={self.full_rebuilds}"
                     )
                 if self.transitions >= next_eval:
-                    self.eval_and_checkpoint()
+                    self.eval_and_checkpoint(final=self.transitions >= self.total)
                     next_eval += self.eval_every
         except TrainingNaNError as exc:
             # Global rule 6, training level: halt + preserve last checkpoint +
@@ -407,7 +407,12 @@ class TrainingRun:
             self.save_run_summary()
             return 2
 
-        self.eval_and_checkpoint(final=True)
+        if not self.eval_history or self.eval_history[-1]["transitions"] < self.transitions:
+            self.eval_and_checkpoint(final=True)
+        else:
+            self.diag.maybe_plot(self.transitions, force=True)
+            self.diag.save_history()
+            self.save_run_summary()
         wall_h = (time.perf_counter() - start_wall) / 3600
         print(
             f"run complete transitions={self.transitions} updates={self.agent.update_count} "
