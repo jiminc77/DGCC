@@ -1,0 +1,31 @@
+[Quadrants] version 0.8.0, llvm 22.1.0, commit a22cc2de, linux, python 3.12.13
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /home/simx2204/Workspaces/DGCC/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/simx2204/Workspaces/DGCC
+configfile: pyproject.toml
+plugins: anyio-4.14.1, quadrants-0.8.0
+collecting ... collected 20 items
+
+tests/test_tasks.py::test_p1_rope_domain_pinned_field_by_field PASSED    [  5%]
+tests/test_tasks.py::test_t2_generation_deterministic PASSED             [ 10%]
+tests/test_tasks.py::test_t2_committed_split_matches_regeneration PASSED [ 15%]
+tests/test_tasks.py::test_t2_split_sizes_and_disjointness PASSED         [ 20%]
+tests/test_tasks.py::test_t2_splits_cover_families_and_include_asymmetric_goals PASSED [ 25%]
+tests/test_tasks.py::test_t2_goal_reconstruction_finite PASSED           [ 30%]
+tests/test_tasks.py::test_t1_samplers_deterministic_and_in_spec PASSED   [ 35%]
+tests/test_tasks.py::test_reward_sign_sanity PASSED                      [ 40%]
+tests/test_tasks.py::test_success_judgment_consistent_with_reward_bonus PASSED [ 45%]
+tests/test_tasks.py::test_reward_module_imports_only_correspondence_l2 PASSED [ 50%]
+tests/test_tasks.py::test_reward_path_never_calls_chamfer_family PASSED  [ 55%]
+tests/test_tasks.py::test_metric_is_correspondence_not_chamfer PASSED    [ 60%]
+tests/test_tasks.py::test_settle_budget_10000_on_every_settle_bearing_call PASSED [ 65%]
+tests/test_tasks.py::test_runner_never_uses_step_primitive_single_path PASSED [ 70%]
+tests/test_tasks.py::test_episode_terminates_at_horizon_without_success PASSED [ 75%]
+tests/test_tasks.py::test_episode_early_termination_on_success PASSED    [ 80%]
+tests/test_tasks.py::test_active_mask_freezes_finished_episodes PASSED   [ 85%]
+tests/test_tasks.py::test_nan_covenant_discards_reseeds_and_counts PASSED [ 90%]
+tests/test_tasks.py::test_build_batch_init_vertices_shapes_and_determinism PASSED [ 95%]
+tests/test_tasks.py::test_nan_covenant_covers_reset_settle_path PASSED   [100%]
+
+============================== 20 passed in 0.15s ==============================
