@@ -1,0 +1,166 @@
+{
+  "generated_at": "2026-07-03T11:38:28Z",
+  "git_commit": "236baae33d5213ae3991d83ff4fa5620d293a1c6",
+  "seed": 0,
+  "config": {
+    "sim": {
+      "dt": 0.001,
+      "substeps": 5,
+      "rod_damping": 10.0,
+      "rod_angular_damping": 5.0,
+      "initial_settle_steps": 0,
+      "reset_settle_max_steps": 10000,
+      "move_step_size": 0.03,
+      "move_hold_steps": 0,
+      "grasp_realism": true
+    },
+    "probe": {
+      "n_env_candidates": [
+        64,
+        128,
+        256
+      ],
+      "warmup_rounds": 1,
+      "measured_rounds": 6
+    },
+    "actions": {
+      "delta_min_m": 0.02,
+      "delta_max_m": 0.15,
+      "lift_choices": [
+        "low",
+        "high"
+      ]
+    },
+    "budgets": {
+      "smoke_transitions": 50000,
+      "t1_run_transitions": 100000,
+      "t2_run_transitions": 300000,
+      "t1_runs": 9,
+      "t2_runs": 3
+    },
+    "outputs": {
+      "json": "outputs/metrics/p1_throughput.json",
+      "report": "outputs/reports/p1_throughput.md",
+      "stdout_log": "outputs/reports/p1_throughput_stdout.log"
+    }
+  },
+  "scheduling": "S1 (one run at a time; R2 concurrency probing rejected at reconciliation)",
+  "candidates": [
+    {
+      "n_envs": 64,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 7.832161549944431,
+      "light_reset_wall_s": 12.089866420254111,
+      "round_wall_s": [
+        35.458640231285244,
+        24.94540338171646,
+        35.379847563337535,
+        35.41326675703749,
+        35.35870377998799,
+        35.4770655031316
+      ],
+      "mean_s_per_round": 33.67215453608272,
+      "transitions_per_s": 1.9006802766784134,
+      "grasp_success_rate": 0.9635416666666666,
+      "settle_convergence_rate": 0.90625,
+      "nan_incidents_runner": 0,
+      "nan_discarded_rounds": 0,
+      "full_scene_rebuilds": 0,
+      "reset_settle_converged_rate": 1.0,
+      "cuda_memory": {
+        "max_allocated_gib": 0.008628368377685547,
+        "max_reserved_gib": 0.021484375,
+        "device_used_gib": 4.910888671875,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    },
+    {
+      "n_envs": 128,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 4.8821415808051825,
+      "light_reset_wall_s": 28.53640651423484,
+      "round_wall_s": [
+        35.97751038474962,
+        35.9589570723474,
+        36.02765141706914,
+        35.912319937720895,
+        36.34653041372076,
+        36.26463946001604
+      ],
+      "mean_s_per_round": 36.08126811427064,
+      "transitions_per_s": 3.5475471536815033,
+      "grasp_success_rate": 0.9544270833333334,
+      "settle_convergence_rate": 0.9583333333333334,
+      "nan_incidents_runner": 0,
+      "nan_discarded_rounds": 0,
+      "full_scene_rebuilds": 1,
+      "reset_settle_converged_rate": 1.0,
+      "cuda_memory": {
+        "max_allocated_gib": 0.010369300842285156,
+        "max_reserved_gib": 0.0234375,
+        "device_used_gib": 4.992919921875,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    },
+    {
+      "n_envs": 256,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 7.454604543745518,
+      "light_reset_wall_s": 25.835272572934628,
+      "round_wall_s": [
+        37.30004530539736,
+        37.2636058521457,
+        37.30056304810569,
+        37.2883608979173,
+        37.22496106708422,
+        37.2853342005983
+      ],
+      "mean_s_per_round": 37.27714506187476,
+      "transitions_per_s": 6.8674787078000845,
+      "grasp_success_rate": 0.9361979166666666,
+      "settle_convergence_rate": 0.9401041666666666,
+      "nan_incidents_runner": 0,
+      "nan_discarded_rounds": 0,
+      "full_scene_rebuilds": 0,
+      "reset_settle_converged_rate": 1.0,
+      "cuda_memory": {
+        "max_allocated_gib": 0.010684967041015625,
+        "max_reserved_gib": 0.0234375,
+        "device_used_gib": 5.000732421875,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    }
+  ],
+  "recommendation": {
+    "n_envs": 256,
+    "transitions_per_s": 6.8674787078000845,
+    "rule": "max measured transitions/s, tie-break smaller n_envs"
+  },
+  "budgets": {
+    "smoke_transitions": 50000,
+    "t1_run_transitions": 100000,
+    "t2_run_transitions": 300000,
+    "t1_runs": 9,
+    "t2_runs": 3
+  },
+  "p0_reference": {
+    "n_envs": 64,
+    "transitions_per_s": 3.61,
+    "settle_max_steps": 5000
+  }
+}

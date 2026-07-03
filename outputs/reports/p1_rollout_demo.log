@@ -1,0 +1,34 @@
+p1_rollout_demo start 2026-07-03T10:52:57Z seed=0 episodes=10
+[38;5;226m[Genesis] [19:53:10] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:10] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+build+reset wall 21.5s
+assignments: ['t1a_straighten', 't1b_single_bend', 't1c_endpoint_reposition', 't2_train[0]', 't2_train[1]', 't2_train[2]', 't2_train[3]', 't2_train[4]', 't2_train[5]', 't2_train[6]']
+init shapes:  ['straight', 'u_bend', 's_curve', 'random_smooth', 'straight', 'u_bend', 's_curve', 'random_smooth', 'straight', 'u_bend']
+d_initial:    0.0003 0.0787 0.2270 0.1125 0.3537 0.3001 0.1307 0.1169 0.1929 0.2405
+step 1: active=10 d_after=[0.3093 0.3139 0.2522 0.1522 0.3200 0.1967 0.2131 0.2087 0.3396 0.3280] reward=[-3.189 -2.452 -0.352 -0.497 +0.237 +0.933 -0.924 -1.019 -1.567 -0.975] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[38;5;226m[Genesis] [19:53:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+step 2: active=10 d_after=[0.2581 0.2195 0.3506 0.1522 0.3607 0.3760 0.2537 0.2087 0.4311 0.3333] reward=[+0.411 +0.844 -1.084 -0.100 -0.507 -1.893 -0.507 -0.100 -1.015 -0.153] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[38;5;226m[Genesis] [19:54:22] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:54:22] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+step 3: active=10 d_after=[0.3642 0.2473 0.3491 0.2895 0.3679 0.4338 0.2985 0.1640 0.4311 0.2419] reward=[-1.161 -0.378 -0.085 -1.472 -0.172 -0.678 -0.548 +0.348 -0.100 +0.814] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+step 4: active=10 d_after=[0.3722 0.2417 0.4891 0.3231 0.2711 0.4211 0.4247 0.3739 0.4444 0.6083] reward=[-0.179 -0.044 -1.500 -0.436 +0.867 +0.028 -1.362 -2.199 -0.234 -3.765] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[38;5;226m[Genesis] [19:55:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:55:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+step 5: active=10 d_after=[0.4706 0.4133 0.5122 0.3231 0.2728 0.7658 0.5114 0.3693 0.3656 0.5810] reward=[-1.084 -1.816 -0.332 -0.100 -0.117 -3.547 -0.967 -0.054 +0.689 +0.173] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+step 6: active=10 d_after=[0.5194 0.5758 0.3771 0.3280 0.3019 0.8272 0.3636 0.3536 0.3547 0.5290] reward=[-0.588 -1.725 +1.251 -0.149 -0.391 -0.714 +1.378 +0.057 +0.008 +0.420] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+step 7: active=10 d_after=[0.4766 0.5742 0.4061 0.3408 0.3453 0.8307 0.5562 0.3359 0.3433 0.4049] reward=[+0.328 -0.084 -0.390 -0.228 -0.534 -0.135 -2.026 +0.077 +0.014 +1.141] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+step 8: active=10 d_after=[0.6456 0.6273 0.2977 0.3535 0.3352 0.7713 0.6895 0.5509 0.4390 0.4427] reward=[-1.790 -0.631 +0.984 -0.227 +0.001 +0.494 -1.433 -2.250 -1.058 -0.477] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+step 9: active=10 d_after=[0.6597 0.6999 0.4764 0.4287 0.2747 0.7731 0.6209 0.5369 0.4860 0.5510] reward=[-0.241 -0.826 -1.886 -0.852 +0.504 -0.118 +0.586 +0.040 -0.570 -1.184] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+[38;5;226m[Genesis] [19:57:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:57:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+step 10: active=10 d_after=[0.5983 0.7006 0.3433 0.4287 0.2747 0.8530 0.6417 0.4593 0.4512 0.4742] reward=[+0.514 -0.107 +1.231 -0.100 -0.100 -0.899 -0.308 +0.675 +0.249 +0.669] success=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0] done=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+episodes complete
+final t:        [10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+succeeded:      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+final D:        0.5983 0.7006 0.3433 0.4287 0.2747 0.8530 0.6417 0.4593 0.4512 0.4742
+episode return: -6.980 -7.220 -2.163 -4.161 -0.210 -6.530 -6.110 -4.424 -3.582 -3.337
+nan_incidents:  0
+wrote outputs/metrics/p1_rollout_demo.json

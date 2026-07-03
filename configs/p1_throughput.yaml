@@ -1,0 +1,31 @@
+# P1-M0 throughput probe (spec scope: single-process n_envs scaling only).
+# Rope domain comes from dgcc.tasks.domain.p1_rope_params() and is asserted,
+# not configured, so the §5 pin cannot drift here.
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 10000  # settle-bearing: immutable P1 budget
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
+probe:
+  n_env_candidates: [64, 128, 256]
+  warmup_rounds: 1
+  measured_rounds: 6
+actions:
+  delta_min_m: 0.02
+  delta_max_m: 0.15
+  lift_choices: [low, high]
+budgets:
+  smoke_transitions: 50000
+  t1_run_transitions: 100000
+  t2_run_transitions: 300000
+  t1_runs: 9
+  t2_runs: 3
+outputs:
+  json: outputs/metrics/p1_throughput.json
+  report: outputs/reports/p1_throughput.md
+  stdout_log: outputs/reports/p1_throughput_stdout.log

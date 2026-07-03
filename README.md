@@ -2,14 +2,21 @@
 
 **Deformation-Grounded Contact Critic** 구현 코드 레포. 연구 관리·문서는 [research-dashboard](https://github.com/jiminc77/research-dashboard) 참조.
 
-## 현재 단계: P0 완료
+## 현재 단계: P1 진행 중 (M0)
+
+- 실행 명세: [`P1.md`](P1.md) — P0 위에 HACMan-style black-box contact critic baseline을 구축하는 P1 brief. Milestone = `@goal` 블록 (M0–M6), GitHub issue #9–#15 대응. 커밋 규약 `P1-M<k>: <요약>`.
+- P1-M0 산출물: `src/dgcc/tasks/` (T1 3종 + T2 절차적 goal 생성기 + episode wrapper + reward), 커밋된 T2 분할 파일 `src/dgcc/tasks/splits/t2_v1.json` (train 500 / val 50 / held-out 100), `outputs/reports/p1_throughput.md` (n_envs 권고), `outputs/reports/p1_rollout_demo.log` (random policy 10 episodes).
+- 수치 정책 (issue #8 sign-off 승계): 불변 — ε_succ=0.05·L, settle 1e-3/10000, grasp realism ±1node/5%, D = 길이 정규화 correspondence L2 + orientation canonicalization (Chamfer는 보고용), K=32, M=8. 조정 허용 (STEP_LOG 기록, M6 잠금) — α=10, c_step=0.1, R_succ=5, RL 하이퍼파라미터.
+- HUMAN GATE: M2 (스모크 2회 실패 시), M3/M4 (판정 미달 분기 + M4 HER 중간 체크), M6 (sign-off + reward 상수 잠금).
+
+## P0 (완료)
 
 - 실행 명세: [`P0.md`](P0.md) — gajae-code(gjc)가 `ralplan → ultragoal`로 실행한 P0 brief. Milestone = `@goal` 블록 (M0–M7), GitHub issue #1–#8 대응.
 - 최종 보고서: [`outputs/reports/p0_final_report.md`](outputs/reports/p0_final_report.md)
 - 실행 환경: `ssh AILAB-simx-remote` → `/home/simx2204/Workspaces/DGCC` (RTX 6000, Ubuntu 22.04, headless)
-- HUMAN GATE: M2 (primary sim 결정), M5 (G2), M6 (G1), M7 (sign-off). P0는 issue #8 HUMAN SIGN-OFF로 종료 승인되었다. P1은 별도 명세로 시작한다.
+- HUMAN GATE: M2 (primary sim 결정), M5 (G2), M6 (G1), M7 (sign-off). P0는 issue #8 HUMAN SIGN-OFF로 종료 승인되었다.
 
-## Milestone 상태
+## P0 Milestone 상태
 
 | Milestone | Issue | 대표 커밋 / 산출물 | 상태 |
 |---|---:|---|---|
@@ -26,8 +33,21 @@
 
 ```bash
 cd /home/simx2204/Workspaces/DGCC
+# P1 (현재)
+gjc ralplan --interactive "P1.md 명세를 읽고 실행 계획 수립"
+gjc ultragoal create-goals --brief-file P1.md
+# P0 (완료)
 gjc ralplan --interactive "P0.md 명세를 읽고 실행 계획 수립"
 gjc ultragoal create-goals --brief-file P0.md
+```
+
+## 재현 (P1 산출물)
+
+```bash
+# P1-M0 task layer + throughput probe + rollout demo
+uv run pytest tests/test_tasks.py -q
+uv run python scripts/throughput_probe.py --seed 0 --config configs/p1_throughput.yaml
+uv run python scripts/p1_rollout_demo.py --seed 0 --config configs/p1_rollout_demo.yaml
 ```
 
 ## 재현 (P0 산출물)
@@ -74,20 +94,21 @@ uv run python scripts/appendix_settle_sweep.py --config configs/gate_g1.yaml --s
 
 주의: `outputs/` 산출물의 `commit_hash` 메타데이터는 실행 시점 HEAD를 기록하므로, 해당 코드가 포함된 커밋의 부모 해시일 수 있다 (run-then-commit). `outputs/data/`, DLO-Lab external clone, assets, 대용량 h5는 커밋하지 않는다.
 
-## 구조 (P0-M0에서 생성됨)
+## 구조
 
 ```
-src/dgcc/{envs,phi,goals,logging,utils}/
+src/dgcc/{envs,phi,goals,logging,utils}/   # P0-M0에서 생성
+src/dgcc/tasks/                            # P1-M0: T1/T2 task·episode·reward 레이어 (+ splits/t2_v1.json)
 scripts/  configs/  tests/
 outputs/{data,metrics,plots,reports}/   # data는 git 제외
 STEP_LOG.md                             # 모든 milestone 기록
-P0.md                                   # P0 명세
+P0.md  P1.md                            # 단계별 명세
 ```
 
 ## P0 종료와 P1 경계
 
-P0는 simulator selection, common interface, logging/δm, G2/G1 pilot measurement, final sign-off report까지 완료했다. issue #8 HUMAN SIGN-OFF로 `outputs/reports/p0_final_report.md`의 §5 수치표가 확정되었다. P1은 별도 명세로 시작하며, 이 레포에서 P1 명세 없이 RL 학습 루프, actor/critic, replay buffer, baseline port, probe experiment를 선행하지 않는다.
+P0는 simulator selection, common interface, logging/δm, G2/G1 pilot measurement, final sign-off report까지 완료했다. issue #8 HUMAN SIGN-OFF로 `outputs/reports/p0_final_report.md`의 §5 수치표가 확정되었다. P1은 [`P1.md`](P1.md) 명세로 진행 중이며, P1 명세 밖 항목(P2+ probe 실험, DGCC variants, f_resp/response head, GreedyResp, matched-dim latent, OOD 평가 sweep, 실로봇)은 선행하지 않는다.
 
-## 규칙 (P0.md 전역 규칙 발췌)
+## 규칙 (P0/P1 전역 규칙 발췌)
 
-명세 밖 구현 금지 · 모호성은 human_blocked로 에스컬레이션 · 게이트 임계 변경 금지 · milestone 단위 커밋 `P0-M<k>: <요약>` · 대용량 데이터/asset 커밋 금지.
+명세 밖 구현 금지 · 모호성은 human_blocked로 에스컬레이션 · 게이트 임계/불변 수치 변경 금지 · milestone 단위 커밋 `P<phase>-M<k>: <요약>` · 대용량 데이터/asset 커밋 금지 · reward/성공 판정에 Chamfer 사용 금지 (correspondence L2만).
