@@ -1,0 +1,212 @@
+{
+  "c_g_layout": {
+    "anchor_channels": 3,
+    "order": "[Phi_shape(G)-Phi_shape(X) for mode>=1 channels, anchor(G)-anchor(X) xyz]",
+    "shape_channels": 21,
+    "total_channels": 24
+  },
+  "channel_layout_id": "axis-major-xyz-modes-0-7-v1",
+  "commit_hash": "af6773f5c1d0611f587fb17a1fe6e50515f2cc48",
+  "config_copy": {
+    "dataset": {
+      "dm_stats_json": "outputs/metrics/dm_stats.json",
+      "h5": "outputs/data/p0_random_transitions.h5"
+    },
+    "filters": {
+      "primary": "grasp_success AND settle_steps != settle_max_steps",
+      "settle_max_steps": 5000,
+      "variants": {
+        "all_success": "grasp_success",
+        "all_transitions": "no filter"
+      }
+    },
+    "goal_sampling": {
+      "anchor_box_unit_length": {
+        "high": [
+          1.25,
+          1.25,
+          0.18
+        ],
+        "low": [
+          -1.25,
+          -1.25,
+          0.02
+        ]
+      },
+      "anchor_mode": "centroid",
+      "random_stream": "numpy.default_rng(seed); one template index and one anchor per transition",
+      "templates": [
+        "straight",
+        "u_bend",
+        "s_curve"
+      ]
+    },
+    "outputs": {
+      "metrics_json": "outputs/metrics/g2_correlation.json",
+      "plots_dir": "outputs/plots",
+      "scatter_png": "outputs/plots/g2_scatter.png",
+      "stdout_log": "outputs/reports/gate_g2_stdout.log"
+    },
+    "qualitative": {
+      "anchor": [
+        0.0,
+        0.0,
+        0.04
+      ],
+      "anchor_mode": "centroid",
+      "boundary_radius_fraction_of_length": 0.05,
+      "initial_seed": 20260703,
+      "lengths_m": [
+        0.5,
+        1.0,
+        1.6
+      ]
+    },
+    "quantitative": {
+      "minimum_primary_n": 1000,
+      "threshold_rho": 0.9
+    }
+  },
+  "config_path": "configs/gate_g2.yaml",
+  "config_text": "dataset:\n  h5: outputs/data/p0_random_transitions.h5\n  dm_stats_json: outputs/metrics/dm_stats.json\nfilters:\n  settle_max_steps: 5000\n  primary: grasp_success AND settle_steps != settle_max_steps\n  variants:\n    all_success: grasp_success\n    all_transitions: no filter\ngoal_sampling:\n  anchor_mode: centroid\n  templates: [straight, u_bend, s_curve]\n  # Uniform anchor box in rope-length units.  Each transition samples\n  # low * length_m <= anchor <= high * length_m in world coordinates.\n  anchor_box_unit_length:\n    low: [-1.25, -1.25, 0.02]\n    high: [1.25, 1.25, 0.18]\n  random_stream: numpy.default_rng(seed); one template index and one anchor per transition\nquantitative:\n  threshold_rho: 0.9\n  minimum_primary_n: 1000\nqualitative:\n  lengths_m: [0.5, 1.0, 1.6]\n  initial_seed: 20260703\n  anchor_mode: centroid\n  anchor: [0.0, 0.0, 0.04]\n  boundary_radius_fraction_of_length: 0.05\noutputs:\n  metrics_json: outputs/metrics/g2_correlation.json\n  scatter_png: outputs/plots/g2_scatter.png\n  plots_dir: outputs/plots\n  stdout_log: outputs/reports/gate_g2_stdout.log\n",
+  "created_at": "2026-07-03T02:29:28Z",
+  "dataset_record_count": 5056,
+  "filter_definitions": {
+    "all_success": {
+      "definition": "grasp_success",
+      "n": 4786
+    },
+    "all_transitions": {
+      "definition": "all records, including failed grasp no-ops",
+      "n": 5056
+    },
+    "primary": {
+      "definition": "grasp_success AND settle_steps != settle_max_steps",
+      "n": 2445,
+      "rationale": "Primary G2 population excludes exact failed-grasp no-ops and non-converged successful transitions per M4 handoff.",
+      "settle_max_steps": 5000
+    }
+  },
+  "goal_sampling_spec": {
+    "anchor_box_unit_length": {
+      "high": [
+        1.25,
+        1.25,
+        0.18
+      ],
+      "low": [
+        -1.25,
+        -1.25,
+        0.02
+      ]
+    },
+    "anchor_mode": "centroid",
+    "anchor_sampling": "uniform per axis; sampled_anchor = uniform(low, high) * transition.length_m",
+    "goal_per_transition": "one independently sampled template index and anchor per transition",
+    "rng": "numpy.default_rng(seed)",
+    "seed": 0,
+    "template_counts_all_transitions": {
+      "s_curve": 1696,
+      "straight": 1671,
+      "u_bend": 1689
+    },
+    "templates": [
+      "straight",
+      "u_bend",
+      "s_curve"
+    ]
+  },
+  "methodology": {
+    "delta_D": "D(X_after,G)-D(X_before,G), D is bidirectional Chamfer divided by length_m",
+    "delta_c_g_norm": "||c_g(X_after,G)|| - ||c_g(X_before,G)||",
+    "physics_quality_note": "For gate/human review, prefer rates.success_and_converged (0.484) over the headline settle_converged rate: failed grasps are no-op transitions whose converged flag reflects the untouched rope, so the aggregate conflates populations. Settle non-convergence at the immutable 1e-3/5000 budget affects 2341 successful transitions; they are recorded honestly (settle_steps == max_steps) and excluded from the normalizer fit. Flagged for the M5/M6 human gates (plan A1).",
+    "spearman": "scipy.stats.spearmanr on fixed sampled goals; threshold comparison recorded as-is"
+  },
+  "outputs": {
+    "goal_consistency_plots": [
+      "outputs/plots/g2_goal_consistency_0p5_straight.png",
+      "outputs/plots/g2_goal_consistency_0p5_u_bend.png",
+      "outputs/plots/g2_goal_consistency_0p5_s_curve.png",
+      "outputs/plots/g2_goal_consistency_1p0_straight.png",
+      "outputs/plots/g2_goal_consistency_1p0_u_bend.png",
+      "outputs/plots/g2_goal_consistency_1p0_s_curve.png",
+      "outputs/plots/g2_goal_consistency_1p6_straight.png",
+      "outputs/plots/g2_goal_consistency_1p6_u_bend.png",
+      "outputs/plots/g2_goal_consistency_1p6_s_curve.png"
+    ],
+    "metrics_json": "outputs/metrics/g2_correlation.json",
+    "scatter_png": "outputs/plots/g2_scatter.png",
+    "stdout_log": "outputs/reports/gate_g2_stdout.log"
+  },
+  "primary": {
+    "delta_D": {
+      "max": 0.7987076644249798,
+      "mean": 0.020118146895262173,
+      "min": -0.4626026419816004
+    },
+    "delta_c_g_norm": {
+      "max": 2.562171572790532,
+      "mean": 0.0733577480610729,
+      "min": -2.0927860901086706
+    },
+    "n": 2445,
+    "name": "primary",
+    "passes": false,
+    "pvalue": 3.9938813791900036e-10,
+    "rho": 0.1260441205846799,
+    "threshold": 0.9
+  },
+  "proposals": [
+    {
+      "rationale": "Primary rho 0.126044 is below the immutable 0.9 threshold; analyze whether anchor channels dominate ||c_g|| before changing any definition.",
+      "status": "PROPOSAL_REQUIRES_HUMAN_DECISION",
+      "topic": "anchor-channel scaling analysis"
+    },
+    {
+      "rationale": "Compare primary, all-success, and all-transitions sensitivity rows to decide whether non-converged/outlier physics populations should remain separate in later gates.",
+      "status": "PROPOSAL_REQUIRES_HUMAN_DECISION",
+      "topic": "population effects"
+    }
+  ],
+  "schema_version": 1,
+  "seed": 0,
+  "source_dataset": "outputs/data/p0_random_transitions.h5",
+  "variants": {
+    "all_success": {
+      "delta_D": {
+        "max": 7.6272884300265105,
+        "mean": 0.027494195793428277,
+        "min": -0.46746161334407466
+      },
+      "delta_c_g_norm": {
+        "max": 7.614307988864006,
+        "mean": 0.044366486397910194,
+        "min": -2.0927860901086706
+      },
+      "n": 4786,
+      "name": "all_success",
+      "passes": false,
+      "pvalue": 5.316493340915444e-29,
+      "rho": 0.1605471212475919,
+      "threshold": 0.9
+    },
+    "all_transitions": {
+      "delta_D": {
+        "max": 7.6272884300265105,
+        "mean": 0.026025953533889982,
+        "min": -0.46746161334407466
+      },
+      "delta_c_g_norm": {
+        "max": 7.614307988864006,
+        "mean": 0.04199723178409774,
+        "min": -2.0927860901086706
+      },
+      "n": 5056,
+      "name": "all_transitions",
+      "passes": false,
+      "pvalue": 3.5675942376094566e-32,
+      "rho": 0.16495881420902056,
+      "threshold": 0.9
+    }
+  }
+}
