@@ -2,12 +2,12 @@
 
 **Deformation-Grounded Contact Critic** 구현 코드 레포. 연구 관리·문서는 [research-dashboard](https://github.com/jiminc77/research-dashboard) 참조.
 
-## 현재 단계: P0-완료 보고 / HUMAN sign-off 대기
+## 현재 단계: P0 완료
 
 - 실행 명세: [`P0.md`](P0.md) — gajae-code(gjc)가 `ralplan → ultragoal`로 실행한 P0 brief. Milestone = `@goal` 블록 (M0–M7), GitHub issue #1–#8 대응.
 - 최종 보고서: [`outputs/reports/p0_final_report.md`](outputs/reports/p0_final_report.md)
 - 실행 환경: `ssh AILAB-simx-remote` → `/home/simx2204/Workspaces/DGCC` (RTX 6000, Ubuntu 22.04, headless)
-- HUMAN GATE: M2 (primary sim 결정), M5 (G2), M6 (G1), M7 (sign-off). P0는 측정·보고까지만 수행하며, M7 승인 전 커밋하지 않는다.
+- HUMAN GATE: M2 (primary sim 결정), M5 (G2), M6 (G1), M7 (sign-off). P0는 issue #8 HUMAN SIGN-OFF로 종료 승인되었다. P1은 별도 명세로 시작한다.
 
 ## Milestone 상태
 
@@ -20,7 +20,7 @@
 | M4 logging/δm | #5 | `53ffca7`, `af6773f`; `outputs/metrics/dm_stats.json`, gitignored h5 dataset | closed |
 | M5 G2 gate | #6 | `f4cab54` plus M5R/M5R2 commits through `d595fa8`; `outputs/metrics/g2_correlation_v3.json` | closed after M5R2 PASS |
 | M6 G1 gate | #7 | `6da316a`, `dc715b4`, `e146c71`, `b1652c5`; `outputs/reports/g1_report.md` | closed with verdict (b) |
-| M7 final sign-off | #8 | `outputs/reports/p0_final_report.md`; no commit until human approval per `P0.md` | pending human sign-off |
+| M7 final sign-off | #8 | `1f2a518`, follow-up sign-off decision commit; `outputs/reports/p0_final_report.md` | closed with HUMAN SIGN-OFF |
 
 ## 실행 (참고)
 
@@ -86,7 +86,7 @@ P0.md                                   # P0 명세
 
 ## P0 종료와 P1 경계
 
-P0는 simulator selection, common interface, logging/δm, G2/G1 pilot measurement, final sign-off report까지의 단계다. P0 종료 승인 전에는 `outputs/reports/p0_final_report.md`의 잠정 수치표가 모두 “사람 확정 필요” 상태다. P1은 별도 명세로 시작하며, 이 레포에서 P0 승인 없이 RL 학습 루프, actor/critic, replay buffer, baseline port, probe experiment를 선행하지 않는다.
+P0는 simulator selection, common interface, logging/δm, G2/G1 pilot measurement, final sign-off report까지 완료했다. issue #8 HUMAN SIGN-OFF로 `outputs/reports/p0_final_report.md`의 §5 수치표가 확정되었다. P1은 별도 명세로 시작하며, 이 레포에서 P1 명세 없이 RL 학습 루프, actor/critic, replay buffer, baseline port, probe experiment를 선행하지 않는다.
 
 ## 규칙 (P0.md 전역 규칙 발췌)
 

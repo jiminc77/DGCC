@@ -1,6 +1,6 @@
 # DGCC P0 final report — HUMAN sign-off
 
-이 문서는 P0 종료 승인을 위한 사실 요약이다. P0 명세상 M7은 보고서 생성 후 human sign-off로 정지하며, 커밋은 사람 승인 뒤에만 수행한다. 수치 확정은 자동 수행하지 않는다. 주요 출처: `P0.md`, `STEP_LOG.md`, `outputs/reports/sim_comparison.md`, `outputs/reports/g1_report.md`, `outputs/metrics/g2_correlation.json`, `outputs/metrics/g2_correlation_v2.json`, `outputs/metrics/g2_correlation_v3.json`, `outputs/metrics/g1_effect_size.json`, `outputs/metrics/g1_template_decomposition.json`, `outputs/metrics/repeat_variance.json`, `outputs/metrics/settle_budget_sweep.json`, `outputs/metrics/dm_stats.json`.
+이 문서는 P0 종료 승인과 2026-07-03 issue #8 HUMAN SIGN-OFF를 반영한 최종 사실 요약이다. M7 sign-off는 완료되었고, §5의 수치는 사람 판정으로 확정되었다. 주요 출처: `P0.md`, `STEP_LOG.md`, `outputs/reports/sim_comparison.md`, `outputs/reports/g1_report.md`, `outputs/metrics/g2_correlation.json`, `outputs/metrics/g2_correlation_v2.json`, `outputs/metrics/g2_correlation_v3.json`, `outputs/metrics/g1_effect_size.json`, `outputs/metrics/g1_template_decomposition.json`, `outputs/metrics/repeat_variance.json`, `outputs/metrics/settle_budget_sweep.json`, `outputs/metrics/dm_stats.json`.
 
 ## 1. Primary sim 결정과 근거 (M2)
 
@@ -66,25 +66,24 @@ Final G2 status: **OVERALL PASS** with source metrics in `outputs/metrics/g2_cor
 
 Template decomposition is appendix material, not a new G1 gate decision. It shows pooling heterogeneity: `u_bend` stiffness d is positive (`0.801315` for 0.5_vs_1.0, `0.739159` for 0.5_vs_2.0), while `random_smooth` stiffness d is negative (`-0.891970`, `-0.609613`, `-0.334725` across the three stiffness pairs). Each template-specific cluster bootstrap has only 5 sequence clusters, so this is a small-n caution. [source: `outputs/metrics/g1_template_decomposition.json`]
 
-## 5. 잠정 수치 고정표 — 모든 행 사람 확정 필요
+## 5. 확정 수치 고정표 — issue #8 HUMAN SIGN-OFF 반영
 
-| 항목 | 잠정값 / 안건 | 실측·근거 | 상태 |
-|---|---|---|---|
-| reward 상수 | `α=10`, `c_step=0.1`, `R_succ=5` | M7 명세가 제안값으로 열거한다. P0에서는 reward 학습/최적화 실험을 수행하지 않았다. [source: `P0.md`] | 사람 확정 필요 |
-| 성공 임계 `ε_succ` | `ε_succ=0.05·L` 제안값 | 반복 실행 분산에서 realism ON 순수 실행 노이즈는 mean `0.046626·L`, median `0.031512·L`, q97.5 `0.238442·L`; realism OFF mean `2.8166e-6·L`. 따라서 `0.05·L`는 실행 노이즈 평균과 같은 스케일이라는 사실만 기록한다. [source: `outputs/metrics/repeat_variance.json`] | 사람 확정 필요 |
-| OOD primary split | train length `[0.8,1.2]` → OOD `{0.5,0.6,1.4,1.6}` | M7 명세와 M6 verdict가 length(+discretization)를 primary로 재편하라고 지시했다. [source: `P0.md`, `STEP_LOG.md`] | 사람 확정 필요 |
-| discretization `n_segments` | 잠정 제안: base `L=1.0, n_segments=50`의 segment density를 유지하면 `{0.5:25, 0.6:30, 1.4:70, 1.6:80}` | `RopeParams.n_segments` 기본값은 50이고 length/segments 축은 구현·비교에서 커버된다. 이 행은 산술 제안이며 확정이 아니다. [source: `P0.md`, `outputs/reports/sim_comparison.md`] | 사람 확정 필요 |
-| OOD 보조 축 | initial/goal shape 분포 | M6 verdict reflection instruction #1: primary=length(+discretization), 보조=initial/goal shape 분포. [source: `STEP_LOG.md`] | 사람 확정 필요 |
-| stiffness·friction 역할 | reference-only appendix | Human verdict: stiffness primary OOD axis demotion, friction not promoted. G1 pooled d/CIs and template decomposition remain reference evidence only. [source: `STEP_LOG.md`, `outputs/metrics/g1_effect_size.json`, `outputs/metrics/g1_template_decomposition.json`] | 사람 확정 필요 |
-| settle 기준·예산 | velocity threshold `1e-3` 불변; `max_steps` 예산은 5000/10000/20000 sweep 근거로 사람 결정 안건 | Sweep: 5000→83.3333%, 10000→100.0%, 20000→100.0% convergence over 24 cases. First-crossing max is 7608. For cases not converged by 5000, 5000_vs_20000 shape change mean is 0.00221368 and max is 0.00490197. [source: `outputs/metrics/settle_budget_sweep.json`] | 사람 확정 필요 |
-| grasp realism | 현행 유지 제안: ±1 node execution noise + 5% failure probability | M3 implemented this model; failure-stat probe was 4.9% over 1000 draws. Repeat-variance appendix quantifies its execution-noise scale. [source: `STEP_LOG.md`, `outputs/metrics/repeat_variance.json`] | 사람 확정 필요 |
+| 항목 | 확정값 | 근거·조건 |
+|---|---|---|
+| reward 상수 | `α=10`, `c_step=0.1`, `R_succ=5` — P1 시작값으로 채택 | P0 무증거 항목(RL 미수행). P1 baseline 안정화 중 조정 허용하되 변경 시 `STEP_LOG.md` 기록 필수, P1 종료 시 최종 잠금. [source: issue #8 HUMAN SIGN-OFF, `P0.md`] |
+| 성공 임계 `ε_succ` | `ε_succ=0.05·L` 확정 | 순수 실행 노이즈 median `0.031512·L` 대비 약 1.6x 여유. mean `0.046626·L`는 5% grasp-failure 쌍이 부풀린 값이므로 판단 기준으로 부적합. 에피소드 내 재파지 가능. P1 파일럿에서 성공률 천장 관찰 시 재상정. [source: issue #8 HUMAN SIGN-OFF, `outputs/metrics/repeat_variance.json`] |
+| settle 기준·예산 | velocity threshold `1e-3` 불변, `max_steps` `5000 → 10000` 증액 | Sweep: 10000에서 100% 수렴, first-crossing max `7608 < 10000`. A2(quasi-static) 보증과 usable 데이터 `48.4% → ~95%` 이득이 비용을 상회. 기존 M4 데이터셋은 재수집하지 않고 플래그 유지; P1 수집부터 적용. [source: issue #8 HUMAN SIGN-OFF, `outputs/metrics/settle_budget_sweep.json`, `outputs/metrics/dm_stats.json`] |
+| grasp realism | ±1 node execution noise + 5% failure probability 유지 확정 | 1000-draw probe 4.9% 검증 및 Appendix B 정량화. [source: issue #8 HUMAN SIGN-OFF, `STEP_LOG.md`, `outputs/metrics/repeat_variance.json`] |
+| OOD primary | length train `[0.8,1.2]` → OOD `{0.5,0.6,1.4,1.6}` m 확정; density-preserving `n_segments` `{25,30,70,80}` 채택 | G1 verdict (b). Discretization 축은 별도로 고정 `L`에서 `N∈{25,100}`; Φ 불변성 실측 `1.73% < 2%`. [source: issue #8 HUMAN SIGN-OFF, `STEP_LOG.md`] |
+| OOD 보조/참고 | 보조 = initial/goal shape 분포; stiffness/friction = reference-only 확정 | G1 pooled stiffness `d≤0.24`, friction negative `d`; 본문 claim 제외, appendix 보고. 방법론적 관찰 문구 유지. [source: issue #8 HUMAN SIGN-OFF, `outputs/metrics/g1_effect_size.json`, `outputs/metrics/g1_template_decomposition.json`] |
+| `D` (reward·성공 판정) | 길이 정규화 correspondence L2로 통일 확정; orientation canonicalization 규약 포함 | G2 v3가 검증한 metric↔`c_g` 정합 조합. Chamfer는 보고·참고 지표로만 병기. [source: issue #8 HUMAN SIGN-OFF, `outputs/metrics/g2_correlation_v3.json`, `P0.md`] |
 
 ## 6. P1에 넘길 리스크·미해결
 
-1. **Settle budget:** current M4 budget (`vel_threshold=1e-3`, `max_steps=5000`) has aggregate settle non-convergence 46.3% (`1 - 0.536986`) and 2,341 successful-but-nonconverged transitions. The M7 sweep shows 10000 and 20000 both reached 100.0% on 24 cases, but max_steps is a human decision item, not auto-changed here. [source: `outputs/metrics/dm_stats.json`, `outputs/metrics/settle_budget_sweep.json`]
+1. **Settle budget implementation boundary:** HUMAN SIGN-OFF fixes `vel_threshold=1e-3` and raises future collection `max_steps` to 10000, but the existing M4 dataset is not recollected; its non-convergence flags remain part of the audit trail. [source: issue #8 HUMAN SIGN-OFF, `outputs/metrics/dm_stats.json`, `outputs/metrics/settle_budget_sweep.json`]
 2. **Shape-channel coupling:** v1 mixed-norm diagnostics found shape-only ρ=0.0233946865 under random far goals; v2 shape component before Case A was ρ=0.2570711208. Case A fixes orientation consistency, but near-goal shape behavior remains an open hypothesis rather than P0 evidence. [source: `outputs/metrics/g2_correlation.json`, `outputs/metrics/g2_correlation_v2.json`, `outputs/metrics/g2_correlation_v3.json`, `STEP_LOG.md`]
 3. **DLO-Lab external-code risk:** DLO-Lab remains young external code; runtime `ti_float` aliasing is required, SharePoint assets originally returned HTTP 401, and dependency pins around torch/genesis/numpy/fsspec/packaging are fragile. [source: `outputs/reports/sim_comparison.md`, `STEP_LOG.md`]
-4. **Chamfer-vs-correspondence metric duality:** P0 now uses correspondence L2 for G2 component gates, while Chamfer remains relevant for reports/effect sizes; v2 sanity showed Chamfer vs D_shape ρ=0.9165367228 over 248 pairs, but metric duality should stay explicit in P1 specs. [source: `P0.md`, `outputs/metrics/g2_correlation_v2.json`]
+4. **Metric boundary:** reward and success judgment use length-normalized correspondence L2 with orientation canonicalization; Chamfer remains a report/reference metric only. P1 specs should preserve this boundary explicitly. [source: issue #8 HUMAN SIGN-OFF, `P0.md`, `outputs/metrics/g2_correlation_v3.json`]
 5. **Template heterogeneity:** pooled G1 numbers hide template-specific sign changes; `u_bend` is positive while `random_smooth` is negative for stiffness, with only 5 sequence clusters per template. [source: `outputs/metrics/g1_template_decomposition.json`]
 6. **Rendering/datagen operational note:** `assets/dlo-lab.zip` exists on disk and is gitignored. Future DLO-Lab rendering/datagen should wire LuisaRender correctly and use the official datagen `--raytracer` path. [source: `STEP_LOG.md`]
 
