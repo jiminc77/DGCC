@@ -85,3 +85,18 @@ def test_degenerate_inputs_raise() -> None:
 
     with pytest.raises(ValueError, match="shape"):
         DualGoal(shape_template=make_shape_template("straight")[:, :2], anchor=np.zeros(3))
+
+
+def test_c_g_exactly_zero_for_exact_goal_curve_both_anchor_modes() -> None:
+    # Locks the QA C2 invariant: both curves flow through the same canonical
+    # resample path, so an exact goal-curve input yields exactly-zero c_g.
+    for anchor_mode in ("centroid", "endpoint"):
+        goal = make_goal("s_curve", np.array([0.25, -0.4, 0.05]), anchor_mode=anchor_mode)
+        for length in (0.5, 1.0, 1.6):
+            x = goal_curve(goal, length)
+            vector = c_g(x, goal, length)
+            # Shape channels flow through the identical canonical path -> exactly zero.
+            assert np.allclose(vector[:-3], 0.0, atol=1.0e-15), (anchor_mode, length)
+            # Anchor channels carry only centroid-of-resample interpolation noise
+            # (~1e-6 * L floor), not a path asymmetry.
+            assert np.abs(vector[-3:]).max() < 1.0e-5 * length, (anchor_mode, length, np.abs(vector[-3:]).max())

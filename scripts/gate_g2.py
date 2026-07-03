@@ -219,11 +219,15 @@ def sample_goals(
     return goals, spec
 
 
-def compute_measurements(data: TransitionArrays, goals: list[DualGoal]) -> tuple[np.ndarray, np.ndarray]:
+def compute_measurements(
+    data: TransitionArrays, goals: list[DualGoal]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     if len(goals) != data.X_before.shape[0]:
         raise ValueError("number of sampled goals must equal transition count")
     delta_d = np.empty(len(goals), dtype=float)
     delta_cg_norm = np.empty(len(goals), dtype=float)
+    delta_anchor_norm = np.empty(len(goals), dtype=float)
+    delta_shape_norm = np.empty(len(goals), dtype=float)
     for idx, goal in enumerate(goals):
         length = float(data.length_m[idx])
         d_before = D(data.X_before[idx], goal, length)
@@ -232,7 +236,15 @@ def compute_measurements(data: TransitionArrays, goals: list[DualGoal]) -> tuple
         cg_after = c_g(data.X_after[idx], goal, length)
         delta_d[idx] = d_after - d_before
         delta_cg_norm[idx] = float(np.linalg.norm(cg_after) - np.linalg.norm(cg_before))
-    return delta_d, delta_cg_norm
+        # Report-only component split (architect advisory for the human packet):
+        # anchor channels are the last 3, shape channels the first 21.
+        delta_anchor_norm[idx] = float(
+            np.linalg.norm(cg_after[-3:]) - np.linalg.norm(cg_before[-3:])
+        )
+        delta_shape_norm[idx] = float(
+            np.linalg.norm(cg_after[:-3]) - np.linalg.norm(cg_before[:-3])
+        )
+    return delta_d, delta_cg_norm, delta_anchor_norm, delta_shape_norm
 
 
 def summarize_population(
@@ -454,7 +466,7 @@ def run(
         lengths_m=data.length_m,
         sampling_cfg=config.get("goal_sampling", {}),
     )
-    delta_d, delta_cg_norm = compute_measurements(data, goals)
+    delta_d, delta_cg_norm, delta_anchor_norm, delta_shape_norm = compute_measurements(data, goals)
 
     primary_mask = data.grasp_success & (data.settle_steps != settle_max_steps)
     all_success_mask = data.grasp_success.copy()
@@ -480,6 +492,25 @@ def run(
             delta_cg_norm,
             threshold,
         ),
+    }
+
+    def _component_rho(values: np.ndarray) -> float | None:
+        result = spearmanr(delta_d[primary_mask], values[primary_mask])
+        rho_value = float(result.statistic)
+        return rho_value if np.isfinite(rho_value) else None
+
+    diagnostics = {
+        "note": (
+            "REPORT-ONLY diagnostics for the M5 human gate (architect advisories): the spec-defined "
+            "quantity is primary.rho on the full ||c_g||; these decompositions quantify WHERE the "
+            "signal lives and change no definition or threshold."
+        ),
+        "component_split_primary": {
+            "anchor_channels_only_rho": _component_rho(delta_anchor_norm),
+            "shape_channels_only_rho": _component_rho(delta_shape_norm),
+            "full_c_g_norm_rho": primary["rho"],
+            "definition": "Spearman(delta_D, delta ||c_g subset||) on the primary population",
+        },
     }
 
     make_scatter(scatter_path, delta_d, delta_cg_norm, primary_mask)
@@ -522,6 +553,7 @@ def run(
             },
         },
         "goal_sampling_spec": sampling_spec,
+        "diagnostics": diagnostics,
         "methodology": {
             "delta_D": "D(X_after,G)-D(X_before,G), D is bidirectional Chamfer divided by length_m",
             "delta_c_g_norm": "||c_g(X_after,G)|| - ||c_g(X_before,G)||",

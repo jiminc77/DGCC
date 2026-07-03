@@ -232,7 +232,9 @@ def c_g(X: np.ndarray, goal: DualGoal | Mapping[str, Any], length_m: float) -> n
 
     typed_goal = coerce_goal(goal)
     goal_world = goal_curve(typed_goal, length_m)
-    shape_delta = Phi_DCT(goal_world)[SHAPE_CHANNEL_INDICES] - phi_shape(X)
+    # Canonicalize BOTH curves through the same resample path so that
+    # c_g(goal_curve(g), g) == 0 exactly (QA C2 invariant; rho impact ~6.6e-06).
+    shape_delta = phi_shape(goal_world) - phi_shape(X)
     anchor_delta = typed_goal.anchor - anchor_of(X, typed_goal.anchor_mode)
     out = np.concatenate((shape_delta, anchor_delta))
     if out.shape != (CG_DIM,):

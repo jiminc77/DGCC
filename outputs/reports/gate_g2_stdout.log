@@ -1,7 +1,7 @@
 G2 measurement start seed=0 config=configs/gate_g2.yaml
-SHORTFALL: primary Spearman rho=0.126044 n=2445 threshold=0.900
-variant all_success: rho=0.160547 n=4786
-variant all_transitions: rho=0.164959 n=5056
+SHORTFALL: primary Spearman rho=0.126051 n=2445 threshold=0.900
+variant all_success: rho=0.160553 n=4786
+variant all_transitions: rho=0.164964 n=5056
 wrote metrics: outputs/metrics/g2_correlation.json
 wrote scatter: outputs/plots/g2_scatter.png
 wrote goal consistency plots: 9
