@@ -1,0 +1,1078 @@
+{
+  "commit_hash": "b1652c55c081ca6e6327da3458166c6a12993fab",
+  "config_path": "configs/gate_g1.yaml",
+  "config_sha256": "346f7db5a3ef98df89ad4974a56d5a3883c3382435c081b7dcdd2f7489633adf",
+  "config_yaml": "# P0-M6 G1 stiffness-validity pilot fixture.\n# The 20 primitive sequences below were generated once with numpy.default_rng(42)\n# and are intentionally frozen here; this config is the measurement fixture.\nrope:\n  length_m: 1.0\n  n_segments: 50\n  bend_stiffness: 1.0\n  twist_stiffness: 1.0\n  friction: 1.0\n  radius: 0.005\nsim:\n  dt: 0.001\n  substeps: 5\n  rod_damping: 10.0\n  rod_angular_damping: 5.0\n  initial_settle_steps: 0\n  reset_settle_max_steps: 5000\n  move_step_size: 0.03\n  move_hold_steps: 0\n  # Controlled G1 experiment: grasp realism is off so p/delta/lift are fixed and\n  # stiffness/friction effects are not confounded by grasp failure or node jitter.\n  grasp_realism: false\nmeasurement:\n  fixture_generation_seed: 42\n  init_seeds: [0, 1, 2]\n  stiffness_multipliers: [0.5, 1.0, 2.0]\n  friction_multipliers: [0.5, 1.0, 2.0]\n  condition_pairs:\n    - [0.5, 1.0]\n    - [1.0, 2.0]\n    - [0.5, 2.0]\n  vel_threshold: 0.001\n  settle_max_steps: 5000\n  bootstrap_replicates: 5000\n  bootstrap_ci: 0.95\n  timing_probe:\n    enabled: true\n    axis: stiffness\n    sequence_id: straight_01\n    condition: 1.0\n    primitive_index: 0\nsequences:\n  - id: straight_01\n    init_shape: straight\n    primitives:\n      - {p: 8, delta: [-0.011002, 0.064548, 0.018355], lift: high}\n      - {p: 35, delta: [0.085612, 0.047005, 0.023234], lift: high}\n  - id: straight_02\n    init_shape: straight\n    primitives:\n      - {p: 38, delta: [-0.023256, 0.076818, 0.015413], lift: low}\n      - {p: 23, delta: [-0.010185, -0.049097, 0.010502], lift: high}\n      - {p: 39, delta: [0.0237, 0.046456, -0.000501], lift: low}\n  - id: straight_03\n    init_shape: straight\n    primitives:\n      - {p: 38, delta: [0.070762, 0.050109, -0.009295], lift: low}\n      - {p: 24, delta: [-0.062228, 0.032949, 0.020962], lift: low}\n      - {p: 6, delta: [-0.031351, -0.023317, 0.005826], lift: high}\n      - {p: 23, delta: [-0.004373, -0.049156, 0.01684], lift: high}\n  - id: straight_04\n    init_shape: straight\n    primitives:\n      - {p: 10, delta: [0.059882, 0.036048, -0.00282], lift: low}\n      - {p: 22, delta: [-0.020254, -0.038101, 0.017537], lift: high}\n  - id: straight_05\n    init_shape: straight\n    primitives:\n      - {p: 37, delta: [-0.054017, -0.088675, 0.023281], lift: low}\n      - {p: 23, delta: [0.050531, -0.007395, 0.011281], lift: high}\n      - {p: 33, delta: [-0.069385, 0.030313, 0.00591], lift: low}\n  - id: u_bend_01\n    init_shape: u_bend\n    primitives:\n      - {p: 8, delta: [-0.035289, -0.084453, 0.004019], lift: high}\n      - {p: 35, delta: [-0.016465, 0.063613, -0.007133], lift: high}\n  - id: u_bend_02\n    init_shape: u_bend\n    primitives:\n      - {p: 39, delta: [-0.037153, 0.029145, 0.010637], lift: low}\n      - {p: 16, delta: [0.029576, -0.01685, 0.024771], lift: high}\n      - {p: 18, delta: [-0.073791, 0.040025, 0.005403], lift: high}\n  - id: u_bend_03\n    init_shape: u_bend\n    primitives:\n      - {p: 5, delta: [0.000188, -0.062584, 0.018298], lift: high}\n      - {p: 11, delta: [-0.035728, 0.023451, -0.0001], lift: high}\n      - {p: 20, delta: [-0.068759, 0.083142, 0.029972], lift: low}\n      - {p: 23, delta: [0.084452, 0.050175, 0.019429], lift: high}\n  - id: u_bend_04\n    init_shape: u_bend\n    primitives:\n      - {p: 15, delta: [-0.040997, -0.07265, 0.029643], lift: low}\n      - {p: 33, delta: [-0.034928, 0.01426, -0.010277], lift: low}\n  - id: u_bend_05\n    init_shape: u_bend\n    primitives:\n      - {p: 13, delta: [0.046534, 0.039503, 0.003765], lift: low}\n      - {p: 10, delta: [0.026972, -0.0748, 0.002869], lift: high}\n      - {p: 28, delta: [-0.071387, 0.015776, -0.010617], lift: low}\n  - id: s_curve_01\n    init_shape: s_curve\n    primitives:\n      - {p: 44, delta: [-0.027563, 0.016365, -0.018746], lift: low}\n      - {p: 28, delta: [-0.003185, 0.050892, -0.01545], lift: low}\n  - id: s_curve_02\n    init_shape: s_curve\n    primitives:\n      - {p: 31, delta: [0.078809, 0.012911, 0.006042], lift: high}\n      - {p: 24, delta: [-0.08611, 0.058733, 0.029289], lift: high}\n      - {p: 17, delta: [-0.070456, 0.031003, -0.004532], lift: low}\n  - id: s_curve_03\n    init_shape: s_curve\n    primitives:\n      - {p: 27, delta: [0.040859, 0.048357, -0.014074], lift: low}\n      - {p: 44, delta: [-0.083266, 0.009873, 0.000401], lift: low}\n      - {p: 14, delta: [0.055485, -0.032915, 0.032409], lift: high}\n      - {p: 29, delta: [-0.043926, 0.078488, -0.010947], lift: high}\n  - id: s_curve_04\n    init_shape: s_curve\n    primitives:\n      - {p: 25, delta: [-0.011683, 0.088628, 0.029042], lift: low}\n      - {p: 38, delta: [0.07082, 0.003395, -0.002624], lift: low}\n  - id: s_curve_05\n    init_shape: s_curve\n    primitives:\n      - {p: 40, delta: [0.029099, -0.022742, -0.014804], lift: low}\n      - {p: 20, delta: [0.078626, -0.046625, -0.013248], lift: low}\n      - {p: 15, delta: [-0.062409, -0.057732, 0.012966], lift: low}\n  - id: random_smooth_01\n    init_shape: random_smooth\n    primitives:\n      - {p: 6, delta: [-0.034142, 0.049933, 0.03345], lift: low}\n      - {p: 12, delta: [-0.064098, -0.087491, -0.007369], lift: high}\n  - id: random_smooth_02\n    init_shape: random_smooth\n    primitives:\n      - {p: 5, delta: [-0.06807, 0.001139, 0.018184], lift: low}\n      - {p: 32, delta: [-0.05404, 0.054742, 0.019347], lift: low}\n      - {p: 38, delta: [-0.067724, 0.076961, 0.001867], lift: high}\n  - id: random_smooth_03\n    init_shape: random_smooth\n    primitives:\n      - {p: 10, delta: [-0.002055, 0.029316, 0.032559], lift: high}\n      - {p: 43, delta: [-0.085525, 0.009936, 0.014869], lift: high}\n      - {p: 41, delta: [-0.064739, -0.014559, 0.033143], lift: low}\n      - {p: 12, delta: [0.054785, -0.005871, 0.023162], lift: high}\n  - id: random_smooth_04\n    init_shape: random_smooth\n    primitives:\n      - {p: 42, delta: [-0.070354, 0.059297, 0.023825], lift: high}\n      - {p: 18, delta: [0.019083, 0.066193, 0.013171], lift: high}\n  - id: random_smooth_05\n    init_shape: random_smooth\n    primitives:\n      - {p: 26, delta: [0.066148, -0.008299, -0.006369], lift: high}\n      - {p: 44, delta: [0.056982, -0.07105, -0.016339], lift: low}\n      - {p: 34, delta: [-0.063689, 0.05844, -0.002932], lift: high}\noutputs:\n  metrics_json: outputs/metrics/g1_effect_size.json\n  stiffness_plot_png: outputs/plots/g1_stiffness_distributions.png\n  friction_plot_png: outputs/plots/g1_friction_distributions.png\n  report_md: outputs/reports/g1_report.md\n  stdout_log: outputs/reports/gate_g1_stdout.log\n  dm_stats_json: outputs/metrics/dm_stats.json\n",
+  "convergence_rates": {
+    "10000": 1.0,
+    "20000": 1.0,
+    "5000": 0.8333333333333334
+  },
+  "created_utc": "2026-07-03T07:21:42Z",
+  "design": {
+    "budgets": [
+      5000,
+      10000,
+      20000
+    ],
+    "init_shape_schedule": "balanced cycle over straight/u_bend/s_curve/random_smooth (6 each)",
+    "lift_schedule": "alternating high/low (12 high, 12 low)",
+    "n_cases": 24,
+    "plasticity": "disabled/not used",
+    "threshold_immutable": 0.001
+  },
+  "first_convergence_steps": {
+    "converged_count_by_20000": 24,
+    "nonconverged_count_by_20000": 0,
+    "stats_converged_only": {
+      "max": 7608.0,
+      "mean": 2931.875,
+      "median": 2434.0,
+      "min": 1110.0,
+      "n": 24,
+      "q025": 1142.2,
+      "q25": 1362.75,
+      "q75": 3458.5,
+      "q975": 7506.225,
+      "std": 1946.2902127872153
+    },
+    "values": [
+      3151,
+      1176,
+      1640,
+      1385,
+      3463,
+      1294,
+      7608,
+      7431,
+      1911,
+      6408,
+      2069,
+      1296,
+      2585,
+      2283,
+      2981,
+      1435,
+      5032,
+      1110,
+      4167,
+      1166,
+      3101,
+      1244,
+      3457,
+      2972
+    ]
+  },
+  "measurement": "M7 appendix settle-budget sweep",
+  "outputs": {
+    "metrics_json": "outputs/metrics/settle_budget_sweep.json",
+    "plot_png": "outputs/plots/settle_budget_sweep.png",
+    "stdout_log": "outputs/reports/appendix_settle_sweep.log"
+  },
+  "result": {
+    "action": {
+      "grasp_success_rate": 1.0,
+      "init_shapes": {
+        "random_smooth": 6,
+        "s_curve": 6,
+        "straight": 6,
+        "u_bend": 6
+      },
+      "lifts": {
+        "high": 12,
+        "low": 12
+      },
+      "wall_s": 0.3949053240939975
+    },
+    "budgets": [
+      5000,
+      10000,
+      20000
+    ],
+    "build_wall_s": 7.907015253324062,
+    "cases": [
+      {
+        "actual_grasp_node": 8,
+        "case_id": "case_00",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.04242412055721779,
+          0.0035379809685334956,
+          0.0022766234556941094
+        ],
+        "delta_norm_m": 0.04263222171956407,
+        "first_convergence_step": 3151,
+        "grasp_success": true,
+        "init_seed": 8901,
+        "init_shape": "straight",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.001226402536263835,
+          "20000": 0.003055105785836079,
+          "5000": 0.008217823439778664
+        },
+        "p": 8
+      },
+      {
+        "actual_grasp_node": 18,
+        "case_id": "case_01",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          -0.038429014598309906,
+          -0.027275589404641493,
+          -0.0033141327120463915
+        ],
+        "delta_norm_m": 0.047241194057736975,
+        "first_convergence_step": 1176,
+        "grasp_success": true,
+        "init_seed": 8902,
+        "init_shape": "u_bend",
+        "initial_arc_length_m": 0.9999999999999999,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0,
+          "20000": 0.0,
+          "5000": 2.3283064365386963e-05
+        },
+        "p": 18
+      },
+      {
+        "actual_grasp_node": 28,
+        "case_id": "case_02",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.0025671655317840384,
+          0.05161861885601334,
+          0.020311098072293494
+        ],
+        "delta_norm_m": 0.0555302877389653,
+        "first_convergence_step": 1640,
+        "grasp_success": true,
+        "init_seed": 8903,
+        "init_shape": "s_curve",
+        "initial_arc_length_m": 0.9999999999999998,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.000297100093002489,
+          "20000": 0.0003393237401479674,
+          "5000": 0.00038714352419276775
+        },
+        "p": 28
+      },
+      {
+        "actual_grasp_node": 28,
+        "case_id": "case_03",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.0831408198958474,
+          0.07409959362172043,
+          0.02280751823918042
+        ],
+        "delta_norm_m": 0.11368081894536296,
+        "first_convergence_step": 1385,
+        "grasp_success": true,
+        "init_seed": 8904,
+        "init_shape": "random_smooth",
+        "initial_arc_length_m": 1.0,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0001491527200394235,
+          "20000": 0.00015359765386647212,
+          "5000": 0.00033327329860082926
+        },
+        "p": 28
+      },
+      {
+        "actual_grasp_node": 31,
+        "case_id": "case_04",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.07546096093662365,
+          0.09719428582963603,
+          0.008171994553138502
+        ],
+        "delta_norm_m": 0.1233201821211279,
+        "first_convergence_step": 3463,
+        "grasp_success": true,
+        "init_seed": 8905,
+        "init_shape": "straight",
+        "initial_arc_length_m": 0.9999999999999999,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.0005273104255795577,
+          "20000": 0.0002998878229646385,
+          "5000": 0.0005707979369999455
+        },
+        "p": 31
+      },
+      {
+        "actual_grasp_node": 33,
+        "case_id": "case_05",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.06035716733614722,
+          -0.09545913483787277,
+          0.01865594178244841
+        ],
+        "delta_norm_m": 0.11447042516138811,
+        "first_convergence_step": 1294,
+        "grasp_success": true,
+        "init_seed": 8906,
+        "init_shape": "u_bend",
+        "initial_arc_length_m": 1.0000000000000002,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 2.3283064365386963e-06,
+          "20000": 0.0,
+          "5000": 4.190951585769653e-05
+        },
+        "p": 33
+      },
+      {
+        "actual_grasp_node": 23,
+        "case_id": "case_06",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": false
+        },
+        "delta": [
+          0.0236240374297694,
+          0.06335357346295518,
+          0.030373304707946577
+        ],
+        "delta_norm_m": 0.07412359984438813,
+        "first_convergence_step": 7608,
+        "grasp_success": true,
+        "init_seed": 8907,
+        "init_shape": "s_curve",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.0033006797135011062,
+          "20000": 0.00020233505389094755,
+          "5000": 0.002675721524733306
+        },
+        "p": 23,
+        "shape_change_length_normalized": {
+          "10000_vs_20000": 0.0005735431594635552,
+          "5000_vs_10000": 0.0011758503412946774,
+          "5000_vs_20000": 0.0016803678357683264
+        }
+      },
+      {
+        "actual_grasp_node": 17,
+        "case_id": "case_07",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": false
+        },
+        "delta": [
+          -0.08618245487304492,
+          -0.03060954538928614,
+          -0.011459309555911304
+        ],
+        "delta_norm_m": 0.09217198908769081,
+        "first_convergence_step": 7431,
+        "grasp_success": true,
+        "init_seed": 8908,
+        "init_shape": "random_smooth",
+        "initial_arc_length_m": 1.0000000000000002,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0010244216356978494,
+          "20000": 0.003836622221336105,
+          "5000": 0.0015565362766215571
+        },
+        "p": 17,
+        "shape_change_length_normalized": {
+          "10000_vs_20000": 0.0006225095429627553,
+          "5000_vs_10000": 0.001262341459262971,
+          "5000_vs_20000": 0.001870532161508849
+        }
+      },
+      {
+        "actual_grasp_node": 35,
+        "case_id": "case_08",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.033038759764409516,
+          0.07889219932803017,
+          0.016290348909483537
+        ],
+        "delta_norm_m": 0.08706844565729148,
+        "first_convergence_step": 1911,
+        "grasp_success": true,
+        "init_seed": 8909,
+        "init_shape": "straight",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.0015924839295339862,
+          "20000": 0.0002378522006631295,
+          "5000": 0.0005675912556869977
+        },
+        "p": 35
+      },
+      {
+        "actual_grasp_node": 18,
+        "case_id": "case_09",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": false
+        },
+        "delta": [
+          -0.08695393929343434,
+          0.08840344331068856,
+          -0.018578075053754337
+        ],
+        "delta_norm_m": 0.12538461317296998,
+        "first_convergence_step": 6408,
+        "grasp_success": true,
+        "init_seed": 8910,
+        "init_shape": "u_bend",
+        "initial_arc_length_m": 1.0,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.003841219709645261,
+          "20000": 0.00210873620642954,
+          "5000": 0.004758020454024431
+        },
+        "p": 18,
+        "shape_change_length_normalized": {
+          "10000_vs_20000": 0.0030904980962712125,
+          "5000_vs_10000": 0.0018562079234560034,
+          "5000_vs_20000": 0.004901966924073254
+        }
+      },
+      {
+        "actual_grasp_node": 21,
+        "case_id": "case_10",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.08572084036611738,
+          -0.039064171383696715,
+          0.02460923144859611
+        ],
+        "delta_norm_m": 0.09736368024812322,
+        "first_convergence_step": 2069,
+        "grasp_success": true,
+        "init_seed": 8911,
+        "init_shape": "s_curve",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.00034345479522991505,
+          "20000": 0.00024328707518974407,
+          "5000": 0.00025346035392673384
+        },
+        "p": 21
+      },
+      {
+        "actual_grasp_node": 38,
+        "case_id": "case_11",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.01866830156359199,
+          0.05742427814036026,
+          0.023047205170547865
+        ],
+        "delta_norm_m": 0.06463146965205106,
+        "first_convergence_step": 1296,
+        "grasp_success": true,
+        "init_seed": 8912,
+        "init_shape": "random_smooth",
+        "initial_arc_length_m": 1.0,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0001862645149230957,
+          "20000": 0.00014901161193847656,
+          "5000": 0.0003437387856461215
+        },
+        "p": 38
+      },
+      {
+        "actual_grasp_node": 11,
+        "case_id": "case_12",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.04554029084159696,
+          0.03682902309245792,
+          0.018870998008550608
+        ],
+        "delta_norm_m": 0.061533808574805116,
+        "first_convergence_step": 2585,
+        "grasp_success": true,
+        "init_seed": 8913,
+        "init_shape": "straight",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.0005784999895240948,
+          "20000": 0.00016674640839727483,
+          "5000": 0.0006147945942190923
+        },
+        "p": 11
+      },
+      {
+        "actual_grasp_node": 15,
+        "case_id": "case_13",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.024624884381530265,
+          0.07358685741850564,
+          -0.0038662853990509977
+        ],
+        "delta_norm_m": 0.07769400670786729,
+        "first_convergence_step": 2283,
+        "grasp_success": true,
+        "init_seed": 8914,
+        "init_shape": "u_bend",
+        "initial_arc_length_m": 1.0,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0003725290298461914,
+          "20000": 0.0005066942613100798,
+          "5000": 0.000687051629687856
+        },
+        "p": 15
+      },
+      {
+        "actual_grasp_node": 17,
+        "case_id": "case_14",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.10008645687378467,
+          0.004903402288955927,
+          0.030188705943473105
+        ],
+        "delta_norm_m": 0.10465514879878958,
+        "first_convergence_step": 2981,
+        "grasp_success": true,
+        "init_seed": 8915,
+        "init_shape": "s_curve",
+        "initial_arc_length_m": 1.0000000000000002,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.0067588835379347395,
+          "20000": 0.004588195105079197,
+          "5000": 0.003053476268289127
+        },
+        "p": 17
+      },
+      {
+        "actual_grasp_node": 12,
+        "case_id": "case_15",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.098794065066249,
+          -0.07480534765761492,
+          0.030093293671169193
+        ],
+        "delta_norm_m": 0.12752142429595942,
+        "first_convergence_step": 1435,
+        "grasp_success": true,
+        "init_seed": 8916,
+        "init_shape": "random_smooth",
+        "initial_arc_length_m": 0.9999999999999999,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 2.3283064365386963e-06,
+          "20000": 1.4551915228366852e-07,
+          "5000": 4.190951585769653e-05
+        },
+        "p": 12
+      },
+      {
+        "actual_grasp_node": 13,
+        "case_id": "case_16",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": false
+        },
+        "delta": [
+          0.05623039721184216,
+          -0.04562436238128836,
+          0.026305904478114147
+        ],
+        "delta_norm_m": 0.07704181088027677,
+        "first_convergence_step": 5032,
+        "grasp_success": true,
+        "init_seed": 8917,
+        "init_shape": "straight",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.004856260516795901,
+          "20000": 0.006084308620375713,
+          "5000": 0.0037914140058191072
+        },
+        "p": 13,
+        "shape_change_length_normalized": {
+          "10000_vs_20000": 0.00022129318760497158,
+          "5000_vs_10000": 0.00018901058735858062,
+          "5000_vs_20000": 0.00040185236536715435
+        }
+      },
+      {
+        "actual_grasp_node": 25,
+        "case_id": "case_17",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          -0.03425723295842945,
+          -0.0403267272700552,
+          0.015004557101811911
+        ],
+        "delta_norm_m": 0.054999451598202805,
+        "first_convergence_step": 1110,
+        "grasp_success": true,
+        "init_seed": 8918,
+        "init_shape": "u_bend",
+        "initial_arc_length_m": 1.0000000000000002,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0,
+          "20000": 0.0,
+          "5000": 1.6298145055770874e-05
+        },
+        "p": 25
+      },
+      {
+        "actual_grasp_node": 35,
+        "case_id": "case_18",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          -0.05982151075531662,
+          -0.01995922574419417,
+          -0.005835709881843209
+        ],
+        "delta_norm_m": 0.06333276680503709,
+        "first_convergence_step": 4167,
+        "grasp_success": true,
+        "init_seed": 8919,
+        "init_shape": "s_curve",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.004146386545282339,
+          "20000": 0.0031410443513321543,
+          "5000": 0.0006350090329993809
+        },
+        "p": 35
+      },
+      {
+        "actual_grasp_node": 33,
+        "case_id": "case_19",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.007859924217930416,
+          -0.09158282151772672,
+          0.020170055581720064
+        ],
+        "delta_norm_m": 0.09410644371151783,
+        "first_convergence_step": 1166,
+        "grasp_success": true,
+        "init_seed": 8920,
+        "init_shape": "random_smooth",
+        "initial_arc_length_m": 1.0000000000000002,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0,
+          "20000": 0.0,
+          "5000": 1.6298145055770874e-05
+        },
+        "p": 33
+      },
+      {
+        "actual_grasp_node": 23,
+        "case_id": "case_20",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          -0.09540486379013798,
+          0.01036974191325555,
+          -0.0009951899677336576
+        ],
+        "delta_norm_m": 0.09597192290057643,
+        "first_convergence_step": 3101,
+        "grasp_success": true,
+        "init_seed": 8921,
+        "init_shape": "straight",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.0030310379266918048,
+          "20000": 0.0022948909314668576,
+          "5000": 0.0004220967978667347
+        },
+        "p": 23
+      },
+      {
+        "actual_grasp_node": 41,
+        "case_id": "case_21",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.05433943792719879,
+          0.07151184295144183,
+          -0.012155840372002891
+        ],
+        "delta_norm_m": 0.09063378316999234,
+        "first_convergence_step": 1244,
+        "grasp_success": true,
+        "init_seed": 8922,
+        "init_shape": "u_bend",
+        "initial_arc_length_m": 1.0,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0,
+          "20000": 0.0,
+          "5000": 2.561137080192566e-05
+        },
+        "p": 41
+      },
+      {
+        "actual_grasp_node": 40,
+        "case_id": "case_22",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          -0.04530806968319713,
+          0.04945358690361731,
+          0.006596792208676129
+        ],
+        "delta_norm_m": 0.06739433287373298,
+        "first_convergence_step": 3457,
+        "grasp_success": true,
+        "init_seed": 8923,
+        "init_shape": "s_curve",
+        "initial_arc_length_m": 1.0,
+        "lift": "high",
+        "max_node_speed_at_budget": {
+          "10000": 0.00041862923830109734,
+          "20000": 0.0008192463078070152,
+          "5000": 0.00042149420871878505
+        },
+        "p": 40
+      },
+      {
+        "actual_grasp_node": 16,
+        "case_id": "case_23",
+        "converged_by_budget": {
+          "10000": true,
+          "20000": true,
+          "5000": true
+        },
+        "delta": [
+          0.009493148437228203,
+          -0.07282810372757212,
+          -0.013275742884172714
+        ],
+        "delta_norm_m": 0.07463442844245487,
+        "first_convergence_step": 2972,
+        "grasp_success": true,
+        "init_seed": 8924,
+        "init_shape": "random_smooth",
+        "initial_arc_length_m": 1.0000000000000004,
+        "lift": "low",
+        "max_node_speed_at_budget": {
+          "10000": 0.0006578795259720134,
+          "20000": 0.003210579296723819,
+          "5000": 0.0018834483282286173
+        },
+        "p": 16
+      }
+    ],
+    "convergence_rates": {
+      "10000": 1.0,
+      "20000": 1.0,
+      "5000": 0.8333333333333334
+    },
+    "first_convergence_steps": {
+      "converged_count_by_20000": 24,
+      "nonconverged_count_by_20000": 0,
+      "stats_converged_only": {
+        "max": 7608.0,
+        "mean": 2931.875,
+        "median": 2434.0,
+        "min": 1110.0,
+        "n": 24,
+        "q025": 1142.2,
+        "q25": 1362.75,
+        "q75": 3458.5,
+        "q975": 7506.225,
+        "std": 1946.2902127872153
+      },
+      "values": [
+        3151,
+        1176,
+        1640,
+        1385,
+        3463,
+        1294,
+        7608,
+        7431,
+        1911,
+        6408,
+        2069,
+        1296,
+        2585,
+        2283,
+        2981,
+        1435,
+        5032,
+        1110,
+        4167,
+        1166,
+        3101,
+        1244,
+        3457,
+        2972
+      ]
+    },
+    "grasp_realism": false,
+    "grasp_realism_reason": "disabled to isolate settle-budget/solver behavior; repeat-variance measurement separately reports realism-on execution noise",
+    "initial_reset_wall_s": 12.760353521909565,
+    "method": "single post-release rollout to 20000 steps; first-crossing steps and snapshots at 5000/10000/20000 derive all rates and cutoff shape changes",
+    "n_envs": 24,
+    "reset_info": {
+      "backend": "2",
+      "init_shape": "straight",
+      "init_vertex_setter": "rod_entity.set_position((n_envs, n_vertices, 3)); rod_entity.set_velocity(zeros)",
+      "initial_arc_length_m": 0.9999999999999999,
+      "interval_m": 0.02040816326530612,
+      "length_m": 1.0,
+      "mapped_parameters": {
+        "bending_stiffness_E": 100000.0,
+        "mu_k": 0.24,
+        "mu_s": 0.3,
+        "segment_mass": 0.001,
+        "segment_radius": 0.005,
+        "stretching_stiffness_K": 800000.0,
+        "twisting_stiffness_G": 10000.0
+      },
+      "n_envs": 24,
+      "n_vertices": 50,
+      "reset_settle_converged": true,
+      "rope_params": {
+        "bend_stiffness": 1.0,
+        "friction": 1.0,
+        "length_m": 1.0,
+        "n_segments": 50,
+        "radius": 0.005,
+        "twist_stiffness": 1.0
+      },
+      "seed": 18401,
+      "show_viewer": false,
+      "sim": "dlolab",
+      "stiffness_bases": {
+        "bend_base_E": 100000.0,
+        "mu_k_ratio": 0.8,
+        "mu_s_base": 0.3,
+        "segment_mass_base": 0.001,
+        "stretch_base_K": 800000.0,
+        "twist_base_G": 10000.0
+      }
+    },
+    "reset_settle": {
+      "converged_rate": 1.0,
+      "steps": {
+        "max": 3641.0,
+        "mean": 1243.5833333333333,
+        "median": 984.0,
+        "min": 878.0,
+        "n": 24,
+        "q025": 879.15,
+        "q25": 912.0,
+        "q75": 1415.75,
+        "q975": 3045.875000000001,
+        "std": 636.9959331428889
+      }
+    },
+    "settle_rollout_wall_s": 69.74561467394233,
+    "shape_change_between_cutoffs": {
+      "nonconverged_at_5000_case_ids": [
+        "case_06",
+        "case_07",
+        "case_09",
+        "case_16"
+      ],
+      "nonconverged_at_5000_count": 4,
+      "pairs": {
+        "10000_vs_20000": {
+          "n_cases": 4,
+          "stats": {
+            "max": 0.0030904980962712125,
+            "mean": 0.0011269609965756237,
+            "median": 0.0005980263512131553,
+            "min": 0.00022129318760497158,
+            "n": 4,
+            "q025": 0.00024771193549436536,
+            "q25": 0.00048548066649890933,
+            "q75": 0.0012395066812898696,
+            "q975": 0.002905398954773078,
+            "std": 0.001321168005159652
+          },
+          "subset": "cases not converged by 5000 steps",
+          "values": [
+            0.0005735431594635552,
+            0.0006225095429627553,
+            0.0030904980962712125,
+            0.00022129318760497158
+          ]
+        },
+        "5000_vs_10000": {
+          "n_cases": 4,
+          "stats": {
+            "max": 0.0018562079234560034,
+            "mean": 0.0011208525778430582,
+            "median": 0.001219095900278824,
+            "min": 0.00018901058735858062,
+            "n": 4,
+            "q025": 0.0002630235689037879,
+            "q25": 0.0009291404028106533,
+            "q75": 0.001410808075311229,
+            "q975": 0.001811667938641526,
+            "std": 0.0006909222911205344
+          },
+          "subset": "cases not converged by 5000 steps",
+          "values": [
+            0.0011758503412946774,
+            0.001262341459262971,
+            0.0018562079234560034,
+            0.00018901058735858062
+          ]
+        },
+        "5000_vs_20000": {
+          "n_cases": 4,
+          "stats": {
+            "max": 0.004901966924073254,
+            "mean": 0.002213679821679396,
+            "median": 0.0017754499986385877,
+            "min": 0.00040185236536715435,
+            "n": 4,
+            "q025": 0.0004977410256472423,
+            "q25": 0.0013607389681680334,
+            "q75": 0.0026283908521499504,
+            "q975": 0.004674609316880923,
+            "std": 0.001907160041120565
+          },
+          "subset": "cases not converged by 5000 steps",
+          "values": [
+            0.0016803678357683264,
+            0.001870532161508849,
+            0.004901966924073254,
+            0.00040185236536715435
+          ]
+        }
+      }
+    },
+    "speed_summary_at_budget": {
+      "10000": {
+        "max": 0.0067588835379347395,
+        "mean": 0.0013880522081932405,
+        "median": 0.00047296983194032756,
+        "min": 0.0,
+        "n": 24,
+        "q025": 0.0,
+        "q25": 0.0001124466166387023,
+        "q75": 0.0019521224288234409,
+        "q975": 0.0056648753007799086,
+        "std": 0.0018854897642991246
+      },
+      "20000": {
+        "max": 0.006084308620375713,
+        "mean": 0.001309900423912812,
+        "median": 0.0002715874490771913,
+        "min": 0.0,
+        "n": 24,
+        "q025": 0.0,
+        "q25": 0.00011179508874192834,
+        "q75": 0.002484944645059163,
+        "q975": 0.005224043349080217,
+        "std": 0.001771686739731856
+      },
+      "5000": {
+        "max": 0.008217823439778664,
+        "mean": 0.0013057583947097627,
+        "median": 0.0004948440267768662,
+        "min": 1.6298145055770874e-05,
+        "n": 24,
+        "q025": 1.6298145055770874e-05,
+        "q25": 0.0002005726444094745,
+        "q75": 0.0016382642895233222,
+        "q975": 0.006228436722969983,
+        "std": 0.0019647447101453974
+      }
+    },
+    "vel_threshold": 0.001,
+    "wall_s": 90.81032649520785
+  },
+  "rope_params": {
+    "bend_stiffness": 1.0,
+    "friction": 1.0,
+    "length_m": 1.0,
+    "n_segments": 50,
+    "radius": 0.005,
+    "twist_stiffness": 1.0
+  },
+  "sanction": "M6 issue-#7 verdict instruction #3; M7 numeric-fixing appendix",
+  "schema_version": 1,
+  "seed": 8401,
+  "shape_change_between_cutoffs": {
+    "nonconverged_at_5000_case_ids": [
+      "case_06",
+      "case_07",
+      "case_09",
+      "case_16"
+    ],
+    "nonconverged_at_5000_count": 4,
+    "pairs": {
+      "10000_vs_20000": {
+        "n_cases": 4,
+        "stats": {
+          "max": 0.0030904980962712125,
+          "mean": 0.0011269609965756237,
+          "median": 0.0005980263512131553,
+          "min": 0.00022129318760497158,
+          "n": 4,
+          "q025": 0.00024771193549436536,
+          "q25": 0.00048548066649890933,
+          "q75": 0.0012395066812898696,
+          "q975": 0.002905398954773078,
+          "std": 0.001321168005159652
+        },
+        "subset": "cases not converged by 5000 steps",
+        "values": [
+          0.0005735431594635552,
+          0.0006225095429627553,
+          0.0030904980962712125,
+          0.00022129318760497158
+        ]
+      },
+      "5000_vs_10000": {
+        "n_cases": 4,
+        "stats": {
+          "max": 0.0018562079234560034,
+          "mean": 0.0011208525778430582,
+          "median": 0.001219095900278824,
+          "min": 0.00018901058735858062,
+          "n": 4,
+          "q025": 0.0002630235689037879,
+          "q25": 0.0009291404028106533,
+          "q75": 0.001410808075311229,
+          "q975": 0.001811667938641526,
+          "std": 0.0006909222911205344
+        },
+        "subset": "cases not converged by 5000 steps",
+        "values": [
+          0.0011758503412946774,
+          0.001262341459262971,
+          0.0018562079234560034,
+          0.00018901058735858062
+        ]
+      },
+      "5000_vs_20000": {
+        "n_cases": 4,
+        "stats": {
+          "max": 0.004901966924073254,
+          "mean": 0.002213679821679396,
+          "median": 0.0017754499986385877,
+          "min": 0.00040185236536715435,
+          "n": 4,
+          "q025": 0.0004977410256472423,
+          "q25": 0.0013607389681680334,
+          "q75": 0.0026283908521499504,
+          "q975": 0.004674609316880923,
+          "std": 0.001907160041120565
+        },
+        "subset": "cases not converged by 5000 steps",
+        "values": [
+          0.0016803678357683264,
+          0.001870532161508849,
+          0.004901966924073254,
+          0.00040185236536715435
+        ]
+      }
+    }
+  },
+  "status": "report_only",
+  "wall_time_s": 90.97156720096245
+}
