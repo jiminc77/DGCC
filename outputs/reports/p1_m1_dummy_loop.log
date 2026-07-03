@@ -1,15 +1,15 @@
 p1_m1_dummy_loop seed=0 n_envs=8 updates_goal=100
 td3 config: {'gamma': 0.95, 'tau': 0.005, 'lr': 0.0003, 'batch_size': 32, 'replay_capacity': 500000, 'utd': 1, 'warmup_transitions': 64, 'grad_clip': 10.0, 'policy_noise': 0.05, 'noise_clip': 0.1, 'exploration_u_sigma': 0.03, 'eps_p_start': 1.0, 'eps_p_end': 0.1, 'eps_p_fraction': 0.3}
 backbone parameter count (encoder+twin critic+actor): 570,630
-update 001 transitions=66 critic_loss=1.4645 actor_loss=-0.0150 critic_grad=0.058 actor_grad=0.001 q1_mean=0.006 target_mean=0.025
-update 010 transitions=114 critic_loss=1.5113 actor_loss=-0.0758 critic_grad=0.196 actor_grad=0.009 q1_mean=0.083 target_mean=0.028
-update 020 transitions=176 critic_loss=1.3646 actor_loss=-0.0890 critic_grad=0.298 actor_grad=0.010 q1_mean=0.105 target_mean=0.022
-update 030 transitions=229 critic_loss=2.8133 actor_loss=-0.1543 critic_grad=0.164 actor_grad=0.015 q1_mean=0.157 target_mean=0.181
-update 040 transitions=291 critic_loss=4.2900 actor_loss=-0.1863 critic_grad=0.657 actor_grad=0.021 q1_mean=0.205 target_mean=0.329
-update 050 transitions=335 critic_loss=1.4518 actor_loss=-0.1650 critic_grad=0.852 actor_grad=0.021 q1_mean=0.184 target_mean=-0.015
-update 060 transitions=397 critic_loss=3.0274 actor_loss=-0.1008 critic_grad=0.280 actor_grad=0.022 q1_mean=0.111 target_mean=0.138
-update 070 transitions=450 critic_loss=2.7007 actor_loss=-0.1779 critic_grad=0.919 actor_grad=0.036 q1_mean=0.207 target_mean=0.133
-update 080 transitions=530 critic_loss=0.2236 actor_loss=0.1205 critic_grad=4.203 actor_grad=0.034 q1_mean=0.012 target_mean=-0.218
-update 090 transitions=610 critic_loss=5.3230 actor_loss=0.2114 critic_grad=25.234 actor_grad=0.024 q1_mean=-0.148 target_mean=0.339
-update 100 transitions=690 critic_loss=2.1032 actor_loss=0.4091 critic_grad=7.893 actor_grad=0.016 q1_mean=-0.263 target_mean=-0.287
-loop complete: updates=100 transitions=690 wall_s=2.8 nan_incidents=0 — no errors
+update 001 transitions=66 critic_loss=1.4367 actor_loss=0.0100 critic_grad=0.106 actor_grad=0.002 q1_mean=-0.022 target_mean=0.008
+update 010 transitions=106 critic_loss=2.9960 actor_loss=-0.0522 critic_grad=0.393 actor_grad=0.006 q1_mean=0.055 target_mean=0.173
+update 020 transitions=159 critic_loss=4.3347 actor_loss=-0.1606 critic_grad=0.690 actor_grad=0.013 q1_mean=0.175 target_mean=0.330
+update 030 transitions=212 critic_loss=4.2245 actor_loss=-0.2055 critic_grad=0.541 actor_grad=0.020 q1_mean=0.214 target_mean=0.328
+update 040 transitions=274 critic_loss=0.3473 actor_loss=-0.1710 critic_grad=1.687 actor_grad=0.024 q1_mean=0.202 target_mean=-0.190
+update 050 transitions=318 critic_loss=1.5052 actor_loss=-0.0852 critic_grad=0.473 actor_grad=0.017 q1_mean=0.101 target_mean=-0.030
+update 060 transitions=371 critic_loss=8.5369 actor_loss=-0.0859 critic_grad=2.150 actor_grad=0.020 q1_mean=0.093 target_mean=0.704
+update 070 transitions=433 critic_loss=1.5102 actor_loss=-0.0842 critic_grad=0.590 actor_grad=0.021 q1_mean=0.090 target_mean=-0.020
+update 080 transitions=513 critic_loss=0.1460 actor_loss=-0.0356 critic_grad=1.483 actor_grad=0.012 q1_mean=0.048 target_mean=-0.195
+update 090 transitions=584 critic_loss=4.0965 actor_loss=0.0501 critic_grad=1.773 actor_grad=0.012 q1_mean=-0.064 target_mean=0.159
+update 100 transitions=664 critic_loss=0.5167 actor_loss=0.3401 critic_grad=7.966 actor_grad=0.056 q1_mean=-0.174 target_mean=-0.359
+loop complete: updates=100 transitions=664 wall_s=1.7 nan_incidents=0 — no errors

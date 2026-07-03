@@ -112,8 +112,6 @@ def build_node_features(
     g_aligned = np.where(flips[:, None, None], g[:, ::-1, :], g)
     sigma = arc_length_coordinates(x)[..., None]
     features = np.concatenate([x, sigma, g_aligned - x], axis=-1)
-    if not batched:
-        return features, flips
     return features, flips
 
 
@@ -193,7 +191,14 @@ class Actor(nn.Module):
         )
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
-        """h (..., 256) → u (..., 4) = [Δ ∈ [-0.15, 0.15]³, lift ∈ (0, 1)]."""
+        """h (..., 256) → u (..., 4) = [Δ ∈ [-0.15, 0.15]³, lift ∈ (0, 1)].
+
+        Note (M1 gate LOW, recorded): §6 writes "lift logit"; the actor emits
+        the sigmoid relaxation lift ∈ (0, 1) so the critic sees a continuous
+        u while EXECUTED lifts are binarized at 0.5 ("high" iff > 0.5).  A
+        standard continuous relaxation of the binary lift — documented, not a
+        spec change.
+        """
 
         raw = self.net(h)
         delta = torch.tanh(raw[..., :3]) * DELTA_SCALE

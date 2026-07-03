@@ -87,6 +87,11 @@ class ReplayBuffer:
         self.lift = np.zeros(capacity, dtype=np.int64)
         self.reward = np.zeros(capacity, dtype=np.float32)
         self.done = np.zeros(capacity, dtype=bool)
+        # Canonical flip decisions cached at insertion (M1 gate MEDIUM): each
+        # transition's flip is computed ONCE here instead of on every sampled
+        # update (~25x fewer canonical_shape_flip calls at §7 replay ratios).
+        self.flip_before = np.zeros(capacity, dtype=bool)
+        self.flip_after = np.zeros(capacity, dtype=bool)
 
     def add_batch(
         self,
@@ -99,6 +104,8 @@ class ReplayBuffer:
         lift: np.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
+        flip_before: np.ndarray | None = None,
+        flip_after: np.ndarray | None = None,
     ) -> None:
         """Append a batch of transitions (oldest entries overwritten)."""
 
@@ -121,6 +128,16 @@ class ReplayBuffer:
         self.lift[indices] = np.asarray(lift, dtype=np.int64)
         self.reward[indices] = np.asarray(reward, dtype=np.float32)
         self.done[indices] = np.asarray(done, dtype=bool)
+        if flip_before is None or flip_after is None:
+            from dgcc.models.networks import goal_residual_flips
+
+            goal = np.asarray(goal_curve, dtype=float)
+            if flip_before is None:
+                flip_before = goal_residual_flips(np.asarray(X_before, dtype=float), goal)
+            if flip_after is None:
+                flip_after = goal_residual_flips(np.asarray(X_after, dtype=float), goal)
+        self.flip_before[indices] = np.asarray(flip_before, dtype=bool)
+        self.flip_after[indices] = np.asarray(flip_after, dtype=bool)
         self._next = int((self._next + count) % self.capacity)
         self.size = int(min(self.size + count, self.capacity))
 
@@ -139,6 +156,8 @@ class ReplayBuffer:
             "lift": self.lift[indices].copy(),
             "reward": self.reward[indices].astype(np.float64),
             "done": self.done[indices].copy(),
+            "flip_before": self.flip_before[indices].copy(),
+            "flip_after": self.flip_after[indices].copy(),
         }
 
 

@@ -2,7 +2,7 @@
 
 Covers the M1 exit contract: hand-computed target values (target vs online
 critics distinguished), double-Q decoupling (selection critic ≠ evaluation
-pair), actor gradient isolation (u only, никогда via p or trunk), replay v2
+pair), actor gradient isolation (u only, never via p or the trunk), replay v2
 round-trip + v1 migration, checkpoint save/load equality — plus the §6
 encoder input contract (goal sensitivity + canonical_shape_flip consistency)
 and the training-level NaN halt.
@@ -343,11 +343,14 @@ def test_replay_buffer_wraps_and_samples() -> None:
             lift=np.zeros(count, dtype=int),
             reward=np.arange(count, dtype=float),
             done=np.zeros(count, dtype=bool),
+            flip_before=np.zeros(count, dtype=bool),
+            flip_after=np.zeros(count, dtype=bool),
         )
     assert buffer.size == 5
     batch = buffer.sample(8, rng)
     assert batch["X_before"].shape == (8, 32, 3)
     assert batch["p"].shape == (8,)
+    assert batch["flip_before"].shape == (8,) and batch["flip_after"].shape == (8,)
 
 
 # ---------------------------------------------------------------------------

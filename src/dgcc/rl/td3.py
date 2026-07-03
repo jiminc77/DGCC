@@ -150,8 +150,24 @@ class TD3Agent:
     # Feature/embedding helpers
     # ------------------------------------------------------------------
 
-    def features(self, X: np.ndarray, G_curve: np.ndarray) -> torch.Tensor:
-        feats, _ = build_node_features(X, G_curve, self.length_m)
+    def features(
+        self,
+        X: np.ndarray,
+        G_curve: np.ndarray,
+        flips: np.ndarray | None = None,
+    ) -> torch.Tensor:
+        """§6 input features; ``flips`` accepts replay-cached decisions.
+
+        Note (M1 gate LOW, deliberate deviation record): the flip decision for
+        s′ features is computed from X_after itself, whereas the M5R2
+        MEASUREMENT convention fixes the flip once per transition from
+        X_before.  For encoder inputs each state is aligned by its own
+        canonical decision so the goal-conditioning is well-defined per state;
+        near the flip boundary the residual channel may change orientation
+        between s and s′ — accepted and documented, not a metric-path change.
+        """
+
+        feats, _ = build_node_features(X, G_curve, self.length_m, flips=flips)
         return torch.as_tensor(feats, dtype=torch.float32, device=self.device)
 
     @staticmethod
@@ -176,7 +192,9 @@ class TD3Agent:
         *,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
-        feats_next = self.features(batch["X_after"], batch["goal_curve"])
+        feats_next = self.features(
+            batch["X_after"], batch["goal_curve"], batch.get("flip_after")
+        )
         h_next = self.encoder_target(feats_next)  # (B, K, 256)
         u_next_all = self.actor_target(h_next)  # (B, K, 4)
 
@@ -203,11 +221,19 @@ class TD3Agent:
     # ------------------------------------------------------------------
 
     def critic_update(
-        self, batch: dict[str, np.ndarray], *, generator: torch.Generator | None = None
+        self,
+        batch: dict[str, np.ndarray],
+        *,
+        generator: torch.Generator | None = None,
+        feats_before: torch.Tensor | None = None,
     ) -> dict[str, float]:
         y = self.compute_target(batch, generator=generator)
 
-        feats = self.features(batch["X_before"], batch["goal_curve"])
+        feats = (
+            self.features(batch["X_before"], batch["goal_curve"], batch.get("flip_before"))
+            if feats_before is None
+            else feats_before
+        )
         h = self.encoder(feats)
         arange = torch.arange(h.shape[0], device=self.device)
         p = torch.as_tensor(batch["p"], dtype=torch.long, device=self.device)
@@ -232,8 +258,17 @@ class TD3Agent:
             "q2_mean": float(q2.detach().mean().cpu()),
         }
 
-    def actor_update(self, batch: dict[str, np.ndarray]) -> dict[str, float]:
-        feats = self.features(batch["X_before"], batch["goal_curve"])
+    def actor_update(
+        self,
+        batch: dict[str, np.ndarray],
+        *,
+        feats_before: torch.Tensor | None = None,
+    ) -> dict[str, float]:
+        feats = (
+            self.features(batch["X_before"], batch["goal_curve"], batch.get("flip_before"))
+            if feats_before is None
+            else feats_before
+        )
         with torch.no_grad():
             h = self.encoder(feats)  # trunk detached: actor grads flow via u only
         u_all = self.actor(h)  # (B, K, 4)
@@ -265,10 +300,17 @@ class TD3Agent:
     def update(
         self, batch: dict[str, np.ndarray], *, generator: torch.Generator | None = None
     ) -> dict[str, float]:
-        """One §7 update: critic (+encoder), actor, target soft update."""
+        """One §7 update: critic (+encoder), actor, target soft update.
 
-        stats = self.critic_update(batch, generator=generator)
-        stats.update(self.actor_update(batch))
+        The X_before feature build is shared between the critic and actor
+        passes (M1 gate MEDIUM: avoid recomputing canonical flips).
+        """
+
+        feats_before = self.features(
+            batch["X_before"], batch["goal_curve"], batch.get("flip_before")
+        )
+        stats = self.critic_update(batch, generator=generator, feats_before=feats_before)
+        stats.update(self.actor_update(batch, feats_before=feats_before))
         self.soft_update_targets()
         self.update_count += 1
         return stats
@@ -344,6 +386,16 @@ class TD3Agent:
 
     def load_checkpoint(self, path: Path | str) -> None:
         payload = torch.load(Path(path), map_location=self.device, weights_only=False)
+        saved_config = payload.get("config")
+        if saved_config is not None and saved_config != self.config.to_dict():
+            import warnings
+
+            drift = {
+                key: (saved_config.get(key), self.config.to_dict().get(key))
+                for key in set(saved_config) | set(self.config.to_dict())
+                if saved_config.get(key) != self.config.to_dict().get(key)
+            }
+            warnings.warn(f"checkpoint config drift (saved, current): {drift}", stacklevel=2)
         self.update_count = int(payload["update_count"])
         self.encoder.load_state_dict(payload["encoder"])
         self.critic.load_state_dict(payload["critic"])
