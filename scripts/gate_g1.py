@@ -93,8 +93,18 @@ class Tee:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Measure the P0-M6 G1 stiffness/friction pilot")
-    parser.add_argument("--seed", type=int, default=0, help="deterministic bootstrap/probe seed")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="deterministic bootstrap/probe seed; --stats-only reuses stored cli_seed when omitted",
+    )
     parser.add_argument("--config", default="configs/gate_g1.yaml", help="YAML config path")
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="regenerate metrics, report, and plots from stored raw distance lists without running simulations",
+    )
     return parser
 
 
@@ -701,6 +711,15 @@ def cohens_d(sample_a: Sequence[float], sample_b: Sequence[float]) -> float:
     return float((np.mean(a) - np.mean(b)) / pooled)
 
 
+def bootstrap_ci_key(level: float, method: str) -> str:
+    percent = int(round(float(level) * 100.0))
+    if math.isclose(float(level) * 100.0, float(percent), rel_tol=0.0, abs_tol=1.0e-9):
+        level_label = str(percent)
+    else:
+        level_label = str(float(level)).replace(".", "_")
+    return f"bootstrap_ci_{level_label}_{method}"
+
+
 def bootstrap_d_ci(
     sample_a: Sequence[float],
     sample_b: Sequence[float],
@@ -731,6 +750,69 @@ def bootstrap_d_ci(
     }
 
 
+def bootstrap_d_ci_cluster(
+    sample_a_records: Sequence[dict[str, Any]],
+    sample_b_records: Sequence[dict[str, Any]],
+    *,
+    sequence_ids: Sequence[str],
+    replicates: int,
+    level: float,
+    rng: np.random.Generator,
+) -> dict[str, Any]:
+    sequence_ids_tuple = tuple(str(sequence_id) for sequence_id in sequence_ids)
+    if len(set(sequence_ids_tuple)) != len(sequence_ids_tuple):
+        raise ValueError("sequence_ids must be unique for cluster bootstrap")
+    if len(sequence_ids_tuple) < 2 or replicates <= 0:
+        return {"level": level, "replicates": int(replicates), "low": None, "high": None}
+
+    a_by_sequence: dict[str, list[float]] = {sequence_id: [] for sequence_id in sequence_ids_tuple}
+    b_by_sequence: dict[str, list[float]] = {sequence_id: [] for sequence_id in sequence_ids_tuple}
+    for label, records, grouped in (
+        ("sample_a", sample_a_records, a_by_sequence),
+        ("sample_b", sample_b_records, b_by_sequence),
+    ):
+        for record in records:
+            sequence_id = str(record["sequence_id"])
+            if sequence_id not in grouped:
+                raise ValueError(f"{label} has sequence_id {sequence_id!r} outside the cluster fixture")
+            grouped[sequence_id].append(float(record["distance"]))
+
+    missing = [
+        sequence_id
+        for sequence_id in sequence_ids_tuple
+        if len(a_by_sequence[sequence_id]) == 0 or len(b_by_sequence[sequence_id]) == 0
+    ]
+    if missing:
+        raise ValueError(f"cluster bootstrap missing distances for sequence ids: {missing}")
+
+    draws = np.empty(int(replicates), dtype=float)
+    for idx in range(int(replicates)):
+        draw_indices = rng.integers(0, len(sequence_ids_tuple), size=len(sequence_ids_tuple))
+        a_sample = [
+            value
+            for draw_index in draw_indices
+            for value in a_by_sequence[sequence_ids_tuple[int(draw_index)]]
+        ]
+        b_sample = [
+            value
+            for draw_index in draw_indices
+            for value in b_by_sequence[sequence_ids_tuple[int(draw_index)]]
+        ]
+        draws[idx] = cohens_d(a_sample, b_sample)
+
+    draws = draws[np.isfinite(draws)]
+    if draws.size == 0:
+        return {"level": level, "replicates": int(replicates), "low": None, "high": None}
+    alpha = (1.0 - float(level)) / 2.0
+    low, high = np.quantile(draws, [alpha, 1.0 - alpha])
+    return {
+        "level": float(level),
+        "replicates": int(replicates),
+        "low": float(low),
+        "high": float(high),
+    }
+
+
 def compute_axis_metrics(
     *,
     axis: str,
@@ -742,7 +824,8 @@ def compute_axis_metrics(
     length_m: float,
     bootstrap_replicates: int,
     bootstrap_level: float,
-    rng: np.random.Generator,
+    rng_iid: np.random.Generator,
+    rng_cluster: np.random.Generator,
 ) -> dict[str, Any]:
     axis_results = [item for item in results if item["axis"] == axis]
     by_key = {
@@ -769,6 +852,9 @@ def compute_axis_metrics(
                 )
 
     pairwise: dict[str, Any] = {}
+    sequence_ids = [sequence.id for sequence in sequences]
+    iid_ci_key = bootstrap_ci_key(bootstrap_level, "iid")
+    cluster_ci_key = bootstrap_ci_key(bootstrap_level, "cluster")
     for pair in pairs:
         a_condition, b_condition = pair
         a_label = condition_label(a_condition)
@@ -804,12 +890,20 @@ def compute_axis_metrics(
                 "values": within_records,
             },
             "cohens_d": d_value,
-            "cohens_d_bootstrap_ci": bootstrap_d_ci(
+            iid_ci_key: bootstrap_d_ci(
                 between_values,
                 within_values,
                 replicates=bootstrap_replicates,
                 level=bootstrap_level,
-                rng=rng,
+                rng=rng_iid,
+            ),
+            cluster_ci_key: bootstrap_d_ci_cluster(
+                between_records,
+                within_records,
+                sequence_ids=sequence_ids,
+                replicates=bootstrap_replicates,
+                level=bootstrap_level,
+                rng=rng_cluster,
             ),
         }
 
@@ -849,7 +943,8 @@ def compute_metrics(
     measurement = measurement_config(config)
     bootstrap_replicates = int(measurement.get("bootstrap_replicates", 5000))
     bootstrap_level = float(measurement.get("bootstrap_ci", 0.95))
-    rng = np.random.default_rng(cli_seed + 60_000)
+    rng_iid = np.random.default_rng(cli_seed + 60_000)
+    rng_cluster = np.random.default_rng(cli_seed + 70_000)
     return {
         "stiffness": compute_axis_metrics(
             axis="stiffness",
@@ -861,7 +956,8 @@ def compute_metrics(
             length_m=float(base_params.length_m),
             bootstrap_replicates=bootstrap_replicates,
             bootstrap_level=bootstrap_level,
-            rng=rng,
+            rng_iid=rng_iid,
+            rng_cluster=rng_cluster,
         ),
         "friction": compute_axis_metrics(
             axis="friction",
@@ -873,9 +969,17 @@ def compute_metrics(
             length_m=float(base_params.length_m),
             bootstrap_replicates=bootstrap_replicates,
             bootstrap_level=bootstrap_level,
-            rng=rng,
+            rng_iid=rng_iid,
+            rng_cluster=rng_cluster,
         ),
     }
+
+
+def format_ci_short(ci: dict[str, Any] | None) -> str:
+    if not ci or ci.get("low") is None:
+        return "n/a"
+    return f"[{float(ci['low']):.3g}, {float(ci['high']):.3g}]"
+
 
 
 def plot_axis_distributions(axis: str, axis_metrics: dict[str, Any], output_path: Path) -> None:
@@ -897,10 +1001,13 @@ def plot_axis_distributions(axis: str, axis_metrics: dict[str, Any], output_path
         bins = np.linspace(0.0, high * 1.05, 22)
         ax.hist(within, bins=bins, alpha=0.62, label="within-seed floor", color="#4c78a8")
         ax.hist(between, bins=bins, alpha=0.62, label="between conditions", color="#f58518")
-        ci = metrics["cohens_d_bootstrap_ci"]
+        iid_ci = metrics.get("bootstrap_ci_95_iid")
+        cluster_ci = metrics.get("bootstrap_ci_95_cluster")
         d_value = metrics["cohens_d"]
-        ci_text = "CI unavailable" if ci["low"] is None else f"CI [{ci['low']:.3g}, {ci['high']:.3g}]"
-        ax.set_title(f"{axis} {key}\nd={d_value:.3g}, {ci_text}")
+        ax.set_title(
+            f"{axis} {key}\nd={d_value:.3g}, iid {format_ci_short(iid_ci)}\n"
+            f"cluster {format_ci_short(cluster_ci)}"
+        )
         ax.set_xlabel("length-normalized Chamfer")
         ax.set_ylabel("count")
         ax.legend(fontsize=8)
@@ -939,6 +1046,13 @@ def format_float(value: Any, digits: int = 6) -> str:
         return "n/a"
     return f"{number:.{digits}g}"
 
+def format_ci(ci: dict[str, Any] | None) -> str:
+    if not ci or ci.get("low") is None:
+        return "n/a"
+    return f"[{format_float(ci['low'])}, {format_float(ci['high'])}]"
+
+
+
 
 def build_report(metrics_payload: dict[str, Any], plot_paths: dict[str, Path]) -> str:
     lines: list[str] = []
@@ -948,6 +1062,10 @@ def build_report(metrics_payload: dict[str, Any], plot_paths: dict[str, Path]) -
     lines.append(f"- config: `{metrics_payload['config_path']}`")
     lines.append(f"- stdout log: `{metrics_payload['outputs']['stdout_log']}`")
     lines.append(f"- wall_time_s: {format_float(metrics_payload['wall_time_s'], 4)}")
+    if metrics_payload.get("stats_recomputed_at"):
+        lines.append(f"- stats_recomputed_at: {metrics_payload['stats_recomputed_at']}")
+    if metrics_payload.get("stats_recomputed_at_commit"):
+        lines.append(f"- stats_recomputed_at_commit: {metrics_payload['stats_recomputed_at_commit']}")
     lines.append(f"- batching: {metrics_payload['batching']['design']}")
     lines.append("- grasp realism: off for this controlled measurement; p/delta/lift fixture is fixed.")
     lines.append("")
@@ -960,23 +1078,40 @@ def build_report(metrics_payload: dict[str, Any], plot_paths: dict[str, Path]) -
     lines.append(f"- init seeds per sequence: {design['init_seeds']}")
     lines.append(f"- stiffness multipliers: {design['stiffness_multipliers']}")
     lines.append(f"- friction multipliers: {design['friction_multipliers']} (G1-subordinate reference)")
+    first_pair = next(iter(metrics_payload["axes"]["stiffness"]["pairwise"].values()))
+    bootstrap_reps = first_pair["bootstrap_ci_95_iid"]["replicates"]
+    lines.append(
+        "- Bootstrap CIs: i.i.d. resamples distance records; sequence-cluster resamples the "
+        f"20 sequence ids with replacement and includes all distances for drawn sequences "
+        f"({bootstrap_reps} reps each; rng seeds cli_seed+60000 and cli_seed+70000)."
+    )
+    lines.append(
+        "- Negative d encodes between-condition distance below the within-condition noise floor "
+        "in pooled-standard-deviation units."
+    )
     lines.append("")
 
     for axis, title in (("stiffness", "Stiffness block"), ("friction", "Friction reference block")):
         axis_metrics = metrics_payload["axes"][axis]
         lines.append(f"## {title}")
         lines.append("")
-        lines.append("| pair | between mean | within-floor mean | d | bootstrap CI | note |")
-        lines.append("| --- | ---: | ---: | ---: | --- | --- |")
+        lines.append(
+            "| pair | between mean | within-floor mean | d | i.i.d. bootstrap CI | "
+            "sequence-cluster bootstrap CI | note |"
+        )
+        lines.append("| --- | ---: | ---: | ---: | --- | --- | --- |")
         for key, pair_metrics in axis_metrics["pairwise"].items():
-            between_summary = pair_metrics["between_condition_distances"]["summary"]
-            within_summary = pair_metrics["within_condition_noise_floor"]["summary"]
-            ci = pair_metrics["cohens_d_bootstrap_ci"]
-            ci_text = "n/a" if ci["low"] is None else f"[{format_float(ci['low'])}, {format_float(ci['high'])}]"
+            between = pair_metrics["between_condition_distances"]
+            within = pair_metrics["within_condition_noise_floor"]
+            between_summary = between["summary"]
+            within_summary = within["summary"]
+            iid_ci = pair_metrics["bootstrap_ci_95_iid"]
+            cluster_ci = pair_metrics["bootstrap_ci_95_cluster"]
             lines.append(
                 f"| {key} | {format_float(between_summary['mean'])} | "
                 f"{format_float(within_summary['mean'])} | {format_float(pair_metrics['cohens_d'])} | "
-                f"{ci_text} | d={format_float(pair_metrics['cohens_d'])}, 임계 판단은 보류 |"
+                f"{format_ci(iid_ci)} | {format_ci(cluster_ci)} | "
+                f"n_between={between_summary['n']}; n_within={within_summary['n']} |"
             )
         lines.append("")
         lines.append("Within-condition floors:")
@@ -995,6 +1130,44 @@ def build_report(metrics_payload: dict[str, Any], plot_paths: dict[str, Path]) -
     lines.append("")
     lines.append(f"- stiffness distributions: `{plot_paths['stiffness']}`")
     lines.append(f"- friction distributions: `{plot_paths['friction']}`")
+    lines.append("")
+    lines.append("## This-run convergence")
+    lines.append("")
+    batch_summaries = metrics_payload.get("batching", {}).get("batch_summaries", [])
+    reset_rates = [
+        float(summary["reset_converged_rate"])
+        for summary in batch_summaries
+        if summary.get("reset_converged_rate") is not None
+    ]
+    primitive_rates = [
+        float(step["converged_rate"])
+        for summary in batch_summaries
+        for step in summary.get("step_summaries", [])
+        if step.get("converged_rate") is not None
+    ]
+    if reset_rates:
+        if min(reset_rates) == max(reset_rates):
+            lines.append(f"- reset_converged_rate: {reset_rates[0]:.1f} across {len(reset_rates)} batches.")
+        else:
+            lines.append(
+                f"- reset_converged_rate: range=[{format_float(min(reset_rates))}, "
+                f"{format_float(max(reset_rates))}], mean={format_float(np.mean(reset_rates))} "
+                f"across {len(reset_rates)} batches."
+            )
+    else:
+        lines.append("- reset_converged_rate: n/a.")
+    if primitive_rates:
+        lines.append(
+            f"- per-primitive converged_rate: range=[{format_float(min(primitive_rates))}, "
+            f"{format_float(max(primitive_rates))}], mean={format_float(np.mean(primitive_rates))} "
+            f"across {len(primitive_rates)} primitive summaries."
+        )
+    else:
+        lines.append("- per-primitive converged_rate: n/a.")
+    lines.append(
+        "- Unsettled final shapes add settle-noise to both between-condition and "
+        "within-condition distance distributions."
+    )
     lines.append("")
     lines.append("## Physics-quality context")
     lines.append("")
@@ -1025,6 +1198,205 @@ def summarize_sequence_counts(sequences: Sequence[SequenceFixture]) -> dict[str,
     for sequence in sequences:
         counts[sequence.init_shape] += 1
     return counts
+
+def recompute_axis_metrics_from_stored_distances(
+    *,
+    axis: str,
+    stored_axis_metrics: dict[str, Any],
+    sequences: Sequence[SequenceFixture],
+    conditions: Sequence[float],
+    pairs: Sequence[tuple[float, float]],
+    bootstrap_replicates: int,
+    bootstrap_level: float,
+    rng_iid: np.random.Generator,
+    rng_cluster: np.random.Generator,
+) -> dict[str, Any]:
+    pairwise: dict[str, Any] = {}
+    sequence_ids = [sequence.id for sequence in sequences]
+    iid_ci_key = bootstrap_ci_key(bootstrap_level, "iid")
+    cluster_ci_key = bootstrap_ci_key(bootstrap_level, "cluster")
+
+    stored_pairwise = stored_axis_metrics.get("pairwise", {})
+    for pair in pairs:
+        key = pair_key(pair)
+        if key not in stored_pairwise:
+            raise ValueError(f"stored {axis} metrics missing pair {key}")
+        stored_pair = stored_pairwise[key]
+        between_records = stored_pair["between_condition_distances"]["values"]
+        within_records = stored_pair["within_condition_noise_floor"]["values"]
+        between_values = [float(record["distance"]) for record in between_records]
+        within_values = [float(record["distance"]) for record in within_records]
+        a_condition, b_condition = pair
+        pairwise[key] = {
+            "condition_pair": [float(a_condition), float(b_condition)],
+            "between_condition_distances": {
+                "summary": describe_distribution(between_values),
+                "values": between_records,
+            },
+            "within_condition_noise_floor": {
+                "pooled_conditions": [float(a_condition), float(b_condition)],
+                "summary": describe_distribution(within_values),
+                "values": within_records,
+            },
+            "cohens_d": cohens_d(between_values, within_values),
+            iid_ci_key: bootstrap_d_ci(
+                between_values,
+                within_values,
+                replicates=bootstrap_replicates,
+                level=bootstrap_level,
+                rng=rng_iid,
+            ),
+            cluster_ci_key: bootstrap_d_ci_cluster(
+                between_records,
+                within_records,
+                sequence_ids=sequence_ids,
+                replicates=bootstrap_replicates,
+                level=bootstrap_level,
+                rng=rng_cluster,
+            ),
+        }
+
+    stored_floors = stored_axis_metrics.get("within_condition_noise_floors", {})
+    within_condition_noise_floors: dict[str, Any] = {}
+    for condition in conditions:
+        label = condition_label(condition)
+        if label not in stored_floors:
+            raise ValueError(f"stored {axis} metrics missing within-condition floor {label}")
+        records = stored_floors[label]["values"]
+        values = [float(record["distance"]) for record in records]
+        within_condition_noise_floors[label] = {
+            "summary": describe_distribution(values),
+            "values": records,
+        }
+
+    return {
+        "conditions": [float(condition) for condition in conditions],
+        "within_condition_noise_floors": within_condition_noise_floors,
+        "pairwise": pairwise,
+    }
+
+
+def recompute_metrics_from_stored_distances(
+    *,
+    config: dict[str, Any],
+    stored_payload: dict[str, Any],
+    sequences: Sequence[SequenceFixture],
+    stiffness_conditions: Sequence[float],
+    friction_conditions: Sequence[float],
+    pairs: Sequence[tuple[float, float]],
+    cli_seed: int,
+) -> dict[str, Any]:
+    measurement = measurement_config(config)
+    bootstrap_replicates = int(measurement.get("bootstrap_replicates", 5000))
+    bootstrap_level = float(measurement.get("bootstrap_ci", 0.95))
+    rng_iid = np.random.default_rng(cli_seed + 60_000)
+    rng_cluster = np.random.default_rng(cli_seed + 70_000)
+    stored_axes = stored_payload["axes"]
+    return {
+        "stiffness": recompute_axis_metrics_from_stored_distances(
+            axis="stiffness",
+            stored_axis_metrics=stored_axes["stiffness"],
+            sequences=sequences,
+            conditions=stiffness_conditions,
+            pairs=pairs,
+            bootstrap_replicates=bootstrap_replicates,
+            bootstrap_level=bootstrap_level,
+            rng_iid=rng_iid,
+            rng_cluster=rng_cluster,
+        ),
+        "friction": recompute_axis_metrics_from_stored_distances(
+            axis="friction",
+            stored_axis_metrics=stored_axes["friction"],
+            sequences=sequences,
+            conditions=friction_conditions,
+            pairs=pairs,
+            bootstrap_replicates=bootstrap_replicates,
+            bootstrap_level=bootstrap_level,
+            rng_iid=rng_iid,
+            rng_cluster=rng_cluster,
+        ),
+    }
+
+
+def stats_only_result_payload(
+    *,
+    config: dict[str, Any],
+    config_text: str,
+    config_path: Path,
+    cli_seed: int | None,
+) -> dict[str, Any]:
+    paths = output_paths(config)
+    if not paths["metrics_json"].exists():
+        raise FileNotFoundError(f"stats-only requires existing metrics JSON at {paths['metrics_json']}")
+    stored_payload = json.loads(paths["metrics_json"].read_text(encoding="utf-8"))
+    stats_seed = int(stored_payload.get("cli_seed", 0) if cli_seed is None else cli_seed)
+
+    base_params = params_from_config(config)
+    sequences = parse_sequences(config, n_vertices=base_params.n_segments)
+    init_seeds, stiffness_conditions, friction_conditions, pairs = measurement_lists(config)
+    axes_metrics = recompute_metrics_from_stored_distances(
+        config=config,
+        stored_payload=stored_payload,
+        sequences=sequences,
+        stiffness_conditions=stiffness_conditions,
+        friction_conditions=friction_conditions,
+        pairs=pairs,
+        cli_seed=stats_seed,
+    )
+    physics_context = read_physics_quality_context(paths["dm_stats_json"])
+
+    plot_axis_distributions("stiffness", axes_metrics["stiffness"], paths["stiffness_plot_png"])
+    plot_axis_distributions("friction", axes_metrics["friction"], paths["friction_plot_png"])
+
+    metrics_payload = dict(stored_payload)
+    metrics_payload.update(
+        {
+            "config_path": str(config_path),
+            "config_sha256": __import__("hashlib").sha256(config_text.encode("utf-8")).hexdigest(),
+            "cli_seed": int(stats_seed),
+            "base_rope_params": asdict(base_params),
+            "stiffness_bases": stiffness_bases(),
+            "axes": axes_metrics,
+            "outputs": {
+                "metrics_json": str(paths["metrics_json"]),
+                "stiffness_plot_png": str(paths["stiffness_plot_png"]),
+                "friction_plot_png": str(paths["friction_plot_png"]),
+                "report_md": str(paths["report_md"]),
+                "stdout_log": str(paths["stdout_log"]),
+            },
+            "physics_quality_context": physics_context,
+            "stats_recomputed_at": utc_now(),
+            "stats_recomputed_at_commit": get_git_commit_hash(Path.cwd()),
+        }
+    )
+    metrics_payload["measurement_design"] = {
+        **metrics_payload.get("measurement_design", {}),
+        "sequence_count": len(sequences),
+        "sequence_counts_by_shape": summarize_sequence_counts(sequences),
+        "fixture_generation_seed": measurement_config(config).get("fixture_generation_seed"),
+        "init_seeds": [int(seed) for seed in init_seeds],
+        "stiffness_multipliers": [float(value) for value in stiffness_conditions],
+        "friction_multipliers": [float(value) for value in friction_conditions],
+        "condition_pairs": [[float(a), float(b)] for a, b in pairs],
+        "grasp_realism": False,
+        "grasp_realism_choice": "off: controlled stiffness/friction effect-size measurement avoids grasp noise confounding",
+        "runs_per_axis": len(sequences) * len(init_seeds) * len(stiffness_conditions),
+    }
+
+    write_json(paths["metrics_json"], metrics_payload)
+    report = build_report(
+        metrics_payload,
+        {"stiffness": paths["stiffness_plot_png"], "friction": paths["friction_plot_png"]},
+    )
+    paths["report_md"].parent.mkdir(parents=True, exist_ok=True)
+    paths["report_md"].write_text(report, encoding="utf-8")
+    print(f"stats_only_source {paths['metrics_json']}")
+    print(f"wrote metrics {paths['metrics_json']}")
+    print(f"wrote report {paths['report_md']}")
+    print(f"wrote plots {paths['stiffness_plot_png']} {paths['friction_plot_png']}")
+    return metrics_payload
+
+
 
 
 def final_result_payload(
@@ -1155,8 +1527,22 @@ def main() -> None:
     config_path = Path(args.config)
     config, config_text = load_config(config_path)
     paths = output_paths(config)
+    simulation_seed = 0 if args.seed is None else int(args.seed)
     with tee_stdout(paths["stdout_log"]):
-        final_result_payload(config=config, config_text=config_text, config_path=config_path, cli_seed=int(args.seed))
+        if args.stats_only:
+            stats_only_result_payload(
+                config=config,
+                config_text=config_text,
+                config_path=config_path,
+                cli_seed=None if args.seed is None else int(args.seed),
+            )
+        else:
+            final_result_payload(
+                config=config,
+                config_text=config_text,
+                config_path=config_path,
+                cli_seed=simulation_seed,
+            )
 
 
 if __name__ == "__main__":

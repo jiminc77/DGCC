@@ -624,13 +624,19 @@
               }
             ]
           },
-          "cohens_d": -0.46069933339431757,
-          "cohens_d_bootstrap_ci": {
+          "bootstrap_ci_95_cluster": {
+            "high": -0.1967982913766256,
+            "level": 0.95,
+            "low": -0.8444335353389548,
+            "replicates": 5000
+          },
+          "bootstrap_ci_95_iid": {
             "high": -0.18063806270812457,
             "level": 0.95,
             "low": -0.742106449182663,
             "replicates": 5000
           },
+          "cohens_d": -0.46069933339431757,
           "condition_pair": [
             0.5,
             1.0
@@ -2473,13 +2479,19 @@
               }
             ]
           },
-          "cohens_d": -0.4120762946695105,
-          "cohens_d_bootstrap_ci": {
+          "bootstrap_ci_95_cluster": {
+            "high": -0.20228990654038012,
+            "level": 0.95,
+            "low": -0.7010185050173011,
+            "replicates": 5000
+          },
+          "bootstrap_ci_95_iid": {
             "high": -0.16147407700530228,
             "level": 0.95,
             "low": -0.6475759505127001,
             "replicates": 5000
           },
+          "cohens_d": -0.4120762946695105,
           "condition_pair": [
             0.5,
             2.0
@@ -4322,13 +4334,19 @@
               }
             ]
           },
-          "cohens_d": -0.5156301449501605,
-          "cohens_d_bootstrap_ci": {
+          "bootstrap_ci_95_cluster": {
+            "high": -0.25522124292679615,
+            "level": 0.95,
+            "low": -0.8474868193830427,
+            "replicates": 5000
+          },
+          "bootstrap_ci_95_iid": {
             "high": -0.2677730468382267,
             "level": 0.95,
             "low": -0.7576247363154053,
             "replicates": 5000
           },
+          "cohens_d": -0.5156301449501605,
           "condition_pair": [
             1.0,
             2.0
@@ -8030,13 +8048,19 @@
               }
             ]
           },
-          "cohens_d": 0.061128750108710904,
-          "cohens_d_bootstrap_ci": {
+          "bootstrap_ci_95_cluster": {
+            "high": 0.37329179040720284,
+            "level": 0.95,
+            "low": -0.29236816349620237,
+            "replicates": 5000
+          },
+          "bootstrap_ci_95_iid": {
             "high": 0.36970655948701975,
             "level": 0.95,
             "low": -0.26492702081327146,
             "replicates": 5000
           },
+          "cohens_d": 0.061128750108710904,
           "condition_pair": [
             0.5,
             1.0
@@ -9879,13 +9903,19 @@
               }
             ]
           },
-          "cohens_d": 0.23585561299750468,
-          "cohens_d_bootstrap_ci": {
+          "bootstrap_ci_95_cluster": {
+            "high": 0.45666611408358615,
+            "level": 0.95,
+            "low": 0.04094459274378634,
+            "replicates": 5000
+          },
+          "bootstrap_ci_95_iid": {
             "high": 0.5575557955220176,
             "level": 0.95,
             "low": -0.05683081156841383,
             "replicates": 5000
           },
+          "cohens_d": 0.23585561299750468,
           "condition_pair": [
             0.5,
             2.0
@@ -11728,13 +11758,19 @@
               }
             ]
           },
-          "cohens_d": -0.03351250412000869,
-          "cohens_d_bootstrap_ci": {
+          "bootstrap_ci_95_cluster": {
+            "high": 0.16820506487750356,
+            "level": 0.95,
+            "low": -0.2731234364634037,
+            "replicates": 5000
+          },
+          "bootstrap_ci_95_iid": {
             "high": 0.2700862396311347,
             "level": 0.95,
             "low": -0.3173096143368532,
             "replicates": 5000
           },
+          "cohens_d": -0.03351250412000869,
           "condition_pair": [
             1.0,
             2.0
@@ -15187,7 +15223,7 @@
   "cli_seed": 42,
   "commit_hash": "d595fa8d19baaa26ebcdc8ee5f2acd4a1b2a8ce0",
   "config_path": "configs/gate_g1.yaml",
-  "config_sha256": "0537b88ea879e4e3b2ef8ce1433ffb2f5358b06a79c81730541adbc0133dbc4b",
+  "config_sha256": "346f7db5a3ef98df89ad4974a56d5a3883c3382435c081b7dcdd2f7489633adf",
   "created_at": "2026-07-03T05:50:47Z",
   "gate": "G1",
   "measurement_design": {
@@ -15256,6 +15292,8 @@
     "record_count": 5056
   },
   "schema_version": 1,
+  "stats_recomputed_at": "2026-07-03T06:20:29Z",
+  "stats_recomputed_at_commit": "6da316a232c2f602c82ddeba630d5c535b9795b1",
   "stiffness_bases": {
     "bend_base_E": 100000.0,
     "mu_k_ratio": 0.8,

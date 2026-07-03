@@ -62,3 +62,4 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 - 2026-07-03T05:30:21+00:00 — M5R2 gate 후속: 비대칭 flip 단일-결정 잠금 테스트 추가, P0.md M5 Exit 체크리스트 완료 표기 (architect P3 2건).
 - 2026-07-03T05:54:59+00:00 — M6 start (G014, G007 대체): G1 stiffness 파일럿.
 - 2026-07-03T05:54:59+00:00 — M6 측정 완료: 20 고정 시퀀스 × seed 3 × bend/twist {×0.5,×1,×2} (+friction 부속), per-env setter 배치(72env, 7.3분). Cohen's d (stiffness): 0.5v1=0.061, 1v2=-0.034, 0.5v2=0.236 — 전 구간 95% CI가 0 포함, between≈within noise floor. friction: d=-0.41~-0.52 (CI 0 제외, 음수). 판단 문구 없음 — 사람 판정 대기. grasp realism off (교란 제거, config 명시). 소성 미활성(검색 확인). tests 50 passed.
+- 2026-07-03T06:24:49+00:00 — M6 gate fixes: sequence-cluster bootstrap 병기(20 seq 재표집; stiffness 0.5v2 cluster CI [0.041,0.457]로 0 제외 — iid에선 포함; friction은 양쪽 모두 0 제외 음수), 본 run settle 수렴 사실(reset 1.0, per-primitive 0.58–0.97) 리포트 명기, 음수 d 정의 1줄, dead knob 제거, --stats-only 재계산 경로 (raw 데이터/d 불변, sha 검증).

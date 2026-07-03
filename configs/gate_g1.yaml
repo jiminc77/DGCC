@@ -33,7 +33,6 @@ measurement:
   settle_max_steps: 5000
   bootstrap_replicates: 5000
   bootstrap_ci: 0.95
-  max_mixed_batch_envs: 90
   timing_probe:
     enabled: true
     axis: stiffness
