@@ -42,7 +42,7 @@ from dgcc.tasks.domain import (
     SETTLE_MAX_STEPS,
     p1_rope_params,
 )
-from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
+from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, is_nonfinite_error
 from dgcc.tasks.t1 import sample_t1_goal
 from dgcc.tasks.t2 import load_t2_split
 from dgcc.utils.meta import get_git_commit_hash
@@ -200,7 +200,9 @@ class TrainingRun:
 
         try:
             record = self.runner.step(p, delta, lift, rng=self.rng)
-        except FloatingPointError as exc:
+        except (FloatingPointError, ValueError, RuntimeError) as exc:
+            if not is_nonfinite_error(exc):
+                raise
             self.full_rebuilds += 1
             print(
                 f"round_recovery rebuild={self.full_rebuilds} error={exc} "
@@ -290,7 +292,9 @@ class TrainingRun:
             try:
                 result = self.deterministic_eval()
                 break
-            except FloatingPointError as exc:
+            except (FloatingPointError, ValueError, RuntimeError) as exc:
+                if not is_nonfinite_error(exc):
+                    raise
                 self.full_rebuilds += 1
                 print(
                     f"eval_recovery rebuild={self.full_rebuilds} error={exc} "

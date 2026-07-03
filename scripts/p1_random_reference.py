@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from dgcc.envs.dlolab import DLOLabEnv
 from dgcc.rl.evaluation import evaluate_episodes
 from dgcc.tasks.domain import P1_N_SEGMENTS, RewardConstants, SETTLE_MAX_STEPS, p1_rope_params
-from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, random_policy_actions
+from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, random_policy_actions, is_nonfinite_error
 from dgcc.tasks.t1 import sample_t1_goal
 from dgcc.tasks.t2 import load_t2_split
 from dgcc.utils.meta import get_git_commit_hash
@@ -125,7 +125,9 @@ def main() -> int:
                 while True:
                     try:
                         return eval_fn(state["runner"])
-                    except FloatingPointError as exc:
+                    except (FloatingPointError, ValueError, RuntimeError) as exc:
+                        if not is_nonfinite_error(exc):
+                            raise
                         state["rebuilds"] += 1
                         print(
                             f"block_recovery rebuild={state['rebuilds']} error={exc} "

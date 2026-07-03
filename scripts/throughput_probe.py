@@ -34,7 +34,7 @@ from dgcc.tasks.domain import (
     SETTLE_VEL_THRESHOLD,
     p1_rope_params,
 )
-from dgcc.tasks.episode import BatchedEpisodeRunner, random_policy_actions
+from dgcc.tasks.episode import BatchedEpisodeRunner, random_policy_actions, is_nonfinite_error
 from dgcc.tasks.t2 import load_t2_split
 from dgcc.utils.meta import get_git_commit_hash
 
@@ -162,7 +162,9 @@ def probe_candidate(
         round_start = time.perf_counter()
         try:
             return one_round(), time.perf_counter() - round_start
-        except FloatingPointError as exc:
+        except (FloatingPointError, ValueError, RuntimeError) as exc:
+            if not is_nonfinite_error(exc):
+                raise
             full_rebuilds += 1
             print(
                 f"round_recovery n_envs={n_envs} rebuild={full_rebuilds} "

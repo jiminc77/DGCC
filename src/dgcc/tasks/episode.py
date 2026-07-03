@@ -50,6 +50,21 @@ GoalFn = Callable[[int, np.ndarray, np.random.Generator], DualGoal]
 MAX_RESEED_ATTEMPTS = 3
 
 
+def is_nonfinite_error(exc: BaseException) -> bool:
+    """Classify NaN-covenant exceptions from the simulator layer.
+
+    The adapter surfaces non-finite rope state as ``FloatingPointError``
+    (finiteness asserts) or ``ValueError`` whose message mentions
+    ``non-finite`` (placement input validation on the failed-grasp
+    restoration path).  P0's collector caught the same family
+    (FloatingPointError/ValueError/RuntimeError) before full rebuilds.
+    """
+
+    if isinstance(exc, FloatingPointError):
+        return True
+    return isinstance(exc, (ValueError, RuntimeError)) and "non-finite" in str(exc)
+
+
 def build_batch_init_vertices(
     params: RopeParams,
     *,
@@ -221,7 +236,9 @@ class BatchedEpisodeRunner:
                 max_steps=self.config.settle_max_steps,
                 rng=rng,
             )
-        except FloatingPointError as exc:
+        except (FloatingPointError, ValueError, RuntimeError) as exc:
+            if not is_nonfinite_error(exc):
+                raise
             return self._handle_nan_incident(active_before, reason=f"env raise: {exc}")
 
         x_after = np.asarray(result["X_after"], dtype=float)

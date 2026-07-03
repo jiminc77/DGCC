@@ -473,3 +473,29 @@ def test_nan_covenant_covers_reset_settle_path() -> None:
     # both settle attempts used the immutable budget
     assert all(call["max_steps"] == SETTLE_MAX_STEPS for call in env.settle_calls)
     assert len([c for c in env.settle_calls if c["method"] == "light_reset"]) == 2
+
+
+def test_nan_covenant_catches_nonfinite_valueerror() -> None:
+    # The failed-grasp restoration path surfaces contamination as
+    # ValueError("vertices contain non-finite values") — the covenant must
+    # treat it identically to FloatingPointError (P0 collector precedent).
+    runner, env = make_runner(n_envs=2)
+    goal = straight_goal()
+    runner.begin_episodes(seed=44, goals=[goal] * 2)
+
+    original = env.step_primitive_batch
+
+    def raising_step(*args, **kwargs):
+        env.settle_calls.append({"method": "step_primitive_batch", "vel_threshold": kwargs["vel_threshold"], "max_steps": kwargs["max_steps"]})
+        env.state[1] = np.nan
+        raise ValueError("vertices contain non-finite values")
+
+    env.step_primitive_batch = raising_step  # type: ignore[method-assign]
+    rng = np.random.default_rng(5)
+    p, deltas, lifts = random_policy_actions(rng, n_envs=2, n_vertices=32)
+    record = runner.step(p, deltas, lifts, rng=rng)
+    assert record["discarded"] is True
+    assert runner.nan_incidents >= 1
+    env.step_primitive_batch = original  # type: ignore[method-assign]
+    follow_up = runner.step(p, deltas, lifts, rng=rng)
+    assert follow_up["discarded"] is False
