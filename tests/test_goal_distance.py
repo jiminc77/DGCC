@@ -252,3 +252,20 @@ def test_c_g_exactly_zero_for_exact_goal_curve_both_anchor_modes() -> None:
             # Anchor channels carry only centroid-of-resample interpolation noise
             # (~1e-6 * L floor), not a path asymmetry.
             assert np.abs(vector[-3:]).max() < 1.0e-5 * length, (anchor_mode, length, np.abs(vector[-3:]).max())
+
+
+def test_convention_uses_single_x_before_decision_for_asymmetric_after() -> None:
+    # Locks the M5R2 single-decision semantics: X_after must reuse X_before's
+    # flip even when X_after's own independent minimization would disagree.
+    from dgcc.goals import canonical_shape_flip, flip_consistent_shape_measurements
+
+    goal = make_goal("s_curve", np.array([0.2, -0.1, 0.04]))
+    x_before = goal_curve(goal, 1.0) + np.array([0.005, -0.003, 0.0])
+    x_after = goal_curve(goal, 1.0)[::-1].copy() + np.array([0.01, 0.02, 0.0])
+
+    flip_before = canonical_shape_flip(x_before, goal, 1.0)
+    flip_after_independent = canonical_shape_flip(x_after, goal, 1.0)
+    assert flip_before != flip_after_independent  # asymmetric by construction
+
+    measurement = flip_consistent_shape_measurements(x_before, x_after, goal, 1.0)
+    assert measurement["flip"] == flip_before
