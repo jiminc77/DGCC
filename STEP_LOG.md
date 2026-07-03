@@ -64,3 +64,9 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 - 2026-07-03T05:54:59+00:00 — M6 측정 완료: 20 고정 시퀀스 × seed 3 × bend/twist {×0.5,×1,×2} (+friction 부속), per-env setter 배치(72env, 7.3분). Cohen's d (stiffness): 0.5v1=0.061, 1v2=-0.034, 0.5v2=0.236 — 전 구간 95% CI가 0 포함, between≈within noise floor. friction: d=-0.41~-0.52 (CI 0 제외, 음수). 판단 문구 없음 — 사람 판정 대기. grasp realism off (교란 제거, config 명시). 소성 미활성(검색 확인). tests 50 passed.
 - 2026-07-03T06:24:49+00:00 — M6 gate fixes: sequence-cluster bootstrap 병기(20 seq 재표집; stiffness 0.5v2 cluster CI [0.041,0.457]로 0 제외 — iid에선 포함; friction은 양쪽 모두 0 제외 음수), 본 run settle 수렴 사실(reset 1.0, per-primitive 0.58–0.97) 리포트 명기, 음수 d 정의 1줄, dead knob 제거, --stats-only 재계산 경로 (raw 데이터/d 불변, sha 검증).
 - 2026-07-03T06:27:46+00:00 — M6 HUMAN GATE 도달: 산출물 완성(g1_effect_size.json, g1_report.md, 분포 플롯 2, 로그), 게이트 lanes all-CLEAR/APPROVE. human_blocked 정지 — 판정 대기. issue #7은 판정 후 처리.
+
+## M6/G1 HUMAN 판정 — 정본 (issue #7 코멘트, jiminc77, 2026-07-03T07:01:09Z)
+
+판정: **(b) 채택 — stiffness 주 OOD 축 강등, length(+discretization) 중심 재편.** friction 주 축 승격 없음. (c) springback 미채택(후속 옵션으로만 기록). 소성 활성화 기각(A2 상충). G1 게이트 종료 — evidence 코멘트(4873586721) 후 issue #7 close 완료.
+
+M7 반영 지시 4건: (1) OOD 표 재편 — primary=length(+discretization), 보조=initial/goal shape 분포, stiffness·friction=reference-only(appendix); (2) ε_succ 확정 전 동일 초기상태 반복 실행 분산(순수 settle/실행 노이즈) 별도 산출; (3) settle 예산 sweep(5000/10000/20000, 소표본, REPORT-ONLY — 임계 1e-3 변경 아님, max_steps 예산 증액 검토 안건) 상정; (4) g1 효과크기 init-템플릿별 분해 부록(재계산만). 방법론적 관찰 논문 기록: quasi-static pick-and-place regime에서 탄성/마찰 파라미터 OOD 전이 주장은 그 자체로 검증력 없음.
