@@ -851,6 +851,15 @@ class DLOLabEnv(DLOEnvBase):
         zeros = np.zeros_like(batched)
         self.rod_entity.set_position(batched)
         self.rod_entity.set_velocity(zeros)
+        # Reset the gripper to a safe finite pose as well: a primitive that
+        # failed with non-finite rope state can leave the gripper at NaN
+        # coordinates (it is positioned from raw vertices at grasp time), and
+        # a NaN gripper re-poisons every subsequent attach/move — the
+        # persistence mechanism behind consecutive covenant discards observed
+        # in the P1-M2 smoke.
+        safe_gripper = np.zeros((self.n_envs, 3), dtype=float)
+        safe_gripper[:, 2] = LIFT_HEIGHTS["high"]
+        self._set_gripper_positions(safe_gripper)
         self._reinitialize_edge_state(batched)
         self._step_scene()
 
