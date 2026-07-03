@@ -165,15 +165,22 @@ class TrainingRun:
         assert self.runner is not None
         self.episode_index += 1
         if self.task == "t2":
-            picks = self.rng.integers(0, len(self.train_goals), size=self.n_envs)
-            goals = [self.train_goals[i] for i in picks]
             self.runner.begin_episodes(
-                seed=self.seed, episode_index=self.episode_index, goals=goals
+                seed=self.seed,
+                episode_index=self.episode_index,
+                goal_pool=self.train_goals,
+                auto_reset=True,
             )
         else:
             self.runner.begin_episodes(
-                seed=self.seed, episode_index=self.episode_index, goal_fn=self._goal_fn
+                seed=self.seed,
+                episode_index=self.episode_index,
+                goal_fn=self._goal_fn,
+                auto_reset=True,
             )
+        self.refresh_goal_curves()
+
+    def refresh_goal_curves(self) -> None:
         self.goal_curves = np.stack(
             [goal_curve(g, P1_LENGTH_M) for g in self.runner.goals]
         )
@@ -184,8 +191,6 @@ class TrainingRun:
         """One batched primitive + buffer insertion. Returns active count."""
 
         assert self.runner is not None and self.env is not None
-        if self.runner.all_done():
-            self.begin_training_episodes()
 
         X = self.env.get_centerline_batch()
         p, delta, lift, info = self.agent.select_actions(
@@ -230,6 +235,8 @@ class TrainingRun:
                 done=record["done"][active],
             )
             self.transitions += count
+        # Auto-reset may have refreshed goals for finished envs.
+        self.refresh_goal_curves()
         return count
 
     def train_updates(self, n_updates: int) -> None:

@@ -499,3 +499,26 @@ def test_nan_covenant_catches_nonfinite_valueerror() -> None:
     env.step_primitive_batch = original  # type: ignore[method-assign]
     follow_up = runner.step(p, deltas, lifts, rng=rng)
     assert follow_up["discarded"] is False
+
+
+def test_auto_reset_keeps_all_envs_active() -> None:
+    runner, env = make_runner(n_envs=3, approach_fraction=1.0)
+    goal = straight_goal()
+    env.targets = np.stack([goal_curve(goal, LENGTH)] * 3)
+    runner.begin_episodes(seed=71, goal_fn=lambda i, x, r: goal, auto_reset=True)
+    rng = np.random.default_rng(6)
+
+    p, deltas, lifts = random_policy_actions(rng, n_envs=3, n_vertices=32)
+    first = runner.step(p, deltas, lifts, rng=rng)
+    # transition record reports the terminal step faithfully...
+    assert first["success"].all() and first["done"].all()
+    assert (first["t"] == 1).all()
+    assert runner.episodes_completed == 3 and runner.episodes_succeeded == 3
+    # ...but the runner immediately refreshed the finished episodes.
+    assert not runner.done.any()
+    assert (runner.t == 0).all()
+    # env state was re-placed with fresh init curves (targets moved them away
+    # from the goal, so D is large again) and the next step counts fully.
+    env.targets = None
+    second = runner.step(p, deltas, lifts, rng=rng)
+    assert second["active"].all()

@@ -136,6 +136,12 @@ class BatchedEpisodeRunner:
         self.incident_log: list[dict[str, Any]] = []
         self._base_seed = 0
         self._reseed_counter = 0
+        self._auto_reset = False
+        self._goal_fn: GoalFn | None = None
+        self._goal_pool: list[DualGoal] | None = None
+        self._episode_counter = 0
+        self.episodes_completed = 0
+        self.episodes_succeeded = 0
 
     # ------------------------------------------------------------------
     # Episode lifecycle
@@ -149,6 +155,8 @@ class BatchedEpisodeRunner:
         init_shapes: Sequence[str] = INIT_SHAPES,
         goals: Sequence[DualGoal] | None = None,
         goal_fn: GoalFn | None = None,
+        auto_reset: bool = False,
+        goal_pool: Sequence[DualGoal] | None = None,
     ) -> dict[str, Any]:
         """Reset all environments to seeded init states and assign goals.
 
@@ -157,8 +165,18 @@ class BatchedEpisodeRunner:
         called with the settled post-reset centerline of each environment.
         """
 
+        if goal_pool is not None and goals is None and goal_fn is None:
+            # Auto-reset pool mode (T2 training): initial goals drawn from the pool.
+            pool_rng = np.random.default_rng(np.random.SeedSequence([int(seed), 777]))
+            goals = [goal_pool[int(i)] for i in pool_rng.integers(0, len(goal_pool), self.n_envs)]
         if (goals is None) == (goal_fn is None):
-            raise ValueError("provide exactly one of goals or goal_fn")
+            raise ValueError("provide exactly one of goals or goal_fn (or goal_pool)")
+        self._auto_reset = bool(auto_reset)
+        self._goal_fn = goal_fn
+        self._goal_pool = list(goal_pool) if goal_pool is not None else None
+        self._episode_counter = int(episode_index)
+        if self._auto_reset and self._goal_fn is None and self._goal_pool is None:
+            raise ValueError("auto_reset requires goal_fn or goal_pool for episode refresh")
 
         self._base_seed = int(seed)
         vertices, shapes, curve_seeds = build_batch_init_vertices(
@@ -264,6 +282,13 @@ class BatchedEpisodeRunner:
         self.succeeded = self.succeeded | (active_before & successes)
         self.done = self.done | newly_done
         self.d_current = d_after
+        self.episodes_completed += int(newly_done.sum())
+        self.episodes_succeeded += int((active_before & successes).sum())
+
+        record_done = self.done.copy()
+        record_t = self.t.copy()
+        if self._auto_reset and self.done.any():
+            self._refresh_done_episodes()
 
         return {
             "discarded": False,
@@ -272,8 +297,8 @@ class BatchedEpisodeRunner:
             "d_before": d_before,
             "d_after": d_after,
             "success": successes,
-            "done": self.done.copy(),
-            "t": self.t.copy(),
+            "done": record_done,
+            "t": record_t,
             "X_before": np.asarray(result["X_before"], dtype=float),
             "X_after": x_after,
             "grasp_success": np.asarray(result["grasp_success"], dtype=bool),
@@ -286,6 +311,56 @@ class BatchedEpisodeRunner:
         """Return whether every environment's episode has terminated."""
 
         return bool(np.all(self.done))
+
+    # ------------------------------------------------------------------
+    # Auto-reset (vectorized training collection; evals keep batch semantics)
+    # ------------------------------------------------------------------
+
+    def _refresh_done_episodes(self) -> None:
+        """Replace finished environments with fresh episodes in place.
+
+        Keeps every environment active on every round (a batch that waits for
+        its slowest episode idles early-succeeding envs — pathologically, a
+        better policy would collect data SLOWER).  Episode protocol per env is
+        unchanged: T=10 horizon, early success stop, fresh seeded init curve
+        and fresh goal on reset.  Active environments keep their positions;
+        the shared settle after placement is a no-op for already-settled
+        ropes (quasi-static protocol).
+        """
+
+        done_envs = np.flatnonzero(self.done)
+        raw = np.asarray(self.env.get_centerline_raw_batch(), dtype=float)
+        replacement = raw.copy()
+        for env_idx in done_envs:
+            self._episode_counter += 1
+            shape = INIT_SHAPES[self._episode_counter % len(INIT_SHAPES)]
+            curve_seed = self._base_seed + 500_000 + self._episode_counter
+            replacement[env_idx] = analytic_init_centerline(self.params, shape, curve_seed)
+            self.init_shapes[env_idx] = shape
+
+        centerlines, _, reseeded = self._settle_finite(
+            replacement, reason="non-finite state during auto-reset settle"
+        )
+        for env_idx in np.union1d(done_envs, reseeded):
+            i = int(env_idx)
+            goal_rng = np.random.default_rng(
+                np.random.SeedSequence([self._base_seed, 31_337, self._episode_counter, i])
+            )
+            if self._goal_fn is not None:
+                self.goals[i] = self._goal_fn(i, centerlines[i], goal_rng)
+            else:
+                assert self._goal_pool is not None
+                self.goals[i] = self._goal_pool[int(goal_rng.integers(0, len(self._goal_pool)))]
+            self.t[i] = 0
+            self.done[i] = False
+            self.succeeded[i] = False
+        self.d_current = np.asarray(
+            [
+                distance_to_goal(centerlines[i], self.goals[i], self.length_m)
+                for i in range(self.n_envs)
+            ],
+            dtype=float,
+        )
 
     # ------------------------------------------------------------------
     # NaN covenant (global rule 6, env level)
