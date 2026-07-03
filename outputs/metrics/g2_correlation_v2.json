@@ -202,7 +202,7 @@
     }
   },
   "channel_layout_id": "axis-major-xyz-modes-0-7-v1",
-  "commit_hash": "71274ea0b586ba3fce6599360ccf8447a40e38bb",
+  "commit_hash": "3b6b0233cb640e4d9bdc0623112c5f021202ea7f",
   "component_a": {
     "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
     "delta_D_corr": {
@@ -303,7 +303,7 @@
   },
   "config_path": "configs/gate_g2.yaml",
   "config_text": "dataset:\n  h5: outputs/data/p0_random_transitions.h5\n  dm_stats_json: outputs/metrics/dm_stats.json\nfilters:\n  settle_max_steps: 5000\n  primary: grasp_success AND settle_steps != settle_max_steps\n  variants:\n    all_success: grasp_success\n    all_transitions: no filter\ngoal_sampling:\n  anchor_mode: centroid\n  templates: [straight, u_bend, s_curve]\n  # Uniform anchor box in rope-length units.  Each transition samples\n  # low * length_m <= anchor <= high * length_m in world coordinates.\n  anchor_box_unit_length:\n    low: [-1.25, -1.25, 0.02]\n    high: [1.25, 1.25, 0.18]\n  random_stream: numpy.default_rng(seed); one template index and one anchor per transition\nquantitative:\n  threshold_rho: 0.9\n  minimum_primary_n: 1000\nqualitative:\n  lengths_m: [0.5, 1.0, 1.6]\n  initial_seed: 20260703\n  anchor_mode: centroid\n  anchor: [0.0, 0.0, 0.04]\n  boundary_radius_fraction_of_length: 0.05\noutputs:\n  metrics_json: outputs/metrics/g2_correlation.json\n  scatter_png: outputs/plots/g2_scatter.png\n  plots_dir: outputs/plots\n  stdout_log: outputs/reports/gate_g2_stdout.log\n",
-  "created_at": "2026-07-03T03:38:19Z",
+  "created_at": "2026-07-03T03:57:42Z",
   "dataset_record_count": 5056,
   "goal_sampling_proof": {
     "goal_stream_hash_sha256": "f3b89e1cb8188a3177a88ca7a5dc185ac4456911cc2fb9d4ed8f22ce2d9fb4da",
@@ -379,6 +379,7 @@
   "schema_version": 2,
   "seed": 0,
   "source_dataset": "outputs/data/p0_random_transitions.h5",
+  "stopping_rule": "amended §8 stopping rule engaged: shape component re-failed (rho < 0.9) on the single authorized re-measurement — NO further retries; awaiting the human redesign decision (issue #6 re-judgment). Threshold 0.9 remains immutable. Caveat for the human packet: the chamfer-sensitivity experiment rebuts only hypothesis 3 (metric shape-blindness); hypothesis 2 (near-goal regime absent from the transition sampling) remains an open explanation for the weak shape coupling and is deferred to the redesign decision.",
   "variants": {
     "all_success": {
       "component_a": {

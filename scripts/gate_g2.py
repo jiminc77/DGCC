@@ -907,6 +907,19 @@ def run_v2(
         "component_a": component_a,
         "component_b": component_b,
         "pass_overall": pass_overall,
+        "stopping_rule": (
+            None
+            if pass_overall
+            else (
+                "amended §8 stopping rule engaged: shape component re-failed (rho < 0.9) on the "
+                "single authorized re-measurement — NO further retries; awaiting the human "
+                "redesign decision (issue #6 re-judgment). Threshold 0.9 remains immutable. "
+                "Caveat for the human packet: the chamfer-sensitivity experiment rebuts only "
+                "hypothesis 3 (metric shape-blindness); hypothesis 2 (near-goal regime absent "
+                "from the transition sampling) remains an open explanation for the weak shape "
+                "coupling and is deferred to the redesign decision."
+            )
+        ),
         "variants": variants,
         "chamfer_reference": chamfer_reference,
         "goal_sampling_proof": goal_sampling_proof,
