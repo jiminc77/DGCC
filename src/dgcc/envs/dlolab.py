@@ -832,7 +832,111 @@ class DLOLabEnv(DLOEnvBase):
         zeros = np.zeros_like(batched)
         self.rod_entity.set_position(batched)
         self.rod_entity.set_velocity(zeros)
+        self._reinitialize_edge_state(batched)
         self._step_scene()
+
+    def _reinitialize_edge_state(self, batched_positions: np.ndarray) -> None:
+        """Recompute the rod's full edge/frame state from placed positions.
+
+        Adapter-internal P1 addition (interface unchanged): the public
+        ``set_position``/``set_velocity`` targets only write vertex pos/vel.
+        Edge twist state (theta/omega), material frames (d1/d2/d3, refs), and
+        internal-vertex state (kb/twist) are incrementally updated by the
+        solver, so non-finite values there survive a light reset and
+        re-pollute the next step (observed in P1-M2: envs stayed non-finite
+        through 3 reseed retries).  This mirrors the build-time
+        ``_kernel_finalize_states`` math per environment: frames rebuilt from
+        the placed centerline, theta/omega/twist zeroed ("at rest,
+        untwisted" — the placement contract the P0 analytic init curves
+        assume).  Upstream (frozen c5026a9) is untouched; ``set_theta`` is
+        bypassed via the solver kernel because its wrapper passes the wrong
+        kwarg name (omega=theta) — documented upstream bug.
+        """
+
+        assert self.rod_entity is not None and self.gs is not None
+        import torch
+
+        pos = np.asarray(batched_positions, dtype=float)  # (B, V, 3)
+        edge = pos[:, 1:, :] - pos[:, :-1, :]  # (B, E, 3)
+        length = np.linalg.norm(edge, axis=-1)  # (B, E)
+        safe_length = np.where(length > 0.0, length, 1.0)
+        d3 = edge / safe_length[..., None]
+
+        n_envs, n_edges = length.shape
+        d1 = np.zeros_like(d3)
+        # First edge: any unit vector perpendicular to d3[0].
+        ref = np.zeros((n_envs, 3))
+        smallest = np.argmin(np.abs(d3[:, 0, :]), axis=-1)
+        ref[np.arange(n_envs), smallest] = 1.0
+        first = np.cross(d3[:, 0, :], ref)
+        first /= np.maximum(np.linalg.norm(first, axis=-1, keepdims=True), 1e-12)
+        d1[:, 0, :] = first
+        # Parallel transport along the rod (Rodrigues rotation t_{e-1} -> t_e).
+        for e in range(1, n_edges):
+            t1 = d3[:, e - 1, :]
+            t2 = d3[:, e, :]
+            axis = np.cross(t1, t2)
+            sin_a = np.linalg.norm(axis, axis=-1)
+            cos_a = np.clip(np.sum(t1 * t2, axis=-1), -1.0, 1.0)
+            prev = d1[:, e - 1, :]
+            rotated = prev.copy()
+            mask = sin_a > 1e-12
+            if np.any(mask):
+                k = axis[mask] / sin_a[mask][..., None]
+                v = prev[mask]
+                c = cos_a[mask][..., None]
+                s = sin_a[mask][..., None]
+                rotated[mask] = (
+                    v * c
+                    + np.cross(k, v) * s
+                    + k * np.sum(k * v, axis=-1, keepdims=True) * (1.0 - c)
+                )
+            # Re-orthonormalize against t2 to keep the frame exact.
+            rotated -= np.sum(rotated * t2, axis=-1, keepdims=True) * t2
+            rotated /= np.maximum(np.linalg.norm(rotated, axis=-1, keepdims=True), 1e-12)
+            d1[:, e, :] = rotated
+        d2 = np.cross(d3, d1)
+
+        # Internal vertices: curvature binormal kb, zero twist.
+        t_a = d3[:, :-1, :]
+        t_b = d3[:, 1:, :]
+        denom = 1.0 + np.sum(t_a * t_b, axis=-1, keepdims=True)
+        kb = 2.0 * np.cross(t_a, t_b) / np.maximum(denom, 1e-12)
+
+        device = self.gs.device
+        tc = self.gs.tc_float
+
+        def t(arr: np.ndarray) -> "torch.Tensor":
+            return torch.as_tensor(np.ascontiguousarray(arr), dtype=tc, device=device)
+
+        n_internal = kb.shape[1]
+        zeros_e = np.zeros_like(length)
+        substep = self.rod_entity._sim.cur_substep_local
+        envs_idx = torch.arange(n_envs, dtype=torch.int32, device=device)
+        # One atomic per-env full-state write (pos, vel, fixed, theta, omega,
+        # edge, length, frames, kb, twist, kappa_rest).  kappa_rest is zero
+        # because the rod is built with rest_state="straight" (zero rest
+        # curvature); fixed flags are zero (free rope); twist/theta/omega are
+        # zero per the "at rest, untwisted" placement contract.
+        self.rod_entity._solver._kernel_set_state(
+            substep,
+            envs_idx,
+            t(pos),
+            t(np.zeros_like(pos)),
+            torch.zeros((n_envs, pos.shape[1]), dtype=torch.bool, device=device),
+            t(zeros_e),
+            t(zeros_e),
+            t(edge),
+            t(length),
+            t(d1),
+            t(d2),
+            t(d3),
+            t(d1),
+            t(d2),
+            t(kb),
+            t(np.zeros((n_envs, n_internal))),
+            t(np.zeros((n_envs, n_internal, 2))),
+        )
 
     def _detach_existing_attachments(self) -> None:
         if self.rod_entity is None:
@@ -864,6 +968,7 @@ class DLOLabEnv(DLOEnvBase):
         zeros = np.zeros_like(batched)
         self.rod_entity.set_position(batched)
         self.rod_entity.set_velocity(zeros)
+        self._reinitialize_edge_state(batched)
         self._step_scene()
 
     def _gripper_positions(self) -> np.ndarray:

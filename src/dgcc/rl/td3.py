@@ -250,12 +250,18 @@ class TD3Agent:
             list(self.encoder.parameters()) + list(self.critic.parameters()), "critic"
         )
         self.critic_optimizer.step()
+        with torch.no_grad():
+            td_error = (q1 - y).abs()
         return {
             "critic_loss": float(loss.detach().cpu()),
             "critic_grad_norm": grad_norm,
             "target_mean": float(y.mean().cpu()),
             "q1_mean": float(q1.detach().mean().cpu()),
             "q2_mean": float(q2.detach().mean().cpu()),
+            "q1_std": float(q1.detach().std().cpu()),
+            "td_error_mean": float(td_error.mean().cpu()),
+            "td_error_p95": float(td_error.quantile(0.95).cpu()),
+            "td_error_max": float(td_error.max().cpu()),
         }
 
     def actor_update(
@@ -328,7 +334,8 @@ class TD3Agent:
         total_budget: int,
         rng: np.random.Generator,
         deterministic: bool = False,
-    ) -> tuple[np.ndarray, np.ndarray, list[str]]:
+        return_info: bool = False,
+    ) -> tuple[np.ndarray, np.ndarray, list[str]] | tuple[np.ndarray, np.ndarray, list[str], dict[str, np.ndarray]]:
         """Return (p, delta, lift) for a batch of states.
 
         Exploration: ε-greedy over p (linear 1.0→0.1 over the first 30% of
@@ -358,7 +365,36 @@ class TD3Agent:
             delta = delta + rng.normal(0.0, self.config.exploration_u_sigma, size=delta.shape)
             delta = np.clip(delta, -DELTA_SCALE, DELTA_SCALE)
         lift = ["high" if value > 0.5 else "low" for value in u[:, 3]]
+        if return_info:
+            info = {
+                "q1_candidates": q1.cpu().numpy(),
+                "u_executed": np.column_stack([delta, u[:, 3]]),
+            }
+            return p.astype(int), delta.astype(float), lift, info
         return p.astype(int), delta.astype(float), lift
+
+    @torch.no_grad()
+    def q_min_executed(
+        self,
+        X: np.ndarray,
+        G_curve: np.ndarray,
+        p: np.ndarray,
+        delta: np.ndarray,
+        lift: np.ndarray,
+    ) -> np.ndarray:
+        """min(Q1, Q2) of the ONLINE critics for executed actions.
+
+        Used by §8 diagnostics for the overestimation gap
+        (Q(s, a) vs realized discounted return on eval episodes).
+        """
+
+        feats = self.features(X, G_curve)
+        h = self.encoder(feats)
+        arange = torch.arange(h.shape[0], device=self.device)
+        h_p = h[arange, torch.as_tensor(np.asarray(p), dtype=torch.long, device=self.device)]
+        u = u_tensor(delta, lift, self.device)
+        q1, q2 = self.critic(h_p, u)
+        return torch.minimum(q1, q2).cpu().numpy()
 
     # ------------------------------------------------------------------
     # Checkpointing

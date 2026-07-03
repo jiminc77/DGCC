@@ -1,0 +1,26 @@
+# P1-M2 random-policy reference (floor for all later comparisons).
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 10000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
+reference:
+  n_envs: 100
+  t1_episodes_per_task: 100
+  t2_val_episodes_per_goal: 2   # 50 val goals x 2 = 100 episodes
+actions:
+  delta_min_m: 0.02
+  delta_max_m: 0.15
+  lift_choices: [low, high]
+reward:
+  alpha: 10.0
+  c_step: 0.1
+  r_succ: 5.0
+outputs:
+  json: outputs/metrics/p1_random_reference.json
+  stdout_log: outputs/reports/p1_random_reference.log
