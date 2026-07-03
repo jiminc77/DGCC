@@ -460,6 +460,23 @@ class DLOLabEnv(DLOEnvBase):
         delta_vec = self._prepare_primitive_inputs(delta, lift)
         return self._move_prepared(delta_vec, lift)
 
+    def _gripper_z_floor(self) -> float:
+        """Lowest allowed gripper target height (support-plane safety).
+
+        Adapter-internal P1 addition (interface unchanged): §6 actions carry
+        Δ ∈ R³ including negative z, so a low-lift grasp plus Δz ≈ −0.15 can
+        command the gripper (and the attached node) BELOW the ground plane,
+        driving rope-plane penetration and solver blow-ups (observed in the
+        P1-M2 smoke: ~45% of batches lost to the NaN covenant).  The plane is
+        rigid — a physical gripper cannot push through it — so move targets
+        are clamped to the rope's resting height above the plane.  The action
+        space itself is unchanged; only physically impossible targets are
+        clipped, mirroring the existing ‖δ‖ ≤ 0.15 norm clamp.
+        """
+
+        radius = float(self.params.radius) if self.params is not None else 0.005
+        return max(radius, 0.005)
+
     def _move_prepared(self, delta_vec: np.ndarray, lift: str) -> np.ndarray:
         """Run the waypoint move for an already-validated/clamped delta (A7: clamp once)."""
         self._require_reset()
@@ -470,6 +487,7 @@ class DLOLabEnv(DLOEnvBase):
         lifted = start.copy()
         lifted[:, 2] = LIFT_HEIGHTS[lift]
         target = lifted + delta_vec.reshape(1, 3)
+        target[:, 2] = np.maximum(target[:, 2], self._gripper_z_floor())
         self.last_move_target = target.copy()
 
         current = start
@@ -509,6 +527,7 @@ class DLOLabEnv(DLOEnvBase):
         lifted = start.copy()
         lifted[:, 2] = np.asarray([LIFT_HEIGHTS[lift] for lift in lifts], dtype=float)
         target = lifted + deltas
+        target[:, 2] = np.maximum(target[:, 2], self._gripper_z_floor())
         self.last_move_target = target.copy()
 
         current = start
