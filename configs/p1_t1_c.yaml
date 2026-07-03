@@ -1,0 +1,42 @@
+# P1 T1-c training run (P1.md §7 start values)
+task: t1c_endpoint_reposition
+run:
+  total_transitions: 100000
+  seeds: [0, 1, 2]
+  n_envs: 256              # M0 probe recommendation (S1 — one run at a time)
+  eval_every_transitions: 25000
+  checkpoint_every_transitions: 25000
+eval:
+  t1_episodes_per_task: 100
+  t2_val_goals: 50
+  t2_episodes_per_goal: 2
+td3:                       # §7 start values (adjustable tier — changes leave a diff + STEP_LOG entry)
+  gamma: 0.95
+  tau: 0.005
+  lr: 3.0e-4
+  batch_size: 256
+  replay_capacity: 500000
+  utd: 1
+  warmup_transitions: 5000
+  grad_clip: 10.0
+  policy_noise: 0.05       # target policy smoothing sigma (u scale)
+  noise_clip: 0.1
+  exploration_u_sigma: 0.03
+  eps_p_start: 1.0
+  eps_p_end: 0.1
+  eps_p_fraction: 0.3      # linear decay over first 30% of budget
+reward:                    # adjustable tier (locked at M6)
+  alpha: 10.0
+  c_step: 0.1
+  r_succ: 5.0
+her: false                 # M4 conditional procedure only — forbidden without human approval
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 10000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
