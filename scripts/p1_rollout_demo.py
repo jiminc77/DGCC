@@ -112,6 +112,7 @@ def main() -> int:
             episode_returns = np.zeros(n_episodes, dtype=float)
             steps_log: list[dict[str, Any]] = []
             step_idx = 0
+            unrecoverable_error: str | None = None
             while not runner.all_done() and step_idx < 2 * runner.config.horizon:
                 p, deltas, lifts = random_policy_actions(
                     rng,
@@ -121,7 +122,16 @@ def main() -> int:
                     delta_max_m=float(actions_cfg.get("delta_max_m", 0.15)),
                     lift_choices=tuple(actions_cfg.get("lift_choices", ("low", "high"))),
                 )
-                record = runner.step(p, deltas, lifts, rng=rng)
+                try:
+                    record = runner.step(p, deltas, lifts, rng=rng)
+                except FloatingPointError as exc:
+                    # Unrecoverable non-finite state (runner already retried
+                    # reseeding): preserve evidence honestly and stop.
+                    step_idx += 1
+                    print(f"step {step_idx}: UNRECOVERABLE NaN — {exc}; aborting with partial evidence")
+                    steps_log.append({"step": step_idx, "unrecoverable_nan": str(exc)})
+                    unrecoverable_error = str(exc)
+                    break
                 step_idx += 1
                 if record.get("discarded"):
                     print(f"step {step_idx}: NaN covenant fired — bad_envs={record['bad_envs'].tolist()}")
@@ -174,13 +184,14 @@ def main() -> int:
                     "d_final": runner.d_current.tolist(),
                     "episode_return": episode_returns.tolist(),
                     "nan_incidents": runner.nan_incidents,
+                    "unrecoverable_error": unrecoverable_error,
                 },
             }
             json_path = Path(outputs.get("json", "outputs/metrics/p1_rollout_demo.json"))
             json_path.parent.mkdir(parents=True, exist_ok=True)
             json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
             print(f"wrote {json_path}")
-            return 0
+            return 0 if unrecoverable_error is None else 1
         finally:
             sys.stdout = original_stdout
 

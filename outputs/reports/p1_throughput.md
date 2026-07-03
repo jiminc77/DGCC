@@ -29,4 +29,4 @@ Chosen by maximum measured transitions/s (6.87 tr/s). P0 reference: 3.61 tr/s at
 | M4 total (3 runs) | 900,000 | 36.4 |
 | **P1 training total** | 1,850,000 | 74.8 |
 
-Eval episodes (every 25k transitions) and checkpointing are additional overhead on top of these collection-only projections.
+Eval episodes (every 25k transitions) and checkpointing are additional overhead on top of these collection-only projections. Accounting caveat: transitions/s counts every executed primitive (n_envs per round) including post-done-env and NaN-discarded rounds; discard/rebuild counts are reported in the measurement table so usable-data throughput can be derived.

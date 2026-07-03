@@ -291,7 +291,10 @@ def build_report(payload: dict[str, Any]) -> str:
         f"| **P1 training total** | {total_tr:,} | {project_hours(total_tr, tps):.1f} |",
         "",
         "Eval episodes (every 25k transitions) and checkpointing are additional "
-        "overhead on top of these collection-only projections.",
+        "overhead on top of these collection-only projections. Accounting caveat: "
+        "transitions/s counts every executed primitive (n_envs per round) including "
+        "post-done-env and NaN-discarded rounds; discard/rebuild counts are reported "
+        "in the measurement table so usable-data throughput can be derived.",
         "",
     ]
     return "\n".join(lines)
