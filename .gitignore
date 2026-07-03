@@ -30,3 +30,7 @@ MUJOCO_LOG.TXT
 .DS_Store
 .idea/
 .vscode/
+
+# Model checkpoints (대용량 — 커밋 금지; 경로는 MANIFEST로 참조)
+outputs/models/
+!outputs/models/MANIFEST.md

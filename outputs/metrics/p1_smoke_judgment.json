@@ -1,0 +1,30 @@
+{
+ "bootstrap_seed": 20260703,
+ "B": 10000,
+ "smoke_mean_return": -3.243384265367743,
+ "random_mean_return": -5.357222813086094,
+ "diff_mean": 2.112904882423723,
+ "ci95_lower_bound_5th_pct": 1.5175053037720878,
+ "slope_per_transition": 0.000189984358803509,
+ "criterion_i": true,
+ "criterion_ii_no_divergence": true,
+ "criterion_iii_overest_gap_trend_record_only": [
+  7.474482619023694,
+  4.291032297604606,
+  3.856376788527692
+ ],
+ "eval_points": [
+  [
+   25088,
+   -8.370011604219723
+  ],
+  [
+   50176,
+   -3.9639837557468383
+  ],
+  [
+   50176,
+   -3.243384265367743
+  ]
+ ]
+}
