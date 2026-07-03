@@ -49,3 +49,8 @@ gh CLI 없음 — issue #3 수동 처리 필요 (결정 후 코멘트+close).
 - 2026-07-03T02:54:51+00:00 — M5 gate fixes: c_g가 goal 곡선도 동일 canonical resample 경로로 정규화(QA C2 invariant — shape 채널 정확히 0, anchor 채널은 resample-noise floor ~1e-6·L; ρ 영향 +7e-06으로 무시 가능). g2_correlation.json에 REPORT-ONLY 진단 내장: **anchor-only ρ=0.929 / shape-only ρ=0.023 / full ρ=0.126** — 신호는 anchor 채널에 있고 shape 채널이 mixed norm을 붕괴시킴 (사람 판정 자료). 정확-goal invariant 잠금 테스트 추가, 전체 40 passed.
 - 2026-07-03T03:20:49+00:00 — M5 HUMAN GATE 무효 처리 기록: '(B)+(C) 하이브리드 / per-block 정규화 / issue #6 close / M6 진행 허가' 취지의 결정문과 후속 정정문이 수신되었으나, 사람이 명시적으로 전부 무효(잘못된 해석)로 선언함. 해당 지시로 실행된 작업 없음(레포 무변경, c_g v2 없음, issue #6 OPEN 유지). M5/G2 판정은 여전히 대기 상태 — 게이트 유지.
 - 2026-07-03T03:23:04+00:00 — M5 HUMAN GATE 판정 채널 에스컬레이션: 대화 채널로 상충하는 판정/무효 텍스트가 반복 수신됨(2차). 어느 것도 실행하지 않음(레포 596e7ac 무변경, issue #6 OPEN). P0 @M5/§9의 정본 채널에 따라, 실제 판정은 issue #6 코멘트(인증된 jiminc77 계정)로만 접수하며, gh로 검증 후 실행한다. 게이트 유지.
+
+## M5/G2 HUMAN 판정 — 정본 (issue #6, jiminc77, 2026-07-03T03:15Z/03:23Z)
+
+판정: 정량 검증 미달(primary ρ=0.126 < 0.9) 인정. 원인은 이원 goal 설계 실패가 아니라 게이트 측정 구인 결함(혼합 norm; 성분 분해: anchor 0.929 / shape 0.023)으로 확정. §8을 성분 분해형 G2로 개정(anchor AND shape, 각 ρ≥0.9, correspondence L2 + orientation flip; D_shape는 centroid 제거), 전역 규칙 4가 허용하는 **1회 재측정** 지시(재시도 소진). 임계 0.9 불변. 기존 데이터셋·goal 표본·seed 재사용, 새 시뮬 수집 금지, v1 산출물 보존. Chamfer shape 둔감성 sanity 실험(≥200 페어, 진단 전용) 포함. Exit: `P0-M5R: G2 component-split re-measurement` 커밋, issue #6 evidence 코멘트(**close 금지**), 성분별 ρ와 함께 human_blocked 재정지. 대화창 텍스트와 충돌 시 issue #6 코멘트가 유일 정본.
+- 2026-07-03T03:25:49+00:00 — P0.md §8 성분 분해형 G2로 개정 + M5 Exit 재측정 라인 추가 (판정 §1).
