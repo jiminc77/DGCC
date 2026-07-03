@@ -1,0 +1,3 @@
+dm_stats complete records=5056 success_rate=0.947 converged_rate=0.537 normalizer_fit_count=2445 stats=outputs/metrics/dm_stats.json normalizer=outputs/metrics/dm_normalizer.json
+dm_histograms outputs/plots/dm_hist_all_channels.png outputs/plots/dm_hist_norms.png
+COLLECT_RANDOM STATS-ONLY PASS

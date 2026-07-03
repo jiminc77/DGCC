@@ -28,13 +28,13 @@
     "z7"
   ],
   "channel_layout_id": "axis-major-xyz-modes-0-7-v1",
-  "commit_hash": "d2f148dd3fbc0014dc0edd34e73e148907be3cce",
+  "commit_hash": "53ffca70229e489dbca1bdd9c48cd1f2bbdee602",
   "convergence_rule": {
     "converged": "settle_steps != max_steps",
     "max_steps": 5000,
     "plan": "A1"
   },
-  "created_at": "2026-07-03T01:45:19Z",
+  "created_at": "2026-07-03T02:08:41Z",
   "delta_m_norm": {
     "max": 13.175283191943082,
     "mean": 0.8203407595124748,
@@ -2489,6 +2489,7 @@
       "std": 0.016968804830876576
     }
   ],
+  "physics_quality_note": "For gate/human review, prefer rates.success_and_converged (0.484) over the headline settle_converged rate: failed grasps are no-op transitions whose converged flag reflects the untouched rope, so the aggregate conflates populations. Settle non-convergence at the immutable 1e-3/5000 budget affects 2341 successful transitions; they are recorded honestly (settle_steps == max_steps) and excluded from the normalizer fit. Flagged for the M5/M6 human gates (plan A1).",
   "plots": [
     "outputs/plots/dm_hist_all_channels.png",
     "outputs/plots/dm_hist_norms.png"
@@ -2670,8 +2671,22 @@
     "success_and_converged": 0.48358386075949367
   },
   "record_count": 5056,
+  "restoration_drift_probe": {
+    "converged_at_t0": 16,
+    "drift_m": {
+      "max_converged_t0": 0.0007680126920361297,
+      "max_nonconverged_t0": 0.0033568259029233484,
+      "max_over_all": 0.0033568259029233484,
+      "mean_converged_t0": 0.0007331465648614475,
+      "mean_nonconverged_t0": 0.0016777600206679664,
+      "mean_over_all": 0.001205453292764707
+    },
+    "n_envs": 32,
+    "reset_settle_budget": 1000,
+    "round_equiv_steps": 6500
+  },
   "round_count": 79,
-  "round_wall_s_mean": 17.857556364581555,
+  "round_wall_s_mean": 0.0,
   "schema_version": 1,
   "source_dataset": "outputs/data/p0_random_transitions.h5",
   "total_wall_time_s": 1850.6515476307832,

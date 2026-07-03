@@ -682,8 +682,17 @@ class DLOLabEnv(DLOEnvBase):
         )
         X_after = self.get_centerline_batch()
 
+        restoration_drift_max = 0.0
+        restoration_drift_mean = 0.0
         if not np.all(grasp_success):
             raw_after = self.get_centerline_raw_batch()
+            # Integrity instrumentation (M4 gate advisory): measure the free-evolution
+            # drift being erased by the failure-contract restoration BEFORE overwriting.
+            failed_drift = np.linalg.norm(
+                raw_after[~grasp_success] - raw_before[~grasp_success], axis=-1
+            )
+            restoration_drift_max = float(failed_drift.max()) if failed_drift.size else 0.0
+            restoration_drift_mean = float(failed_drift.mean()) if failed_drift.size else 0.0
             raw_after[~grasp_success] = raw_before[~grasp_success]
             self.place_rod_vertices_batch(raw_after)
             X_after = self.get_centerline_batch()
@@ -720,6 +729,8 @@ class DLOLabEnv(DLOEnvBase):
                 "max_node_speed": self.max_node_speed_batch(),
                 "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
                 "grasp_mode": "per-env",
+                "restoration_drift_max_m": restoration_drift_max,
+                "restoration_drift_mean_m": restoration_drift_mean,
             },
         }
 

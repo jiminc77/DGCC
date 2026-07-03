@@ -63,6 +63,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Collect P0-M4 random DLO-Lab transitions")
     parser.add_argument("--seed", type=int, default=0, help="deterministic collection seed")
     parser.add_argument("--config", default="configs/collect_random.yaml", help="YAML config path")
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="skip collection; recompute dm stats/normalizer/plots from the existing dataset (CPU only)",
+    )
+    parser.add_argument(
+        "--drift-probe-json",
+        default=None,
+        help="optional path to a restoration-drift probe JSON to embed in dm_stats (M4 gate evidence)",
+    )
     return parser
 
 
@@ -616,6 +626,7 @@ def compute_dm_outputs(
     dataset_path: Path,
     config: dict[str, Any],
     run_info: dict[str, Any],
+    drift_probe: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_cfg = config.get("outputs", {})
     collection_cfg = config.get("collection", {})
@@ -705,6 +716,19 @@ def compute_dm_outputs(
         "total_wall_time_s": float(run_info["total_wall_time_s"]),
         "round_count": int(run_info["round_count"]),
         "round_wall_s_mean": float(np.mean(run_info["round_wall_s"])) if run_info["round_wall_s"] else 0.0,
+        "physics_quality_note": (
+            "For gate/human review, prefer rates.success_and_converged "
+            f"({float(np.mean(fit_mask)):.3f}) over the headline settle_converged rate: failed grasps "
+            "are no-op transitions whose converged flag reflects the untouched rope, so the aggregate "
+            "conflates populations. Settle non-convergence at the immutable 1e-3/5000 budget affects "
+            f"{int((success & ~converged).sum())} successful transitions; they are recorded honestly "
+            "(settle_steps == max_steps) and excluded from the normalizer fit. Flagged for the M5/M6 "
+            "human gates (plan A1)."
+        ),
+        "restoration_drift_probe": as_jsonable(drift_probe) if drift_probe else (
+            "not measured for this run (instrumentation added post-collection at the M4 gate; "
+            "future runs log restoration_drift_max_m/mean_m per round)"
+        ),
         "metadata": meta,
         "plots": [str(hist_path), str(norm_hist_path)],
     }
@@ -722,9 +746,36 @@ def compute_dm_outputs(
     return stats_payload
 
 
-def run(config: dict[str, Any], config_text: str, seed: int, config_path: Path) -> dict[str, Any]:
+def run(
+    config: dict[str, Any],
+    config_text: str,
+    seed: int,
+    config_path: Path,
+    *,
+    stats_only: bool = False,
+    drift_probe: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if stats_only:
+        output_cfg = config.get("outputs", {})
+        stats_path = Path(output_cfg.get("dm_stats_json", "outputs/metrics/dm_stats.json"))
+        dataset_path = Path(output_cfg.get("dataset", "outputs/data/p0_random_transitions.h5"))
+        prior = json.loads(stats_path.read_text(encoding="utf-8")) if stats_path.exists() else {}
+        run_info = {
+            "dataset_path": str(dataset_path),
+            "commit_hash": get_git_commit_hash(),
+            "probe": prior.get("probe", []),
+            "n_envs": int(prior.get("n_envs", 0)),
+            "K": int(prior.get("K", 0)),
+            "total_wall_time_s": float(prior.get("total_wall_time_s", 0.0)),
+            "round_count": int(prior.get("round_count", 0)),
+            "round_wall_s": [],
+        }
+        stats = compute_dm_outputs(dataset_path, config, run_info, drift_probe=drift_probe)
+        print("COLLECT_RANDOM STATS-ONLY PASS")
+        return {"run_info": run_info, "dm_stats": stats}
+
     run_info = collect(config, config_text, seed, config_path)
-    stats = compute_dm_outputs(Path(run_info["dataset_path"]), config, run_info)
+    stats = compute_dm_outputs(Path(run_info["dataset_path"]), config, run_info, drift_probe=drift_probe)
     print("COLLECT_RANDOM PASS")
     return {"run_info": run_info, "dm_stats": stats}
 
@@ -735,6 +786,9 @@ def main() -> int:
     config, config_text = load_config(config_path)
     output_cfg = config.get("outputs", {})
     log_path = Path(output_cfg.get("stdout_log", "outputs/reports/collect_random_stdout.log"))
+    if args.stats_only:
+        # Never clobber the committed collection log with a stats-only recompute.
+        log_path = log_path.with_name(log_path.stem + "_stats_only.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     original_stdout = sys.stdout
@@ -743,7 +797,17 @@ def main() -> int:
         sys.stdout = Tee(original_stdout, log_file)
         sys.stderr = Tee(original_stderr, log_file)
         try:
-            run(config, config_text, int(args.seed), config_path)
+            drift_probe = None
+            if args.drift_probe_json:
+                drift_probe = json.loads(Path(args.drift_probe_json).read_text(encoding="utf-8"))
+            run(
+                config,
+                config_text,
+                int(args.seed),
+                config_path,
+                stats_only=bool(args.stats_only),
+                drift_probe=drift_probe,
+            )
             return 0
         except Exception as exc:
             print(f"COLLECT_RANDOM FAIL {type(exc).__name__}: {exc}")
