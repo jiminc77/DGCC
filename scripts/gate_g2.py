@@ -12,6 +12,7 @@ import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -25,7 +26,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 from matplotlib.patches import Circle
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import pearsonr, spearmanr
 import yaml
 _PREFERRED_PLOT_FONTS = ("Noto Sans CJK KR", "Noto Sans CJK JP", "Droid Sans Fallback")
 _AVAILABLE_PLOT_FONTS = {font.name for font in font_manager.fontManager.ttflist}
@@ -36,7 +37,7 @@ _PLOT_FONT_FAMILY = next(
 plt.rcParams["font.family"] = [_PLOT_FONT_FAMILY, "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-from dgcc.goals.distance import D
+from dgcc.goals.distance import D, chamfer_distance, correspondence_l2
 from dgcc.goals.dual_goal import (
     CG_DIM,
     SHAPE_CHANNEL_COUNT,
@@ -46,9 +47,21 @@ from dgcc.goals.dual_goal import (
     goal_curve,
     make_goal,
     make_shape_template,
+    normalize_shape_template,
 )
 from dgcc.phi.dct import CHANNEL_LAYOUT_ID
+from dgcc.phi.resample import resample
 from dgcc.utils.meta import get_git_commit_hash
+
+V2_VERDICT_SOURCE = "issue #6 comment 2026-07-03T03:23Z"
+AMENDED_DEFINITION_TEXT = (
+    "correspondence L2 (K=32 canonical arc-length resample path): "
+    "D(X,G) = min over orientation flip of (1/L)·sqrt((1/K)·Σ_k ||X̃_k − G̃_k||²) "
+    "using absolute coordinates; D_shape removes each centroid before the same computation; "
+    "orientation flip evaluates k↔k and k↔K+1−k correspondences; gate PASS = "
+    "Spearman rho(ΔD, Δ||c_g_anchor||) >= 0.9 AND "
+    "Spearman rho(ΔD_shape, Δ||c_g_shape||) >= 0.9."
+)
 
 
 @dataclass(frozen=True)
@@ -83,6 +96,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         default="configs/gate_g2.yaml",
         help="YAML config path for dataset, filters, sampling, and outputs",
+    )
+    parser.add_argument(
+        "--v2",
+        action="store_true",
+        help=(
+            "Run the amended component-split correspondence-L2 re-measurement and "
+            "Chamfer sensitivity diagnostic, writing only new *_v2/new artifacts."
+        ),
     )
     return parser
 
@@ -247,6 +268,44 @@ def compute_measurements(
     return delta_d, delta_cg_norm, delta_anchor_norm, delta_shape_norm
 
 
+def compute_measurements_v2(data: TransitionArrays, goals: list[DualGoal]) -> dict[str, np.ndarray]:
+    if len(goals) != data.X_before.shape[0]:
+        raise ValueError("number of sampled goals must equal transition count")
+    out = {
+        "delta_d_corr": np.empty(len(goals), dtype=float),
+        "delta_d_shape": np.empty(len(goals), dtype=float),
+        "delta_d_chamfer": np.empty(len(goals), dtype=float),
+        "delta_cg_norm": np.empty(len(goals), dtype=float),
+        "delta_anchor_norm": np.empty(len(goals), dtype=float),
+        "delta_shape_norm": np.empty(len(goals), dtype=float),
+    }
+    for idx, goal in enumerate(goals):
+        length = float(data.length_m[idx])
+        g_curve = goal_curve(goal, length)
+
+        corr_before = correspondence_l2(data.X_before[idx], g_curve, length)
+        corr_after = correspondence_l2(data.X_after[idx], g_curve, length)
+        shape_before = correspondence_l2(data.X_before[idx], g_curve, length, shape_only=True)
+        shape_after = correspondence_l2(data.X_after[idx], g_curve, length, shape_only=True)
+        chamfer_before = D(data.X_before[idx], goal, length)
+        chamfer_after = D(data.X_after[idx], goal, length)
+
+        cg_before = c_g(data.X_before[idx], goal, length)
+        cg_after = c_g(data.X_after[idx], goal, length)
+
+        out["delta_d_corr"][idx] = corr_after - corr_before
+        out["delta_d_shape"][idx] = shape_after - shape_before
+        out["delta_d_chamfer"][idx] = chamfer_after - chamfer_before
+        out["delta_cg_norm"][idx] = float(np.linalg.norm(cg_after) - np.linalg.norm(cg_before))
+        out["delta_anchor_norm"][idx] = float(
+            np.linalg.norm(cg_after[-3:]) - np.linalg.norm(cg_before[-3:])
+        )
+        out["delta_shape_norm"][idx] = float(
+            np.linalg.norm(cg_after[:-3]) - np.linalg.norm(cg_before[:-3])
+        )
+    return out
+
+
 def summarize_population(
     name: str,
     mask: np.ndarray,
@@ -276,6 +335,44 @@ def summarize_population(
     }
 
 
+def summarize_correlation(
+    name: str,
+    mask: np.ndarray,
+    x_values: np.ndarray,
+    y_values: np.ndarray,
+    threshold: float,
+    *,
+    x_key: str,
+    y_key: str,
+    definition: str,
+) -> dict[str, Any]:
+    x = x_values[mask]
+    y = y_values[mask]
+    if x.size < 2:
+        rho = np.nan
+        pvalue = np.nan
+    else:
+        result = spearmanr(x, y)
+        rho = float(result.statistic)
+        pvalue = float(result.pvalue)
+    passes = bool(np.isfinite(rho) and rho >= threshold)
+    return {
+        "name": name,
+        "definition": definition,
+        "rho": rho if np.isfinite(rho) else None,
+        "pvalue": pvalue if np.isfinite(pvalue) else None,
+        "n": int(x.size),
+        "threshold": float(threshold),
+        "passes": passes,
+        x_key: _series_summary(x),
+        y_key: _series_summary(y),
+    }
+
+
+def _format_rho(value: float | None) -> str:
+    return "nan" if value is None else f"{float(value):.6f}"
+
+
 def _series_summary(values: np.ndarray) -> dict[str, float | None]:
     if values.size == 0:
         return {"min": None, "mean": None, "max": None}
@@ -295,6 +392,28 @@ def make_scatter(path: Path, delta_d: np.ndarray, delta_cg_norm: np.ndarray, pri
     ax.set_xlabel("ΔD = D(after, G) - D(before, G)")
     ax.set_ylabel("Δ||c_g|| = ||c_g(after)|| - ||c_g(before)||")
     ax.set_title("G2 primary population: converged successful transitions")
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def make_component_scatter(
+    path: Path,
+    x_values: np.ndarray,
+    y_values: np.ndarray,
+    primary_mask: np.ndarray,
+    *,
+    xlabel: str,
+    ylabel: str,
+    title: str,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7.0, 5.5), constrained_layout=True)
+    ax.scatter(x_values[primary_mask], y_values[primary_mask], s=9, alpha=0.45, linewidths=0)
+    ax.axhline(0.0, color="0.7", linewidth=0.8)
+    ax.axvline(0.0, color="0.7", linewidth=0.8)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
     fig.savefig(path, dpi=160)
     plt.close(fig)
 
@@ -427,16 +546,420 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def population_masks(data: TransitionArrays, settle_max_steps: int) -> dict[str, np.ndarray]:
+    return {
+        "primary": data.grasp_success & (data.settle_steps != settle_max_steps),
+        "all_success": data.grasp_success.copy(),
+        "all_transitions": np.ones_like(data.grasp_success, dtype=bool),
+    }
+
+
+def summarize_component_a(name: str, mask: np.ndarray, measurements: dict[str, np.ndarray], threshold: float) -> dict[str, Any]:
+    return summarize_correlation(
+        name,
+        mask,
+        measurements["delta_d_corr"],
+        measurements["delta_anchor_norm"],
+        threshold,
+        x_key="delta_D_corr",
+        y_key="delta_c_g_anchor_norm",
+        definition="Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+    )
+
+
+def summarize_component_b(name: str, mask: np.ndarray, measurements: dict[str, np.ndarray], threshold: float) -> dict[str, Any]:
+    return summarize_correlation(
+        name,
+        mask,
+        measurements["delta_d_shape"],
+        measurements["delta_shape_norm"],
+        threshold,
+        x_key="delta_D_shape",
+        y_key="delta_c_g_shape_norm",
+        definition="Spearman rho(ΔD_shape centroid-removed correspondence L2, Δ||c_g_shape||)",
+    )
+
+
+def summarize_chamfer_reference(
+    name: str,
+    mask: np.ndarray,
+    measurements: dict[str, np.ndarray],
+    threshold: float,
+) -> dict[str, Any]:
+    return {
+        "anchor_component": summarize_correlation(
+            f"{name}_chamfer_anchor_reference",
+            mask,
+            measurements["delta_d_chamfer"],
+            measurements["delta_anchor_norm"],
+            threshold,
+            x_key="delta_D_chamfer",
+            y_key="delta_c_g_anchor_norm",
+            definition="REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_anchor||)",
+        ),
+        "shape_component": summarize_correlation(
+            f"{name}_chamfer_shape_reference",
+            mask,
+            measurements["delta_d_chamfer"],
+            measurements["delta_shape_norm"],
+            threshold,
+            x_key="delta_D_chamfer",
+            y_key="delta_c_g_shape_norm",
+            definition="REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_shape||)",
+        ),
+        "full_c_g_norm_reference": summarize_correlation(
+            f"{name}_chamfer_full_c_g_reference",
+            mask,
+            measurements["delta_d_chamfer"],
+            measurements["delta_cg_norm"],
+            threshold,
+            x_key="delta_D_chamfer",
+            y_key="delta_c_g_norm",
+            definition="REFERENCE ONLY: v1 Spearman rho(ΔD_old_chamfer, Δ||c_g||)",
+        ),
+    }
+
+
+def goal_stream_hash(goals: list[DualGoal]) -> str:
+    digest = hashlib.sha256()
+    float64_le = np.dtype("<f8")
+    for goal in goals:
+        digest.update(str(goal.template_name).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(goal.anchor_mode.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(np.ascontiguousarray(goal.anchor, dtype=float64_le).tobytes())
+        digest.update(np.ascontiguousarray(goal.shape_template, dtype=float64_le).tobytes())
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def build_goal_sampling_identity_proof(
+    *,
+    goals: list[DualGoal],
+    sampling_spec: dict[str, Any],
+    v1_metrics_path: Path,
+    v1_recomputed_primary_rho: float | None,
+) -> dict[str, Any]:
+    stream_hash = goal_stream_hash(goals)
+    proof: dict[str, Any] = {
+        "sample_goals_call": "sample_goals(seed=args.seed, lengths_m=data.length_m, sampling_cfg=config['goal_sampling'])",
+        "goal_stream_hash_sha256": stream_hash,
+        "v1_recomputed_goal_stream_hash_sha256": stream_hash,
+        "matches_v1_recomputed_hash": True,
+        "sampling_spec": sampling_spec,
+        "v1_metrics_path": str(v1_metrics_path),
+    }
+    if not v1_metrics_path.exists():
+        proof["v1_metrics_available"] = False
+        return proof
+
+    v1 = json.loads(v1_metrics_path.read_text(encoding="utf-8"))
+    v1_spec = v1.get("goal_sampling_spec", {})
+    comparisons = {
+        "seed": v1_spec.get("seed") == sampling_spec.get("seed"),
+        "templates": v1_spec.get("templates") == sampling_spec.get("templates"),
+        "template_counts_all_transitions": v1_spec.get("template_counts_all_transitions")
+        == sampling_spec.get("template_counts_all_transitions"),
+        "anchor_mode": v1_spec.get("anchor_mode") == sampling_spec.get("anchor_mode"),
+        "anchor_box_unit_length": v1_spec.get("anchor_box_unit_length")
+        == sampling_spec.get("anchor_box_unit_length"),
+    }
+    v1_primary_rho = v1.get("primary", {}).get("rho")
+    rho_abs_diff = (
+        abs(float(v1_primary_rho) - float(v1_recomputed_primary_rho))
+        if v1_primary_rho is not None and v1_recomputed_primary_rho is not None
+        else None
+    )
+    proof.update(
+        {
+            "v1_metrics_available": True,
+            "v1_recorded_sampling_spec_comparisons": comparisons,
+            "v1_recorded_sampling_spec_matches": all(comparisons.values()),
+            "v1_primary_rho_recorded": v1_primary_rho,
+            "v1_primary_rho_recomputed_from_current_stream": v1_recomputed_primary_rho,
+            "v1_primary_rho_abs_diff": rho_abs_diff,
+            "v1_primary_rho_matches_recomputed": rho_abs_diff is not None and rho_abs_diff <= 1.0e-12,
+        }
+    )
+    return proof
+
+
+def random_smooth_shape(rng: np.random.Generator) -> np.ndarray:
+    t = np.linspace(0.0, 1.0, 257)
+    y = np.zeros_like(t)
+    z = np.zeros_like(t)
+    for freq in range(1, 6):
+        y += rng.normal(0.0, 0.09 / freq) * np.sin(2.0 * np.pi * freq * t + rng.uniform(0.0, 2.0 * np.pi))
+        z += rng.normal(0.0, 0.045 / freq) * np.cos(2.0 * np.pi * freq * t + rng.uniform(0.0, 2.0 * np.pi))
+    dense = np.column_stack((t - 0.5, y, z))
+    return normalize_shape_template(resample(dense))
+
+
+def build_chamfer_sensitivity_pairs(seed: int = 20260703) -> list[tuple[np.ndarray, np.ndarray, str]]:
+    templates = [make_shape_template(name) for name in TEMPLATE_NAMES]
+    pairs: list[tuple[np.ndarray, np.ndarray, str]] = []
+    for left in range(len(templates)):
+        for right in range(left + 1, len(templates)):
+            pairs.append((templates[left], templates[right], "template_vs_template"))
+            alphas = np.linspace(0.05, 0.95, 25)
+            morphs = [
+                normalize_shape_template((1.0 - alpha) * templates[left] + alpha * templates[right])
+                for alpha in alphas
+            ]
+            for idx in range(len(morphs) - 3):
+                pairs.append((morphs[idx], morphs[idx + 3], "template_morph"))
+    rng = np.random.default_rng(seed)
+    random_curves = [random_smooth_shape(rng) for _ in range(180)]
+    for idx in range(len(random_curves) - 1):
+        pairs.append((random_curves[idx], random_curves[idx + 1], "random_smooth"))
+    return pairs
+
+
+def run_chamfer_sensitivity_experiment(metrics_path: Path, scatter_path: Path) -> dict[str, Any]:
+    pairs = build_chamfer_sensitivity_pairs()
+    chamfer_values = np.empty(len(pairs), dtype=float)
+    corr_values = np.empty(len(pairs), dtype=float)
+    label_counts: dict[str, int] = {}
+    for idx, (x_raw, y_raw, label) in enumerate(pairs):
+        label_counts[label] = label_counts.get(label, 0) + 1
+        x = x_raw - x_raw.mean(axis=0, keepdims=True)
+        y = y_raw - y_raw.mean(axis=0, keepdims=True)
+        chamfer_values[idx] = chamfer_distance(x, y, 1.0)
+        corr_values[idx] = correspondence_l2(x, y, 1.0, shape_only=True)
+
+    spearman = spearmanr(chamfer_values, corr_values)
+    pearson = pearsonr(chamfer_values, corr_values)
+
+    scatter_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7.0, 5.5), constrained_layout=True)
+    ax.scatter(chamfer_values, corr_values, s=12, alpha=0.55, linewidths=0)
+    ax.set_xlabel("ΔChamfer, old length-normalized (same-centroid pairs)")
+    ax.set_ylabel("ΔD_shape correspondence L2")
+    ax.set_title("Chamfer sensitivity sanity diagnostic")
+    fig.savefig(scatter_path, dpi=160)
+    plt.close(fig)
+
+    payload = {
+        "schema_version": 1,
+        "created_at": utc_now(),
+        "diagnostic_only": True,
+        "purpose": "Quantify verdict hypothesis 3: old Chamfer may be insensitive to same-centroid shape changes.",
+        "pair_count": int(len(pairs)),
+        "pair_sources": label_counts,
+        "same_centroid": "Each curve is centroid-removed before distance computation.",
+        "length_m": 1.0,
+        "spearman": {"rho": float(spearman.statistic), "pvalue": float(spearman.pvalue)},
+        "pearson": {"r": float(pearson.statistic), "pvalue": float(pearson.pvalue)},
+        "old_chamfer_normalized": _series_summary(chamfer_values),
+        "d_shape_correspondence_l2": _series_summary(corr_values),
+        "delta_chamfer_normalized": _series_summary(chamfer_values),
+        "delta_d_shape_correspondence_l2": _series_summary(corr_values),
+        "outputs": {"metrics_json": str(metrics_path), "scatter_png": str(scatter_path)},
+    }
+    write_json(metrics_path, payload)
+    return payload
+
+
 def main() -> None:
     args = build_parser().parse_args()
     config_path = Path(args.config)
     config, config_text = load_config(config_path)
     outputs = config.get("outputs", {})
-    log_path = Path(outputs.get("stdout_log", "outputs/reports/gate_g2_stdout.log"))
+    if args.v2:
+        log_path = Path(outputs.get("stdout_log_v2", "outputs/reports/gate_g2_v2_stdout.log"))
+    else:
+        log_path = Path(outputs.get("stdout_log", "outputs/reports/gate_g2_stdout.log"))
 
     with tee_stdout(log_path):
-        run(args=args, config=config, config_text=config_text, config_path=config_path, log_path=log_path)
+        if args.v2:
+            run_v2(args=args, config=config, config_text=config_text, config_path=config_path, log_path=log_path)
+        else:
+            run(args=args, config=config, config_text=config_text, config_path=config_path, log_path=log_path)
 
+
+def run_v2(
+    *,
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    config_text: str,
+    config_path: Path,
+    log_path: Path,
+) -> None:
+    dataset_cfg = config.get("dataset", {})
+    outputs = config.get("outputs", {})
+    quantitative = config.get("quantitative", {})
+    filters = config.get("filters", {})
+
+    dataset_path = Path(dataset_cfg.get("h5", "outputs/data/p0_random_transitions.h5"))
+    dm_stats_path = Path(dataset_cfg.get("dm_stats_json", "outputs/metrics/dm_stats.json"))
+    v1_metrics_path = Path(outputs.get("metrics_json", "outputs/metrics/g2_correlation.json"))
+    metrics_path = Path(outputs.get("metrics_json_v2", "outputs/metrics/g2_correlation_v2.json"))
+    plots_dir = Path(outputs.get("plots_dir", "outputs/plots"))
+    anchor_scatter_path = Path(outputs.get("scatter_anchor_png", plots_dir / "g2_scatter_anchor.png"))
+    shape_scatter_path = Path(outputs.get("scatter_shape_png", plots_dir / "g2_scatter_shape.png"))
+    sanity_metrics_path = Path(outputs.get("chamfer_sensitivity_json", "outputs/metrics/chamfer_sensitivity.json"))
+    sanity_scatter_path = Path(outputs.get("chamfer_sensitivity_png", plots_dir / "chamfer_sensitivity.png"))
+
+    threshold = float(quantitative.get("threshold_rho", 0.9))
+    if threshold != 0.9:
+        raise ValueError("G2 v2 threshold is immutable and must remain 0.9")
+    min_primary_n = int(quantitative.get("minimum_primary_n", 1000))
+    settle_max_steps = int(filters.get("settle_max_steps", 5000))
+
+    print(f"G2 v2 measurement start seed={int(args.seed)} config={config_path}")
+    print(f"verdict_source: {V2_VERDICT_SOURCE}")
+    data = load_transitions(dataset_path)
+    goals, sampling_spec = sample_goals(
+        seed=int(args.seed),
+        lengths_m=data.length_m,
+        sampling_cfg=config.get("goal_sampling", {}),
+    )
+    measurements = compute_measurements_v2(data, goals)
+
+    masks = population_masks(data, settle_max_steps)
+    primary_mask = masks["primary"]
+    if int(primary_mask.sum()) < min_primary_n:
+        raise RuntimeError(
+            f"primary population has n={int(primary_mask.sum())}, below required {min_primary_n}"
+        )
+
+    component_a = summarize_component_a("primary_component_a_anchor", primary_mask, measurements, threshold)
+    component_b = summarize_component_b("primary_component_b_shape", primary_mask, measurements, threshold)
+    pass_overall = bool(component_a["passes"] and component_b["passes"])
+
+    variants = {
+        name: {
+            "component_a": summarize_component_a(f"{name}_component_a_anchor", mask, measurements, threshold),
+            "component_b": summarize_component_b(f"{name}_component_b_shape", mask, measurements, threshold),
+            "pass_overall": bool(
+                summarize_component_a(f"{name}_component_a_anchor", mask, measurements, threshold)["passes"]
+                and summarize_component_b(f"{name}_component_b_shape", mask, measurements, threshold)["passes"]
+            ),
+        }
+        for name, mask in masks.items()
+        if name != "primary"
+    }
+
+    chamfer_reference = {
+        "label": "reference-only old Chamfer D component decomposition; not part of the amended gate",
+        "primary": summarize_chamfer_reference("primary", primary_mask, measurements, threshold),
+        "variants": {
+            name: summarize_chamfer_reference(name, mask, measurements, threshold)
+            for name, mask in masks.items()
+            if name != "primary"
+        },
+    }
+    goal_sampling_proof = build_goal_sampling_identity_proof(
+        goals=goals,
+        sampling_spec=sampling_spec,
+        v1_metrics_path=v1_metrics_path,
+        v1_recomputed_primary_rho=chamfer_reference["primary"]["full_c_g_norm_reference"]["rho"],
+    )
+
+    make_component_scatter(
+        anchor_scatter_path,
+        measurements["delta_d_corr"],
+        measurements["delta_anchor_norm"],
+        primary_mask,
+        xlabel="ΔD_corr = absolute correspondence L2 after-before",
+        ylabel="Δ||c_g_anchor||",
+        title="G2 v2 component A: anchor",
+    )
+    make_component_scatter(
+        shape_scatter_path,
+        measurements["delta_d_shape"],
+        measurements["delta_shape_norm"],
+        primary_mask,
+        xlabel="ΔD_shape = centroid-removed correspondence L2 after-before",
+        ylabel="Δ||c_g_shape||",
+        title="G2 v2 component B: shape",
+    )
+    sanity_payload = run_chamfer_sensitivity_experiment(sanity_metrics_path, sanity_scatter_path)
+    physics_note = read_physics_quality_note(dm_stats_path)
+
+    payload = {
+        "schema_version": 2,
+        "created_at": utc_now(),
+        "verdict_source": V2_VERDICT_SOURCE,
+        "amended_definition_text": AMENDED_DEFINITION_TEXT,
+        "seed": int(args.seed),
+        "config_path": str(config_path),
+        "config_copy": config,
+        "config_text": config_text,
+        "commit_hash": get_git_commit_hash(),
+        "channel_layout_id": CHANNEL_LAYOUT_ID,
+        "c_g_layout": {
+            "total_channels": CG_DIM,
+            "shape_channels": SHAPE_CHANNEL_COUNT,
+            "anchor_channels": 3,
+            "shape_component": "first 21 channels of c_g",
+            "anchor_component": "last 3 channels of c_g",
+            "order": "[Phi_shape(G)-Phi_shape(X) for mode>=1 channels, anchor(G)-anchor(X) xyz]",
+        },
+        "source_dataset": str(dataset_path),
+        "dataset_record_count": int(data.X_before.shape[0]),
+        "primary_population": {
+            "definition": "grasp_success AND settle_steps != settle_max_steps",
+            "settle_max_steps": settle_max_steps,
+            "n": int(primary_mask.sum()),
+        },
+        "component_a": component_a,
+        "component_b": component_b,
+        "pass_overall": pass_overall,
+        "variants": variants,
+        "chamfer_reference": chamfer_reference,
+        "goal_sampling_proof": goal_sampling_proof,
+        "methodology": {
+            "component_a": "Spearman rho(ΔD_corr, Δ||c_g_anchor||) on primary population",
+            "component_b": "Spearman rho(ΔD_shape, Δ||c_g_shape||) on primary population",
+            "delta_c_g_anchor_norm": "||last 3 c_g channels after|| - ||last 3 c_g channels before||",
+            "delta_c_g_shape_norm": "||first 21 c_g channels after|| - ||first 21 c_g channels before||",
+            "old_chamfer_reference": "ΔD_old_chamfer uses the unchanged length-normalized bidirectional Chamfer D from v1",
+            "physics_quality_note": physics_note,
+        },
+        "outputs": {
+            "metrics_json": str(metrics_path),
+            "scatter_anchor_png": str(anchor_scatter_path),
+            "scatter_shape_png": str(shape_scatter_path),
+            "stdout_log": str(log_path),
+            "chamfer_sensitivity_json": str(sanity_metrics_path),
+            "chamfer_sensitivity_png": str(sanity_scatter_path),
+        },
+        "chamfer_sensitivity_summary": {
+            "spearman": sanity_payload["spearman"],
+            "pearson": sanity_payload["pearson"],
+            "pair_count": sanity_payload["pair_count"],
+        },
+    }
+    write_json(metrics_path, payload)
+
+    status_a = "PASS" if component_a["passes"] else "FAIL"
+    status_b = "PASS" if component_b["passes"] else "FAIL"
+    status_overall = "PASS" if pass_overall else "FAIL"
+    print(f"COMPONENT_A {status_a}: rho={_format_rho(component_a['rho'])} n={component_a['n']} threshold={threshold:.3f}")
+    print(f"COMPONENT_B {status_b}: rho={_format_rho(component_b['rho'])} n={component_b['n']} threshold={threshold:.3f}")
+    print(f"OVERALL {status_overall}: component_a AND component_b")
+    for name, rows in variants.items():
+        print(
+            f"variant {name}: component_a rho={_format_rho(rows['component_a']['rho'])} "
+            f"component_b rho={_format_rho(rows['component_b']['rho'])}"
+        )
+    print(
+        "chamfer reference primary: "
+        f"anchor rho={_format_rho(chamfer_reference['primary']['anchor_component']['rho'])} "
+        f"shape rho={_format_rho(chamfer_reference['primary']['shape_component']['rho'])}"
+    )
+    print(
+        "chamfer sensitivity: "
+        f"spearman={float(sanity_payload['spearman']['rho']):.6f} "
+        f"pearson={float(sanity_payload['pearson']['r']):.6f} n={sanity_payload['pair_count']}"
+    )
+    print(f"wrote metrics: {metrics_path}")
+    print(f"wrote anchor scatter: {anchor_scatter_path}")
+    print(f"wrote shape scatter: {shape_scatter_path}")
+    print(f"wrote chamfer sensitivity: {sanity_metrics_path}, {sanity_scatter_path}")
+    print(f"stdout log: {log_path}")
 
 def run(
     *,

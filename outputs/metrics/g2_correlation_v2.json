@@ -1,0 +1,467 @@
+{
+  "amended_definition_text": "correspondence L2 (K=32 canonical arc-length resample path): D(X,G) = min over orientation flip of (1/L)·sqrt((1/K)·Σ_k ||X̃_k − G̃_k||²) using absolute coordinates; D_shape removes each centroid before the same computation; orientation flip evaluates k↔k and k↔K+1−k correspondences; gate PASS = Spearman rho(ΔD, Δ||c_g_anchor||) >= 0.9 AND Spearman rho(ΔD_shape, Δ||c_g_shape||) >= 0.9.",
+  "c_g_layout": {
+    "anchor_channels": 3,
+    "anchor_component": "last 3 channels of c_g",
+    "order": "[Phi_shape(G)-Phi_shape(X) for mode>=1 channels, anchor(G)-anchor(X) xyz]",
+    "shape_channels": 21,
+    "shape_component": "first 21 channels of c_g",
+    "total_channels": 24
+  },
+  "chamfer_reference": {
+    "label": "reference-only old Chamfer D component decomposition; not part of the amended gate",
+    "primary": {
+      "anchor_component": {
+        "definition": "REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_anchor||)",
+        "delta_D_chamfer": {
+          "max": 0.7987076644249798,
+          "mean": 0.020118146895262173,
+          "min": -0.4626026419816004
+        },
+        "delta_c_g_anchor_norm": {
+          "max": 0.7514860536868877,
+          "mean": 0.014823838218031042,
+          "min": -0.5417935186825888
+        },
+        "n": 2445,
+        "name": "primary_chamfer_anchor_reference",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.9287929157032982,
+        "threshold": 0.9
+      },
+      "full_c_g_norm_reference": {
+        "definition": "REFERENCE ONLY: v1 Spearman rho(ΔD_old_chamfer, Δ||c_g||)",
+        "delta_D_chamfer": {
+          "max": 0.7987076644249798,
+          "mean": 0.020118146895262173,
+          "min": -0.4626026419816004
+        },
+        "delta_c_g_norm": {
+          "max": 2.562171572790532,
+          "mean": 0.0733660237284771,
+          "min": -2.0927861102680207
+        },
+        "n": 2445,
+        "name": "primary_chamfer_full_c_g_reference",
+        "passes": false,
+        "pvalue": 3.985494059143858e-10,
+        "rho": 0.12605068039841205,
+        "threshold": 0.9
+      },
+      "shape_component": {
+        "definition": "REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_shape||)",
+        "delta_D_chamfer": {
+          "max": 0.7987076644249798,
+          "mean": 0.020118146895262173,
+          "min": -0.4626026419816004
+        },
+        "delta_c_g_shape_norm": {
+          "max": 3.038657521201446,
+          "mean": 0.10203101026128812,
+          "min": -2.3516683560679428
+        },
+        "n": 2445,
+        "name": "primary_chamfer_shape_reference",
+        "passes": false,
+        "pvalue": 0.24753295614819296,
+        "rho": 0.023394686529530872,
+        "threshold": 0.9
+      }
+    },
+    "variants": {
+      "all_success": {
+        "anchor_component": {
+          "definition": "REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_anchor||)",
+          "delta_D_chamfer": {
+            "max": 7.6272884300265105,
+            "mean": 0.027494195793428277,
+            "min": -0.46746161334407466
+          },
+          "delta_c_g_anchor_norm": {
+            "max": 7.611132022627853,
+            "mean": 0.023454640583198804,
+            "min": -0.5514549654874328
+          },
+          "n": 4786,
+          "name": "all_success_chamfer_anchor_reference",
+          "passes": true,
+          "pvalue": 0.0,
+          "rho": 0.9377611481674583,
+          "threshold": 0.9
+        },
+        "full_c_g_norm_reference": {
+          "definition": "REFERENCE ONLY: v1 Spearman rho(ΔD_old_chamfer, Δ||c_g||)",
+          "delta_D_chamfer": {
+            "max": 7.6272884300265105,
+            "mean": 0.027494195793428277,
+            "min": -0.46746161334407466
+          },
+          "delta_c_g_norm": {
+            "max": 7.614307988458389,
+            "mean": 0.04437172444371703,
+            "min": -2.0927861102680207
+          },
+          "n": 4786,
+          "name": "all_success_chamfer_full_c_g_reference",
+          "passes": false,
+          "pvalue": 5.293400792874716e-29,
+          "rho": 0.1605526000371335,
+          "threshold": 0.9
+        },
+        "shape_component": {
+          "definition": "REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_shape||)",
+          "delta_D_chamfer": {
+            "max": 7.6272884300265105,
+            "mean": 0.027494195793428277,
+            "min": -0.46746161334407466
+          },
+          "delta_c_g_shape_norm": {
+            "max": 12.379294489555578,
+            "mean": 0.05057982594111376,
+            "min": -2.3516683560679428
+          },
+          "n": 4786,
+          "name": "all_success_chamfer_shape_reference",
+          "passes": false,
+          "pvalue": 0.9943231042971319,
+          "rho": 0.00010287305249173481,
+          "threshold": 0.9
+        }
+      },
+      "all_transitions": {
+        "anchor_component": {
+          "definition": "REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_anchor||)",
+          "delta_D_chamfer": {
+            "max": 7.6272884300265105,
+            "mean": 0.026025953533889982,
+            "min": -0.46746161334407466
+          },
+          "delta_c_g_anchor_norm": {
+            "max": 7.611132022627853,
+            "mean": 0.0222021182419283,
+            "min": -0.5514549654874328
+          },
+          "n": 5056,
+          "name": "all_transitions_chamfer_anchor_reference",
+          "passes": true,
+          "pvalue": 0.0,
+          "rho": 0.9362727375328761,
+          "threshold": 0.9
+        },
+        "full_c_g_norm_reference": {
+          "definition": "REFERENCE ONLY: v1 Spearman rho(ΔD_old_chamfer, Δ||c_g||)",
+          "delta_D_chamfer": {
+            "max": 7.6272884300265105,
+            "mean": 0.026025953533889982,
+            "min": -0.46746161334407466
+          },
+          "delta_c_g_norm": {
+            "max": 7.614307988458389,
+            "mean": 0.04200219010831285,
+            "min": -2.0927861102680207
+          },
+          "n": 5056,
+          "name": "all_transitions_chamfer_full_c_g_reference",
+          "passes": false,
+          "pvalue": 3.5529284755934395e-32,
+          "rho": 0.16496358737159947,
+          "threshold": 0.9
+        },
+        "shape_component": {
+          "definition": "REFERENCE ONLY: Spearman rho(ΔD_old_chamfer, Δ||c_g_shape||)",
+          "delta_D_chamfer": {
+            "max": 7.6272884300265105,
+            "mean": 0.026025953533889982,
+            "min": -0.46746161334407466
+          },
+          "delta_c_g_shape_norm": {
+            "max": 12.379294489555578,
+            "mean": 0.04787876719821408,
+            "min": -2.3516683560679428
+          },
+          "n": 5056,
+          "name": "all_transitions_chamfer_shape_reference",
+          "passes": false,
+          "pvalue": 0.9079418935240745,
+          "rho": 0.0016266441177806136,
+          "threshold": 0.9
+        }
+      }
+    }
+  },
+  "chamfer_sensitivity_summary": {
+    "pair_count": 248,
+    "pearson": {
+      "pvalue": 1.0569333316437482e-115,
+      "r": 0.9386178237336122
+    },
+    "spearman": {
+      "pvalue": 6.872196888150087e-100,
+      "rho": 0.9165367228349206
+    }
+  },
+  "channel_layout_id": "axis-major-xyz-modes-0-7-v1",
+  "commit_hash": "71274ea0b586ba3fce6599360ccf8447a40e38bb",
+  "component_a": {
+    "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+    "delta_D_corr": {
+      "max": 0.7528636550487733,
+      "mean": 0.020552341111650087,
+      "min": -0.5004146600960864
+    },
+    "delta_c_g_anchor_norm": {
+      "max": 0.7514860536868877,
+      "mean": 0.014823838218031042,
+      "min": -0.5417935186825888
+    },
+    "n": 2445,
+    "name": "primary_component_a_anchor",
+    "passes": true,
+    "pvalue": 0.0,
+    "rho": 0.9846875811535779,
+    "threshold": 0.9
+  },
+  "component_b": {
+    "definition": "Spearman rho(ΔD_shape centroid-removed correspondence L2, Δ||c_g_shape||)",
+    "delta_D_shape": {
+      "max": 0.34150988423729783,
+      "mean": 0.029024559618145405,
+      "min": -0.19966623496203156
+    },
+    "delta_c_g_shape_norm": {
+      "max": 3.038657521201446,
+      "mean": 0.10203101026128812,
+      "min": -2.3516683560679428
+    },
+    "n": 2445,
+    "name": "primary_component_b_shape",
+    "passes": false,
+    "pvalue": 3.3536362021902637e-38,
+    "rho": 0.2570711208354716,
+    "threshold": 0.9
+  },
+  "config_copy": {
+    "dataset": {
+      "dm_stats_json": "outputs/metrics/dm_stats.json",
+      "h5": "outputs/data/p0_random_transitions.h5"
+    },
+    "filters": {
+      "primary": "grasp_success AND settle_steps != settle_max_steps",
+      "settle_max_steps": 5000,
+      "variants": {
+        "all_success": "grasp_success",
+        "all_transitions": "no filter"
+      }
+    },
+    "goal_sampling": {
+      "anchor_box_unit_length": {
+        "high": [
+          1.25,
+          1.25,
+          0.18
+        ],
+        "low": [
+          -1.25,
+          -1.25,
+          0.02
+        ]
+      },
+      "anchor_mode": "centroid",
+      "random_stream": "numpy.default_rng(seed); one template index and one anchor per transition",
+      "templates": [
+        "straight",
+        "u_bend",
+        "s_curve"
+      ]
+    },
+    "outputs": {
+      "metrics_json": "outputs/metrics/g2_correlation.json",
+      "plots_dir": "outputs/plots",
+      "scatter_png": "outputs/plots/g2_scatter.png",
+      "stdout_log": "outputs/reports/gate_g2_stdout.log"
+    },
+    "qualitative": {
+      "anchor": [
+        0.0,
+        0.0,
+        0.04
+      ],
+      "anchor_mode": "centroid",
+      "boundary_radius_fraction_of_length": 0.05,
+      "initial_seed": 20260703,
+      "lengths_m": [
+        0.5,
+        1.0,
+        1.6
+      ]
+    },
+    "quantitative": {
+      "minimum_primary_n": 1000,
+      "threshold_rho": 0.9
+    }
+  },
+  "config_path": "configs/gate_g2.yaml",
+  "config_text": "dataset:\n  h5: outputs/data/p0_random_transitions.h5\n  dm_stats_json: outputs/metrics/dm_stats.json\nfilters:\n  settle_max_steps: 5000\n  primary: grasp_success AND settle_steps != settle_max_steps\n  variants:\n    all_success: grasp_success\n    all_transitions: no filter\ngoal_sampling:\n  anchor_mode: centroid\n  templates: [straight, u_bend, s_curve]\n  # Uniform anchor box in rope-length units.  Each transition samples\n  # low * length_m <= anchor <= high * length_m in world coordinates.\n  anchor_box_unit_length:\n    low: [-1.25, -1.25, 0.02]\n    high: [1.25, 1.25, 0.18]\n  random_stream: numpy.default_rng(seed); one template index and one anchor per transition\nquantitative:\n  threshold_rho: 0.9\n  minimum_primary_n: 1000\nqualitative:\n  lengths_m: [0.5, 1.0, 1.6]\n  initial_seed: 20260703\n  anchor_mode: centroid\n  anchor: [0.0, 0.0, 0.04]\n  boundary_radius_fraction_of_length: 0.05\noutputs:\n  metrics_json: outputs/metrics/g2_correlation.json\n  scatter_png: outputs/plots/g2_scatter.png\n  plots_dir: outputs/plots\n  stdout_log: outputs/reports/gate_g2_stdout.log\n",
+  "created_at": "2026-07-03T03:38:19Z",
+  "dataset_record_count": 5056,
+  "goal_sampling_proof": {
+    "goal_stream_hash_sha256": "f3b89e1cb8188a3177a88ca7a5dc185ac4456911cc2fb9d4ed8f22ce2d9fb4da",
+    "matches_v1_recomputed_hash": true,
+    "sample_goals_call": "sample_goals(seed=args.seed, lengths_m=data.length_m, sampling_cfg=config['goal_sampling'])",
+    "sampling_spec": {
+      "anchor_box_unit_length": {
+        "high": [
+          1.25,
+          1.25,
+          0.18
+        ],
+        "low": [
+          -1.25,
+          -1.25,
+          0.02
+        ]
+      },
+      "anchor_mode": "centroid",
+      "anchor_sampling": "uniform per axis; sampled_anchor = uniform(low, high) * transition.length_m",
+      "goal_per_transition": "one independently sampled template index and anchor per transition",
+      "rng": "numpy.default_rng(seed)",
+      "seed": 0,
+      "template_counts_all_transitions": {
+        "s_curve": 1696,
+        "straight": 1671,
+        "u_bend": 1689
+      },
+      "templates": [
+        "straight",
+        "u_bend",
+        "s_curve"
+      ]
+    },
+    "v1_metrics_available": true,
+    "v1_metrics_path": "outputs/metrics/g2_correlation.json",
+    "v1_primary_rho_abs_diff": 0.0,
+    "v1_primary_rho_matches_recomputed": true,
+    "v1_primary_rho_recomputed_from_current_stream": 0.12605068039841205,
+    "v1_primary_rho_recorded": 0.12605068039841205,
+    "v1_recomputed_goal_stream_hash_sha256": "f3b89e1cb8188a3177a88ca7a5dc185ac4456911cc2fb9d4ed8f22ce2d9fb4da",
+    "v1_recorded_sampling_spec_comparisons": {
+      "anchor_box_unit_length": true,
+      "anchor_mode": true,
+      "seed": true,
+      "template_counts_all_transitions": true,
+      "templates": true
+    },
+    "v1_recorded_sampling_spec_matches": true
+  },
+  "methodology": {
+    "component_a": "Spearman rho(ΔD_corr, Δ||c_g_anchor||) on primary population",
+    "component_b": "Spearman rho(ΔD_shape, Δ||c_g_shape||) on primary population",
+    "delta_c_g_anchor_norm": "||last 3 c_g channels after|| - ||last 3 c_g channels before||",
+    "delta_c_g_shape_norm": "||first 21 c_g channels after|| - ||first 21 c_g channels before||",
+    "old_chamfer_reference": "ΔD_old_chamfer uses the unchanged length-normalized bidirectional Chamfer D from v1",
+    "physics_quality_note": "For gate/human review, prefer rates.success_and_converged (0.484) over the headline settle_converged rate: failed grasps are no-op transitions whose converged flag reflects the untouched rope, so the aggregate conflates populations. Settle non-convergence at the immutable 1e-3/5000 budget affects 2341 successful transitions; they are recorded honestly (settle_steps == max_steps) and excluded from the normalizer fit. Flagged for the M5/M6 human gates (plan A1)."
+  },
+  "outputs": {
+    "chamfer_sensitivity_json": "outputs/metrics/chamfer_sensitivity.json",
+    "chamfer_sensitivity_png": "outputs/plots/chamfer_sensitivity.png",
+    "metrics_json": "outputs/metrics/g2_correlation_v2.json",
+    "scatter_anchor_png": "outputs/plots/g2_scatter_anchor.png",
+    "scatter_shape_png": "outputs/plots/g2_scatter_shape.png",
+    "stdout_log": "outputs/reports/gate_g2_v2_stdout.log"
+  },
+  "pass_overall": false,
+  "primary_population": {
+    "definition": "grasp_success AND settle_steps != settle_max_steps",
+    "n": 2445,
+    "settle_max_steps": 5000
+  },
+  "schema_version": 2,
+  "seed": 0,
+  "source_dataset": "outputs/data/p0_random_transitions.h5",
+  "variants": {
+    "all_success": {
+      "component_a": {
+        "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+        "delta_D_corr": {
+          "max": 7.611125467097281,
+          "mean": 0.027053679477825224,
+          "min": -0.5099531000970832
+        },
+        "delta_c_g_anchor_norm": {
+          "max": 7.611132022627853,
+          "mean": 0.023454640583198804,
+          "min": -0.5514549654874328
+        },
+        "n": 4786,
+        "name": "all_success_component_a_anchor",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.9876126579280728,
+        "threshold": 0.9
+      },
+      "component_b": {
+        "definition": "Spearman rho(ΔD_shape centroid-removed correspondence L2, Δ||c_g_shape||)",
+        "delta_D_shape": {
+          "max": 1.6229848661761457,
+          "mean": 0.01939125736660126,
+          "min": -0.19966623496203156
+        },
+        "delta_c_g_shape_norm": {
+          "max": 12.379294489555578,
+          "mean": 0.05057982594111376,
+          "min": -2.3516683560679428
+        },
+        "n": 4786,
+        "name": "all_success_component_b_shape",
+        "passes": false,
+        "pvalue": 3.159801060940796e-48,
+        "rho": 0.20865353714775967,
+        "threshold": 0.9
+      },
+      "pass_overall": false
+    },
+    "all_transitions": {
+      "component_a": {
+        "definition": "Spearman rho(ΔD_corr absolute correspondence L2, Δ||c_g_anchor||)",
+        "delta_D_corr": {
+          "max": 7.611125467097281,
+          "mean": 0.025608961625963513,
+          "min": -0.5099531000970832
+        },
+        "delta_c_g_anchor_norm": {
+          "max": 7.611132022627853,
+          "mean": 0.0222021182419283,
+          "min": -0.5514549654874328
+        },
+        "n": 5056,
+        "name": "all_transitions_component_a_anchor",
+        "passes": true,
+        "pvalue": 0.0,
+        "rho": 0.9869961304048882,
+        "threshold": 0.9
+      },
+      "component_b": {
+        "definition": "Spearman rho(ΔD_shape centroid-removed correspondence L2, Δ||c_g_shape||)",
+        "delta_D_shape": {
+          "max": 1.6229848661761457,
+          "mean": 0.01835572740438165,
+          "min": -0.19966623496203156
+        },
+        "delta_c_g_shape_norm": {
+          "max": 12.379294489555578,
+          "mean": 0.04787876719821408,
+          "min": -2.3516683560679428
+        },
+        "n": 5056,
+        "name": "all_transitions_component_b_shape",
+        "passes": false,
+        "pvalue": 4.541891662717617e-50,
+        "rho": 0.20702645068931835,
+        "threshold": 0.9
+      },
+      "pass_overall": false
+    }
+  },
+  "verdict_source": "issue #6 comment 2026-07-03T03:23Z"
+}

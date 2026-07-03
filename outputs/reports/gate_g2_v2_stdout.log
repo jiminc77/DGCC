@@ -1,0 +1,14 @@
+G2 v2 measurement start seed=0 config=configs/gate_g2.yaml
+verdict_source: issue #6 comment 2026-07-03T03:23Z
+COMPONENT_A PASS: rho=0.984688 n=2445 threshold=0.900
+COMPONENT_B FAIL: rho=0.257071 n=2445 threshold=0.900
+OVERALL FAIL: component_a AND component_b
+variant all_success: component_a rho=0.987613 component_b rho=0.208654
+variant all_transitions: component_a rho=0.986996 component_b rho=0.207026
+chamfer reference primary: anchor rho=0.928793 shape rho=0.023395
+chamfer sensitivity: spearman=0.916537 pearson=0.938618 n=248
+wrote metrics: outputs/metrics/g2_correlation_v2.json
+wrote anchor scatter: outputs/plots/g2_scatter_anchor.png
+wrote shape scatter: outputs/plots/g2_scatter_shape.png
+wrote chamfer sensitivity: outputs/metrics/chamfer_sensitivity.json, outputs/plots/chamfer_sensitivity.png
+stdout log: outputs/reports/gate_g2_v2_stdout.log

@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-07-03T03:38:19Z",
+  "d_shape_correspondence_l2": {
+    "max": 0.18260490223149467,
+    "mean": 0.07864747863747641,
+    "min": 0.011234774517987748
+  },
+  "delta_chamfer_normalized": {
+    "max": 0.12310459986001945,
+    "mean": 0.05522984356575233,
+    "min": 0.010146182240209089
+  },
+  "delta_d_shape_correspondence_l2": {
+    "max": 0.18260490223149467,
+    "mean": 0.07864747863747641,
+    "min": 0.011234774517987748
+  },
+  "diagnostic_only": true,
+  "length_m": 1.0,
+  "old_chamfer_normalized": {
+    "max": 0.12310459986001945,
+    "mean": 0.05522984356575233,
+    "min": 0.010146182240209089
+  },
+  "outputs": {
+    "metrics_json": "outputs/metrics/chamfer_sensitivity.json",
+    "scatter_png": "outputs/plots/chamfer_sensitivity.png"
+  },
+  "pair_count": 248,
+  "pair_sources": {
+    "random_smooth": 179,
+    "template_morph": 66,
+    "template_vs_template": 3
+  },
+  "pearson": {
+    "pvalue": 1.0569333316437482e-115,
+    "r": 0.9386178237336122
+  },
+  "purpose": "Quantify verdict hypothesis 3: old Chamfer may be insensitive to same-centroid shape changes.",
+  "same_centroid": "Each curve is centroid-removed before distance computation.",
+  "schema_version": 1,
+  "spearman": {
+    "pvalue": 6.872196888150087e-100,
+    "rho": 0.9165367228349206
+  }
+}

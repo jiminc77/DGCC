@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from dgcc.goals.dual_goal import DualGoal, arc_length, goal_curve
+from dgcc.goals.dual_goal import DualGoal, arc_length, canonical_centerline, goal_curve
 
 
 def chamfer(X: np.ndarray, Y: np.ndarray) -> float:
@@ -46,6 +46,38 @@ def chamfer_distance(X: np.ndarray, G: np.ndarray, length_m: float) -> float:
     length = _validate_length(length_m)
     return chamfer(X, G) / length
 
+def correspondence_l2(
+    X: np.ndarray,
+    G_curve: np.ndarray,
+    length_m: float,
+    *,
+    shape_only: bool = False,
+) -> float:
+    """Return amended §8 length-normalized correspondence L2 distance.
+
+    Both inputs are canonicalized through the existing 32-node arc-length
+    resampling path.  The pointwise RMS L2 correspondence is evaluated for the
+    identity orientation and the reversed goal orientation; the smaller value is
+    divided by ``length_m``.  When ``shape_only`` is true, each canonical curve's
+    centroid is removed before the orientation comparison.
+    """
+
+    length = _validate_length(length_m)
+    x = canonical_centerline(_validate_centerline("X", X))
+    g = canonical_centerline(_validate_centerline("G_curve", G_curve))
+    if shape_only:
+        x = x - x.mean(axis=0, keepdims=True)
+        g = g - g.mean(axis=0, keepdims=True)
+
+    identity = _rms_pointwise_l2(x, g)
+    flipped = _rms_pointwise_l2(x, g[::-1])
+    return min(identity, flipped) / length
+
+
+def _rms_pointwise_l2(X: np.ndarray, Y: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.sum((X - Y) ** 2, axis=1))))
+
+
 
 def _validate_point_cloud(name: str, value: np.ndarray) -> np.ndarray:
     try:
@@ -77,4 +109,4 @@ def _validate_length(length_m: float) -> float:
     return length
 
 
-__all__ = ["D", "chamfer", "chamfer_distance"]
+__all__ = ["D", "chamfer", "chamfer_distance", "correspondence_l2"]

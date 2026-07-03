@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from dgcc.goals.distance import D, chamfer
+from dgcc.goals.distance import D, chamfer, correspondence_l2
 from dgcc.goals.dual_goal import (
     ANCHOR_CHANNEL_COUNT,
     CG_DIM,
@@ -33,6 +33,64 @@ def test_length_normalized_distance_is_scale_invariant() -> None:
     x_scaled = goal_curve(scaled_goal, 2.5) + np.array([0.0, 0.08 * 2.5, 0.0])
 
     assert D(x, base_goal, 1.0) == pytest.approx(D(x_scaled, scaled_goal, 2.5))
+
+def test_correspondence_l2_is_symmetric_including_flip_case() -> None:
+    length = 1.4
+    x = goal_curve(make_goal("s_curve", np.array([0.25, -0.2, 0.04])), length)
+    y = goal_curve(make_goal("u_bend", np.array([-0.15, 0.35, 0.07])), length)[::-1]
+
+    assert correspondence_l2(x, y, length) == pytest.approx(correspondence_l2(y, x, length))
+    assert correspondence_l2(x, y, length, shape_only=True) == pytest.approx(
+        correspondence_l2(y, x, length, shape_only=True)
+    )
+
+
+def test_correspondence_l2_is_flip_invariant() -> None:
+    length = 1.1
+    x = goal_curve(make_goal("s_curve", np.array([0.1, -0.1, 0.03])), length)
+    y = goal_curve(make_goal("straight", np.array([-0.2, 0.3, 0.06])), length)
+
+    distance = correspondence_l2(x, y, length)
+    assert correspondence_l2(x, y[::-1], length) == pytest.approx(distance)
+    assert correspondence_l2(x[::-1], y, length) == pytest.approx(distance)
+
+
+def test_correspondence_l2_shape_only_translation_invariant_absolute_sensitive() -> None:
+    length = 1.3
+    curve = goal_curve(make_goal("s_curve", np.array([0.2, -0.3, 0.05])), length)
+    translation = np.array([0.31, -0.17, 0.09])
+
+    assert correspondence_l2(curve + translation, curve, length, shape_only=True) == pytest.approx(
+        0.0,
+        abs=1.0e-12,
+    )
+    assert correspondence_l2(curve + translation, curve, length) == pytest.approx(
+        np.linalg.norm(translation) / length
+    )
+
+
+def test_correspondence_l2_scale_normalization() -> None:
+    length = 0.9
+    scale = 2.75
+    x = goal_curve(make_goal("s_curve", np.array([0.12, -0.07, 0.03])), length)
+    y = goal_curve(make_goal("u_bend", np.array([-0.18, 0.22, 0.08])), length)
+
+    assert correspondence_l2(x, y, length) == pytest.approx(
+        correspondence_l2(x * scale, y * scale, length * scale)
+    )
+    assert correspondence_l2(x, y, length, shape_only=True) == pytest.approx(
+        correspondence_l2(x * scale, y * scale, length * scale, shape_only=True)
+    )
+
+
+def test_correspondence_l2_exact_goal_zero() -> None:
+    length = 1.6
+    curve = goal_curve(make_goal("u_bend", np.array([0.2, 0.1, 0.04])), length)
+
+    assert correspondence_l2(curve, curve, length) == pytest.approx(0.0, abs=1.0e-12)
+    assert correspondence_l2(curve, curve[::-1], length) == pytest.approx(0.0, abs=1.0e-12)
+    assert correspondence_l2(curve, curve, length, shape_only=True) == pytest.approx(0.0, abs=1.0e-12)
+
 
 
 def test_c_g_dimension_and_documented_channel_split() -> None:
@@ -79,6 +137,14 @@ def test_degenerate_inputs_raise() -> None:
 
     with pytest.raises(ValueError, match="positive finite"):
         D(goal_curve(goal, 1.0), goal, 0.0)
+    with pytest.raises(ValueError, match="non-zero arc length"):
+        correspondence_l2(np.zeros((32, 3)), goal_curve(goal, 1.0), 1.0)
+
+    with pytest.raises(ValueError, match="non-zero arc length"):
+        correspondence_l2(goal_curve(goal, 1.0), np.zeros((32, 3)), 1.0)
+
+    with pytest.raises(ValueError, match="positive finite"):
+        correspondence_l2(goal_curve(goal, 1.0), goal_curve(goal, 1.0), 0.0)
 
     with pytest.raises(ValueError, match="at least one point"):
         chamfer(np.empty((0, 3)), goal_curve(goal, 1.0))
