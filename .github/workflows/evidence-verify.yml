@@ -58,17 +58,20 @@ jobs:
         run: uv sync
 
       - name: Run pytest (unit only)
+        # 2026-07-06: test_rl_units.py는 module-level torch import (torch는 dlo-lab extra 전용)라
+        # plain uv sync 러너에서 collection error → 가짜 blocked-tech 방지 위해 제외.
+        # P2에서 torch extra 설치 또는 marker 정리 후 이 ignore 제거 예정.
         if: steps.sha.outputs.found == 'true'
         id: test
         run: |
           set -uo pipefail
           # 마커 도입 시: slow/gpu 제외. 미도입(usage error)이면 전체로 폴백.
-          out="$(timeout 900 uv run pytest -q -m "not slow and not gpu" 2>&1)"; rc=$?
+          out="$(timeout 900 uv run pytest -q -m "not slow and not gpu" --ignore=tests/test_rl_units.py 2>&1)"; rc=$?
           echo "$out"
           # exit 4 = pytest usage error (마커 미등록) → 폴백
           if [ "$rc" -eq 4 ]; then
             echo "마커 미등록 — 전체 pytest 폴백"
-            out="$(timeout 900 uv run pytest -q 2>&1)"; rc=$?
+            out="$(timeout 900 uv run pytest -q -m "not gpu" --ignore=tests/test_rl_units.py 2>&1)"; rc=$?
             echo "$out"
           fi
           # 결과 요약 (예: "24 passed")
