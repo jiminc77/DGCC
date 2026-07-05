@@ -1,0 +1,120 @@
+# research-ops v2 — EVIDENCE CI 재검증 (CODE repo)
+# ### EVIDENCE 댓글이 달리면 그 안의 커밋 SHA를 체크아웃해 pytest 를 재실행한다.
+# 성공 → 👍 + "✅ VERIFIED" 댓글 + state:verify 라벨.  실패 → "❌" 댓글 + state:blocked-tech + ntfy 푸시.
+# 주의: GPU/장시간 학습은 검증 범위 밖 — 단위테스트만 재실행한다.
+#       마커 미도입 시를 대비해 "not slow and not gpu" 실패하면 전체 pytest 로 폴백.
+#       pyproject.toml 에 slow/gpu 마커 등록 권장:
+#         [tool.pytest.ini_options]
+#         markers = ["slow: 장시간", "gpu: GPU 필요"]
+name: evidence-verify
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: evidence-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: ${{ github.event.issue && contains(github.event.comment.body, '### EVIDENCE') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract SHA
+        id: sha
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          # 첫 번째 hex 7~40자 토큰 (단어 경계)
+          sha="$(printf '%s' "$COMMENT" | grep -oE '\b[0-9a-f]{7,40}\b' | head -1 || true)"
+          if [ -z "$sha" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "EVIDENCE 댓글에서 SHA를 찾지 못함 — 검증 스킵"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+            echo "추출된 SHA: $sha"
+          fi
+
+      - name: Checkout at SHA
+        if: steps.sha.outputs.found == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.sha.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Setup uv
+        if: steps.sha.outputs.found == 'true'
+        uses: astral-sh/setup-uv@v5
+
+      - name: uv sync
+        if: steps.sha.outputs.found == 'true'
+        run: uv sync
+
+      - name: Run pytest (unit only)
+        if: steps.sha.outputs.found == 'true'
+        id: test
+        run: |
+          set -uo pipefail
+          # 마커 도입 시: slow/gpu 제외. 미도입(usage error)이면 전체로 폴백.
+          out="$(timeout 900 uv run pytest -q -m "not slow and not gpu" 2>&1)"; rc=$?
+          echo "$out"
+          # exit 4 = pytest usage error (마커 미등록) → 폴백
+          if [ "$rc" -eq 4 ]; then
+            echo "마커 미등록 — 전체 pytest 폴백"
+            out="$(timeout 900 uv run pytest -q 2>&1)"; rc=$?
+            echo "$out"
+          fi
+          # 결과 요약 (예: "24 passed")
+          summary="$(printf '%s' "$out" | grep -oE '[0-9]+ (passed|failed|error)[a-z, ]*' | tail -1 || true)"
+          {
+            echo "rc=$rc"
+            echo "summary=${summary:-unknown}"
+          } >> "$GITHUB_OUTPUT"
+          exit 0    # 결과는 다음 스텝에서 분기 (rc 로 판단)
+
+      - name: Comment VERIFIED + label
+        if: steps.sha.outputs.found == 'true' && steps.test.outputs.rc == '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.issue.number }}
+          SHA: ${{ steps.sha.outputs.sha }}
+          SUMMARY: ${{ steps.test.outputs.summary }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+            -f content='+1' -H "Accept: application/vnd.github+json" >/dev/null 2>&1 || true
+          gh issue comment "$NUM" -R "$REPO" \
+            --body "✅ VERIFIED — \`${SHA:0:8}\` @ pytest ${SUMMARY}. (unit only; GPU/slow 제외)" || true
+          gh issue edit "$NUM" -R "$REPO" --add-label "state:verify" || true
+
+      - name: Comment FAILED + label + push
+        if: steps.sha.outputs.found == 'true' && steps.test.outputs.rc != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.issue.number }}
+          SHA: ${{ steps.sha.outputs.sha }}
+          SUMMARY: ${{ steps.test.outputs.summary }}
+          TITLE: ${{ github.event.issue.title }}
+          URL: ${{ github.event.issue.html_url }}
+        run: |
+          set -euo pipefail
+          gh issue comment "$NUM" -R "$REPO" \
+            --body "❌ VERIFICATION FAILED — \`${SHA:0:8}\` @ pytest ${SUMMARY} (rc=${{ steps.test.outputs.rc }}). Actions 로그 확인 후 재제출." || true
+          gh issue edit "$NUM" -R "$REPO" --add-label "state:blocked-tech" || true
+          if [ -n "${NTFY_TOPIC:-}" ]; then
+            msg="$(printf 'EVIDENCE 재검증 실패 (%s).\n%s' "${SHA:0:8}" "$URL")"
+            curl -fsS -H "Title: ❌ CI 실패: ${TITLE}" \
+              -H "Priority: high" -H "Tags: x" \
+              -d "$msg" "https://ntfy.sh/${NTFY_TOPIC}" || true
+          fi
