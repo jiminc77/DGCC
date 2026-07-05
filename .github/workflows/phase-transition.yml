@@ -1,8 +1,9 @@
-# research-ops — 단계 자동 전환 (API 키 불필요)
+# 킷 원본 — 새 프로젝트의 CODE 레포 .github/workflows/ 로 복사해 사용
+# research-ops v2 — 단계 자동 전환 (2세션 모델, API 키 불필요)
 # phase:P{k} 라벨의 open 이슈가 0이 되는 순간:
-#   1) P{k+1} 킥오프 이슈 자동 생성 (본문 = 복붙용 오케스트레이터 킥오프 프롬프트, 값 채워짐)
+#   1) P{k+1} 세션 A 킥오프 이슈 자동 생성 (본문 = 복붙용 세션 A 지시서, 값 채워짐)
 #   2) ntfy 푸시 (이슈 링크 포함)
-# 사람이 하는 일: 푸시 받고 → 이슈 열고 → 프롬프트 복사 → 새 오케스트레이터 세션에 붙여넣기. 끝.
+# 사람이 하는 일: 푸시 받고 → 이슈 열고 → 프롬프트 복사 → 새 세션 A에 붙여넣기. 끝.
 #
 # 선택 설정: 레포 Variables 에 MGMT_REPO (기본값 research-dashboard)
 name: phase-transition
@@ -38,7 +39,7 @@ jobs:
           [ "$OPEN" -gt 0 ] && exit 0
           NEXT=$((K+1))
           # 멱등: 킥오프 이슈가 이미 있으면 통과
-          DUP=$(gh issue list -R "$REPO" --state all --search "P${NEXT} 오케스트레이션 킥오프 in:title" --json number --jq length)
+          DUP=$(gh issue list -R "$REPO" --state all --search "P${NEXT} 세션 A 킥오프 in:title" --json number --jq length)
           [ "$DUP" -gt 0 ] && { echo "킥오프 이미 존재 — 통과"; exit 0; }
           # 다음 마일스톤이 없으면 프로젝트 종료 알림만
           HAS_NEXT=$(gh api "repos/$REPO/milestones?state=all&per_page=100" --jq "[.[]|select(.title|startswith(\"P${NEXT}\"))]|length")
@@ -50,35 +51,41 @@ jobs:
             fi
             exit 0
           fi
-          # 킥오프 이슈 본문 (복붙용 프롬프트)
+          # 킥오프 이슈 본문 (복붙용 세션 A 지시서)
           BODY_FILE=$(mktemp)
           {
-          echo "## P${K} 완료 → P${NEXT} 킥오프"
+          echo "## P${K} 완료 → P${NEXT}"
           echo
-          echo "아래 프롬프트를 **새 오케스트레이터 세션에 그대로 붙여넣으세요.**"
+          echo "아래 프롬프트를 **새 세션 A(메인 오케스트레이터)에 그대로 붙여넣으세요.**"
           echo
           echo '~~~text'
-          echo "새 단계 오케스트레이션을 맡긴다. ${OWNER}/${MGMT_REPO} 의 research-ops/ORCHESTRATOR.md 와"
-          echo "PROTOCOL.md, templates/ 를 읽고 그대로 따른다. STEP 0 self-check부터 시작(라벨·마일스톤은 이미 생성됨)."
+          echo "새 단계 오케스트레이션을 맡긴다(세션 A). ${OWNER}/${MGMT_REPO} 의"
+          echo "research-ops/ORCHESTRATOR.md 와 PROTOCOL.md, templates/ 를 읽고 그대로 따른다."
+          echo "STEP 0(프로젝트 설정 로드)부터 시작 — 라벨·마일스톤·워크플로는 이미 생성됨."
           echo "- 구현 레포: ${REPO} · 관리 레포: ${OWNER}/${MGMT_REPO}"
-          echo "- 단계: P${NEXT} (사전 등록 기준 문서가 있으면 반영)"
-          echo "- P${NEXT}.md 작성: templates/phase_spec.md 뼈대. @goal 블록마다 Exit에 primary+guard 지표 사전등록,"
-          echo "  HUMAN GATE는 class(hard/soft) 지정. 완료 후 CODE repo에 push."
-          echo "- dev 이슈 생성: bash research-ops/scripts/setup_phase.sh P${NEXT} <P${NEXT}.md 경로>"
-          echo "- gjc 위임 시 PROTOCOL 준수 명시: 착수 state:running, 게이트는 GATE REQUEST+state:blocked-human,"
-          echo "  완료는 EVIDENCE(primary+guard) 후 CI VERIFIED ✅ 기다렸다 close, 진행은 PROGRESS 코멘트 편집."
-          echo "  guard 이상치면 primary PASS여도 정지."
+          echo "- 프로젝트 설정: 관리 레포 projects/ 에서 이 구현 레포(${REPO})와 일치하는 파일을 읽어라"
+          echo "  (code_repo·ssh_host·workdir·모델·ntfy 토픽명)."
+          echo "- 단계: P${NEXT}"
+          echo "- **시작 전 회고: P${K}의 리포트·[CHECKPOINT] 코멘트·게이트(GATE VERDICT) 기록을 읽고"
+          echo "  P${NEXT}.md 설계에 반영할 목록을 명시**(승계 수치·리스크·바뀐 가정·follow-up)."
+          echo "- P${NEXT}.md 작성: templates/phase_spec.md 뼈대. @goal 블록마다 Exit에 primary+guard 지표"
+          echo "  사전등록, HUMAN GATE는 class(hard/soft) 지정. 완료 후 CODE repo에 push."
+          echo "- dev 이슈 발행: bash research-ops/scripts/setup_phase.sh P${NEXT} <P${NEXT}.md 경로>"
+          echo "  (착수 시 state:ready, 게이트는 GATE REQUEST+state:blocked-human, 완료는 EVIDENCE"
+          echo "  (primary+guard) 후 CI VERIFIED ✅ 기다렸다 close, 진행은 PROGRESS 코멘트 편집)."
+          echo "- **마지막에 세션 B 지시서(SESSION_B.md)를 프로젝트·단계 값으로 채워 복사 블록으로 출력하고 정지.**"
+          echo "  사람이 그걸 새 세션 B에 붙여넣어 gjc를 감독한다."
           echo '~~~'
           echo
-          echo "오케스트레이터가 dev 이슈까지 만들면 이 이슈를 닫으세요. (gjc는 폴러가 자동 기상합니다)"
+          echo "세션 A가 dev 이슈까지 만들고 세션 B 지시서를 출력하면 이 이슈를 닫으세요."
           } > "$BODY_FILE"
           URL=$(gh issue create -R "$REPO" \
-            --title "[P${NEXT}] 오케스트레이션 킥오프 — 프롬프트 준비됨" \
+            --title "[P${NEXT}] 세션 A 킥오프 — 지시서 준비됨" \
             --body-file "$BODY_FILE" \
             --label "type:milestone,phase:P${NEXT}")
           echo "kickoff: $URL"
           if [ -n "${NTFY_TOPIC:-}" ]; then
-            curl -s -H "Title: ✅ P${K} 완료 — P${NEXT} 킥오프 준비됨" -H "Priority: high" -H "Tags: rocket" \
-              -d "킥오프 프롬프트 준비 완료. 복붙 한 번이면 시작: ${URL}" \
+            curl -s -H "Title: ✅ P${K} 완료 — 세션 A 킥오프 준비됨" -H "Priority: high" -H "Tags: rocket" \
+              -d "P${K} 완료 — 세션 A 킥오프 준비됨. 복붙 한 번이면 시작: ${URL}" \
               "ntfy.sh/${NTFY_TOPIC}" >/dev/null || true
           fi
