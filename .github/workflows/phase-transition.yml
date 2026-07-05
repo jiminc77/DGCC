@@ -68,6 +68,7 @@ jobs:
           echo "- 단계: P${NEXT}"
           echo "- **시작 전 회고: P${K}의 리포트·[CHECKPOINT] 코멘트·게이트(GATE VERDICT) 기록을 읽고"
           echo "  P${NEXT}.md 설계에 반영할 목록을 명시**(승계 수치·리스크·바뀐 가정·follow-up)."
+          echo "- 회고 산출물: P${K}(방금 끝난 단계) 리포트 HTML을 research-ops/templates/phase_report_guide.md 형식으로 생성해 관리 레포 docs/reports/ 에 커밋하라"
           echo "- P${NEXT}.md 작성: templates/phase_spec.md 뼈대. @goal 블록마다 Exit에 primary+guard 지표"
           echo "  사전등록, HUMAN GATE는 class(hard/soft) 지정. 완료 후 CODE repo에 push."
           echo "- dev 이슈 발행: bash research-ops/scripts/setup_phase.sh P${NEXT} <P${NEXT}.md 경로>"
