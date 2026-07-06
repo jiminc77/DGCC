@@ -38,6 +38,9 @@ jobs:
           echo "P$K open=$OPEN"
           [ "$OPEN" -gt 0 ] && exit 0
           NEXT=$((K+1))
+          # 세션 A 실행 옵션(웹 pro 경로)용 파라미터 — PROJECT 기본값은 CODE 레포명 (projects/<slug>와 일치시킬 것)
+          PROJECT="${REPO##*/}"
+          PRO_PROMPT_URL="https://raw.githubusercontent.com/${OWNER}/${MGMT_REPO}/main/research-ops/templates/pro_orchestrator_prompt.md"
           # 멱등: 킥오프 이슈가 이미 있으면 통과
           DUP=$(gh issue list -R "$REPO" --state all --search "P${NEXT} 세션 A 킥오프 in:title" --json number --jq length)
           [ "$DUP" -gt 0 ] && { echo "킥오프 이미 존재 — 통과"; exit 0; }
@@ -56,7 +59,12 @@ jobs:
           {
           echo "## P${K} 완료 → P${NEXT}"
           echo
-          echo "아래 프롬프트를 **새 세션 A(메인 오케스트레이터)에 그대로 붙여넣으세요.**"
+          echo "## 세션 A 실행 옵션"
+          echo
+          echo "세션 A를 아래 **두 경로 중 하나**로 실행하세요."
+          echo
+          echo "### (a) 기존 Claude/Cowork 경로"
+          echo "아래 프롬프트를 **새 세션 A(메인 오케스트레이터)에 그대로 붙여넣으세요.** (branch+PR 게시가 어려운 환경이면 이 경로.)"
           echo
           echo '~~~text'
           echo "새 단계 오케스트레이션을 맡긴다(세션 A). ${OWNER}/${MGMT_REPO} 의"
@@ -68,7 +76,7 @@ jobs:
           echo "- 단계: P${NEXT}"
           echo "- **시작 전 회고: P${K}의 리포트·[CHECKPOINT] 코멘트·게이트(GATE VERDICT) 기록을 읽고"
           echo "  P${NEXT}.md 설계에 반영할 목록을 명시**(승계 수치·리스크·바뀐 가정·follow-up)."
-          echo "- 회고 산출물: P${K}(방금 끝난 단계) 리포트 HTML을 research-ops/templates/phase_report_guide.md 형식으로 생성해 관리 레포 docs/reports/ 에 커밋하라"
+          echo "- 회고 산출물: P${K}(방금 끝난 단계) 리포트 HTML을 research-ops/templates/phase_report_guide.md 형식으로 생성해 관리 레포 projects/{project}/reports/ 에 커밋하라"
           echo "- P${NEXT}.md 작성: templates/phase_spec.md 뼈대. @goal 블록마다 Exit에 primary+guard 지표"
           echo "  사전등록, HUMAN GATE는 class(hard/soft) 지정. 완료 후 CODE repo에 push."
           echo "- dev 이슈 발행: bash research-ops/scripts/setup_phase.sh P${NEXT} <P${NEXT}.md 경로>"
@@ -78,7 +86,25 @@ jobs:
           echo "  사람이 그걸 새 세션 B에 붙여넣어 gjc를 감독한다."
           echo '~~~'
           echo
-          echo "세션 A가 dev 이슈까지 만들고 세션 B 지시서를 출력하면 이 이슈를 닫으세요."
+          echo "### (b) 웹 pro 경로 (GitHub 쓰기 앱 + PR/CI)"
+          echo "GitHub 쓰기 앱(create_branch/push_files/create_issue)이 연결된 웹 pro를 세션 A로 쓰는 경로다."
+          echo "레포 쓰기는 **branch+PR 로만**(main 직접 금지) — pr-verify green 후 사람이 merge 한다."
+          echo
+          echo "1) 계약 프롬프트를 연다: [$PRO_PROMPT_URL]($PRO_PROMPT_URL)"
+          echo "2) 프롬프트 안의 파라미터를 아래 값으로 치환한 뒤 웹 pro에 붙여넣는다:"
+          echo
+          echo '~~~text'
+          echo "PROJECT     = ${PROJECT}"
+          echo "OWNER       = ${OWNER}"
+          echo "MGMT_REPO   = ${MGMT_REPO}"
+          echo "CODE_REPO   = ${REPO#*/}"
+          echo "PHASE_DONE  = P${K}"
+          echo "PHASE_NEXT  = P${NEXT}"
+          echo '~~~'
+          echo
+          echo "웹 pro는 MGMT(리포트·status) 1 PR·CODE(P${NEXT}.md) 1 PR 을 열고, 킥오프 이슈에 \`### PROGRESS\` 코멘트로 PR 링크를 게시한 뒤 정지한다. pr-verify green 확인 후 사람이 merge 한다."
+          echo
+          echo "세션 A가 (a) dev 이슈까지 만들고 세션 B 지시서를 출력했거나, (b) 두 PR을 열어 merge까지 완료되면 이 이슈를 닫으세요."
           } > "$BODY_FILE"
           URL=$(gh issue create -R "$REPO" \
             --title "[P${NEXT}] 세션 A 킥오프 — 지시서 준비됨" \
