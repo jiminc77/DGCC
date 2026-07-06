@@ -40,6 +40,7 @@ jobs:
           NEXT=$((K+1))
           # 세션 A 실행 옵션(웹 pro 경로)용 파라미터 — PROJECT 기본값은 CODE 레포명 (projects/<slug>와 일치시킬 것)
           PROJECT="${REPO##*/}"
+          PROJECT_SLUG=$(printf '%s' "$PROJECT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
           PRO_PROMPT_URL="https://raw.githubusercontent.com/${OWNER}/${MGMT_REPO}/main/research-ops/templates/pro_orchestrator_prompt.md"
           # 멱등: 킥오프 이슈가 이미 있으면 통과
           DUP=$(gh issue list -R "$REPO" --state all --search "P${NEXT} 세션 A 킥오프 in:title" --json number --jq length)
@@ -95,6 +96,7 @@ jobs:
           echo
           echo '~~~text'
           echo "PROJECT     = ${PROJECT}"
+          echo "PROJECT_SLUG = ${PROJECT_SLUG}"
           echo "OWNER       = ${OWNER}"
           echo "MGMT_REPO   = ${MGMT_REPO}"
           echo "CODE_REPO   = ${REPO#*/}"
@@ -102,9 +104,40 @@ jobs:
           echo "PHASE_NEXT  = P${NEXT}"
           echo '~~~'
           echo
+          echo "3) 위 파라미터를 직접 치환하기 싫으면, 아래 **완성본**을 그대로 복붙하면 된다 (치환 0회)."
+          echo
           echo "웹 pro는 MGMT(리포트·status) 1 PR·CODE(P${NEXT}.md) 1 PR 을 열고, 킥오프 이슈에 \`### PROGRESS\` 코멘트로 PR 링크를 게시한 뒤 정지한다. pr-verify green 확인 후 사람이 merge 한다."
           echo
           echo "세션 A가 (a) dev 이슈까지 만들고 세션 B 지시서를 출력했거나, (b) 두 PR을 열어 merge까지 완료되면 이 이슈를 닫으세요."
+          # --- (b) 완성본 프롬프트: 런타임에 계약을 받아 파라미터 전부 치환해 <details> 로 임베드 (치환 0회 복붙) ---
+          PRO_RAW=$(mktemp)
+          if curl -fsSL "$PRO_PROMPT_URL" -o "$PRO_RAW" 2>/dev/null && [ -s "$PRO_RAW" ]; then
+            PRO_SUB=$(mktemp)
+            # 값은 [A-Za-z0-9._-] / P<digit> 범위라 sed 치환 안전. {k} = PHASE_DONE 번호.
+            sed -e "s/{PROJECT_SLUG}/${PROJECT_SLUG}/g" \
+                -e "s/{PROJECT}/${PROJECT}/g" \
+                -e "s/{OWNER}/${OWNER}/g" \
+                -e "s/{MGMT_REPO}/${MGMT_REPO}/g" \
+                -e "s/{CODE_REPO}/${REPO#*/}/g" \
+                -e "s/{PHASE_DONE}/P${K}/g" \
+                -e "s/{PHASE_NEXT}/P${NEXT}/g" \
+                -e "s/{k}/${K}/g" \
+                "$PRO_RAW" > "$PRO_SUB"
+            echo
+            echo "<details><summary>웹 pro 프롬프트 (완성본 — 그대로 복붙)</summary>"
+            echo
+            # 계약 md 는 3-backtick 펜스를 포함 → 4-backtick 으로 감싸 원문 펜스를 그대로 렌더
+            echo '````text'
+            cat "$PRO_SUB"
+            echo '````'
+            echo
+            echo "</details>"
+            rm -f "$PRO_SUB"
+          else
+            echo
+            echo "> (완성본 자동 첨부 실패 — 위 링크의 계약 프롬프트를 열어 파라미터 블록으로 직접 치환하세요.)"
+          fi
+          rm -f "$PRO_RAW"
           } > "$BODY_FILE"
           URL=$(gh issue create -R "$REPO" \
             --title "[P${NEXT}] 세션 A 킥오프 — 지시서 준비됨" \
