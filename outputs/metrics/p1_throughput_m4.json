@@ -1,0 +1,132 @@
+{
+  "generated_at": "2026-07-06T18:07:38Z",
+  "git_commit": "ecfa1feea37485ac63d66f6953d4c98ca14f951e",
+  "seed": 0,
+  "config": {
+    "sim": {
+      "dt": 0.001,
+      "substeps": 5,
+      "rod_damping": 10.0,
+      "rod_angular_damping": 5.0,
+      "initial_settle_steps": 0,
+      "reset_settle_max_steps": 10000,
+      "move_step_size": 0.03,
+      "move_hold_steps": 0,
+      "grasp_realism": true
+    },
+    "probe": {
+      "n_env_candidates": [
+        512,
+        1024
+      ],
+      "warmup_rounds": 1,
+      "measured_rounds": 6
+    },
+    "actions": {
+      "delta_min_m": 0.02,
+      "delta_max_m": 0.15,
+      "lift_choices": [
+        "low",
+        "high"
+      ]
+    },
+    "budgets": {
+      "smoke_transitions": 50000,
+      "t1_run_transitions": 100000,
+      "t2_run_transitions": 300000,
+      "t1_runs": 9,
+      "t2_runs": 3
+    },
+    "outputs": {
+      "json": "outputs/metrics/p1_throughput_m4.json",
+      "report": "outputs/reports/p1_throughput_m4.md",
+      "stdout_log": "outputs/reports/p1_throughput_m4_stdout.log"
+    }
+  },
+  "scheduling": "S1 (one run at a time; R2 concurrency probing rejected at reconciliation)",
+  "candidates": [
+    {
+      "n_envs": 512,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 15.217882114928216,
+      "light_reset_wall_s": 25.092007467057556,
+      "round_wall_s": [
+        37.54979216400534,
+        37.51921820780262,
+        37.572884099092335,
+        37.63275736896321,
+        37.72985581215471,
+        37.67056982778013
+      ],
+      "mean_s_per_round": 37.612512913299724,
+      "transitions_per_s": 13.612491172291698,
+      "grasp_success_rate": 0.9508463541666666,
+      "settle_convergence_rate": 0.9264322916666666,
+      "nan_incidents_runner": 0,
+      "nan_discarded_rounds": 0,
+      "full_scene_rebuilds": 0,
+      "reset_settle_converged_rate": 1.0,
+      "cuda_memory": {
+        "max_allocated_gib": 0.015215873718261719,
+        "max_reserved_gib": 0.02734375,
+        "device_used_gib": 4.26531982421875,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    },
+    {
+      "n_envs": 1024,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 7.4327078009955585,
+      "light_reset_wall_s": 35.65149692213163,
+      "round_wall_s": [
+        40.25573279708624,
+        40.17049992084503,
+        40.21311251819134,
+        40.31422503804788,
+        40.25337290484458,
+        79.72530967416242
+      ],
+      "mean_s_per_round": 46.822042142196246,
+      "transitions_per_s": 21.870041398240645,
+      "grasp_success_rate": 0.9498046875,
+      "settle_convergence_rate": 0.9259765625,
+      "nan_incidents_runner": 0,
+      "nan_discarded_rounds": 1,
+      "full_scene_rebuilds": 0,
+      "reset_settle_converged_rate": 1.0,
+      "cuda_memory": {
+        "max_allocated_gib": 0.023221492767333984,
+        "max_reserved_gib": 0.037109375,
+        "device_used_gib": 4.31610107421875,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    }
+  ],
+  "recommendation": {
+    "n_envs": 1024,
+    "transitions_per_s": 21.870041398240645,
+    "rule": "max measured transitions/s, tie-break smaller n_envs"
+  },
+  "budgets": {
+    "smoke_transitions": 50000,
+    "t1_run_transitions": 100000,
+    "t2_run_transitions": 300000,
+    "t1_runs": 9,
+    "t2_runs": 3
+  },
+  "p0_reference": {
+    "n_envs": 64,
+    "transitions_per_s": 3.61,
+    "settle_max_steps": 5000
+  }
+}

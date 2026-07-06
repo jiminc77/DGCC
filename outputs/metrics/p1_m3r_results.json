@@ -1,0 +1,78 @@
+{
+ "bootstrap_seed": 20260703,
+ "B": 10000,
+ "preliminary": true,
+ "expected_runs": 9,
+ "run_files_present": 0,
+ "completed_runs": 0,
+ "missing_runs": [
+  "m3r_t1a_s0",
+  "m3r_t1a_s1",
+  "m3r_t1a_s2",
+  "m3r_t1b_s0",
+  "m3r_t1b_s1",
+  "m3r_t1b_s2",
+  "m3r_t1c_s0",
+  "m3r_t1c_s1",
+  "m3r_t1c_s2"
+ ],
+ "incomplete_runs": [],
+ "halted_runs": [],
+ "tasks": {
+  "t1a": {
+   "random_success": 0.04,
+   "random_return": -5.357222813086094,
+   "criterion_i_prime_metric": "success",
+   "seeds": {},
+   "template_min_d": {},
+   "criterion_ii_std_lt_15pp": null,
+   "criterion_iii_t1a_ge_70pct": null,
+   "curve_path": "outputs/plots/p1_m3r_curves_t1a.png"
+  },
+  "t1b": {
+   "random_success": 0.0,
+   "random_return": -4.056910803338964,
+   "criterion_i_prime_metric": "return",
+   "seeds": {},
+   "template_min_d": {},
+   "criterion_ii_std_lt_15pp": null,
+   "curve_path": "outputs/plots/p1_m3r_curves_t1b.png"
+  },
+  "t1c": {
+   "random_success": 0.0,
+   "random_return": -3.1685295291730626,
+   "criterion_i_prime_metric": "return",
+   "seeds": {},
+   "template_min_d": {},
+   "criterion_ii_std_lt_15pp": null,
+   "curve_path": "outputs/plots/p1_m3r_curves_t1c.png"
+  }
+ },
+ "p_a": {
+  "halt_count": 0,
+  "target_halt_count": 0,
+  "m3r_t1a_s1_status": "missing"
+ },
+ "p_b": {
+  "t1a": {
+   "overestimation_gap_p95_bounded": false,
+   "overestimation_gap_p95_max": null
+  },
+  "t1b": {
+   "overestimation_gap_p95_bounded": false,
+   "overestimation_gap_p95_max": null
+  },
+  "t1c": {
+   "overestimation_gap_p95_bounded": false,
+   "overestimation_gap_p95_max": null
+  }
+ },
+ "p_c": {
+  "interpretation_rule": "oracle \uc131\uacf5 \u2192 \uacfc\uc81c \ub2ec\uc131 \uac00\ub2a5 \ud655\uc815 \u00b7 oracle \u226b policy \u2192 \ud559\uc2b5 \ubb38\uc81c \ud655\uc815 \u00b7 oracle \u2248 0 \u2192 \ud310\uc815 \ubd88\ub2a5 (\ubd88\uac00\ub2a5 \uc99d\uba85 \uc544\ub2d8)",
+  "oracle_loaded": false,
+  "oracle_path": "outputs/metrics/p1_o1_oracle.json"
+ },
+ "reward_constants_adjusted": false,
+ "schema_debt_note": "HDF5 v3: termination-cause \ud544\ub4dc \u2014 M6 P2 \uc2b9\uacc4 \ucd94\uc801 \ud56d\ubaa9",
+ "hygiene_note": "old p1_t1_report halted-glob would match m3r halted files if re-run"
+}
