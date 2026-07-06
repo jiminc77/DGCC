@@ -75,6 +75,7 @@ def evaluate_episodes(
         returns = np.zeros(n_envs, dtype=float)
         discounted = np.zeros(n_envs, dtype=float)
         q_first = np.full(n_envs, np.nan, dtype=float)
+        d_step_traces: list[list[float]] = [[] for _ in range(n_envs)]
         step_index = 0
         while not runner.all_done() and step_index < 2 * runner.config.horizon:
             X = runner.env.get_centerline_batch()
@@ -86,6 +87,8 @@ def evaluate_episodes(
             if record.get("discarded"):
                 continue
             active = record["active"]
+            for slot in np.flatnonzero(active):
+                d_step_traces[int(slot)].append(float(record["d_after"][int(slot)]))
             returns += np.where(active, record["reward"], 0.0)
             discounted += np.where(active, (gamma**step_index) * record["reward"], 0.0)
             step_index += 1
@@ -94,6 +97,13 @@ def evaluate_episodes(
             episode_id = episode_base + slot
             if episode_id >= n_episodes:
                 continue
+            final_d = float(runner.d_current[slot])
+            d_at_done = float(runner.d_at_done[slot])
+            d_at_done_fallback = not np.isfinite(d_at_done)
+            if d_at_done_fallback:
+                d_at_done = final_d
+            d_steps = [float(v) for v in d_step_traces[slot][: runner.config.horizon]]
+            min_d = float(np.min(d_steps)) if d_steps else final_d
             episodes.append(
                 {
                     "episode_id": episode_id,
@@ -108,6 +118,10 @@ def evaluate_episodes(
                     "return": float(returns[slot]),
                     "discounted_return": float(discounted[slot]),
                     "final_d": float(runner.d_current[slot]),
+                    "d_at_done": d_at_done,
+                    "d_at_done_fallback": bool(d_at_done_fallback),
+                    "d_steps": d_steps,
+                    "min_d": min_d,
                     "d_initial": float(begin_info["d_initial"][slot]),
                     "q_first": None if np.isnan(q_first[slot]) else float(q_first[slot]),
                 }
@@ -125,6 +139,8 @@ def summarize_episodes(episodes: list[dict[str, Any]]) -> dict[str, Any]:
     success = np.asarray([ep["success"] for ep in episodes], dtype=bool)
     returns = np.asarray([ep["return"] for ep in episodes], dtype=float)
     final_d = np.asarray([ep["final_d"] for ep in episodes], dtype=float)
+    d_at_done = np.asarray([ep["d_at_done"] for ep in episodes], dtype=float)
+    min_d = np.asarray([ep["min_d"] for ep in episodes], dtype=float)
 
     per_template: dict[str, float] = {}
     per_template_n: dict[str, int] = {}
@@ -143,6 +159,8 @@ def summarize_episodes(episodes: list[dict[str, Any]]) -> dict[str, Any]:
         "success_rate": float(success.mean()) if episodes else float("nan"),
         "mean_return": float(returns.mean()) if episodes else float("nan"),
         "mean_final_d": float(final_d.mean()) if episodes else float("nan"),
+        "mean_d_at_done": float(d_at_done.mean()) if episodes else float("nan"),
+        "mean_min_d": float(min_d.mean()) if episodes else float("nan"),
         "per_template_success": per_template,
         "per_template_episodes": per_template_n,
         "overestimation_gap_mean": float(np.mean(gaps)) if gaps else None,

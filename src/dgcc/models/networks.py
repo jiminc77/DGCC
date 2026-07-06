@@ -14,9 +14,13 @@ and P3 variants (P1.md §6):
       h_i ∈ R^256 (local 128 ⊕ global 128).
       LATENT HOOK [P2: "encoder per-node h_i"]: the forward output ``h``.
     * :class:`TwinCritic` — two independent per-point MLP(256, 256) heads on
-      [h_p, u] → Q_i(s, g, p, u).
+      [h_p, u] → Q_i(s, g, p, u). S2 inserts LayerNorm(256) before each
+      hidden ReLU in the critic heads only: normalization, not capacity
+      expansion (+2,048 affine params, ~0.36% of the measured 570,630-param
+      pre-S2 backbone).
       LATENT HOOK [P2: "critic trunk mid-layer"]: ``forward(...,
-      return_hidden=True)`` exposes each head's post-activation hidden layers.
+      return_hidden=True)`` exposes each head's post-LN post-ReLU hidden
+      layers; the 256-wide shape contract is unchanged.
     * :class:`Actor` — per-point MLP(256, 128): h_i → u_i = (Δ ∈ R³ tanh·0.15,
       lift logit).
 
@@ -149,6 +153,8 @@ class _QHead(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(EMBED_DIM + U_DIM, 256)
         self.fc2 = nn.Linear(256, 256)
+        self.ln1 = nn.LayerNorm(256)
+        self.ln2 = nn.LayerNorm(256)
         self.out = nn.Linear(256, 1)
         self.act = nn.ReLU()
 
@@ -156,8 +162,8 @@ class _QHead(nn.Module):
         self, h_p: torch.Tensor, u: torch.Tensor, *, return_hidden: bool = False
     ) -> torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
         z = torch.cat([h_p, u], dim=-1)
-        hid1 = self.act(self.fc1(z))
-        hid2 = self.act(self.fc2(hid1))
+        hid1 = self.act(self.ln1(self.fc1(z)))
+        hid2 = self.act(self.ln2(self.fc2(hid1)))
         q = self.out(hid2).squeeze(-1)
         if return_hidden:
             # LATENT HOOK [P2 latent_api: "critic trunk mid-layer"].

@@ -6,9 +6,9 @@ Logged items (P1.md §8, research plan §6.6):
     * TD-error distribution
     * gradient norms
     * per-point argmax entropy (softmax over Q_i — DLO symmetry monitor)
-    * replay statistics
-    * NaN incident counter (global rule 6, env level)
-    * per-template success decomposition (inherited risk #5)
+    * replay statistics, active-step D statistics, and TD-target clamp hits
+    * NaN/magnitude incident counters (global rule 6, env level)
+    * per-template success decomposition plus lift/flip-flicker diagnostics
 
 Every 25k collected transitions the logger renders a multi-panel dashboard to
 ``outputs/plots/p1_diag_<run_tag>_<transitions>.png`` and persists the full
@@ -62,7 +62,11 @@ class DiagnosticsLogger:
         self.replay_series: list[dict[str, float]] = []
         self.eval_series: list[dict[str, Any]] = []
         self.nan_incidents = 0
+        self.magnitude_incidents = 0
         self.nan_series: list[dict[str, float]] = []
+        self.step_d_series: list[dict[str, float | str]] = []
+        self.lift_dist_series: list[dict[str, float | str]] = []
+        self.flip_flicker_series: list[dict[str, float | str]] = []
         self.plots_written: list[str] = []
 
     # ------------------------------------------------------------------
@@ -92,9 +96,93 @@ class DiagnosticsLogger:
             }
         )
 
-    def log_nan_incidents(self, transitions: int, total_count: int) -> None:
+    def log_step_d(
+        self,
+        transitions: int,
+        d_values: np.ndarray,
+        *,
+        phase: str = "collect",
+    ) -> None:
+        values = np.asarray(d_values, dtype=float).reshape(-1)
+        finite = values[np.isfinite(values)]
+        self.step_d_series.append(
+            {
+                "transitions": float(transitions),
+                "phase": str(phase),
+                "d_mean": float(finite.mean()) if finite.size else float("nan"),
+                "d_p50": float(np.quantile(finite, 0.50)) if finite.size else float("nan"),
+                "d_p95": float(np.quantile(finite, 0.95)) if finite.size else float("nan"),
+                "n_active": float(values.size),
+            }
+        )
+
+    def log_nan_incidents(
+        self,
+        transitions: int,
+        total_count: int,
+        magnitude_count: int | None = None,
+    ) -> None:
         self.nan_incidents = int(total_count)
-        self.nan_series.append({"transitions": float(transitions), "nan_incidents": float(total_count)})
+        if magnitude_count is not None:
+            self.magnitude_incidents = int(magnitude_count)
+        self.nan_series.append(
+            {
+                "transitions": float(transitions),
+                "nan_incidents": float(total_count),
+                "magnitude_incidents": float(self.magnitude_incidents),
+            }
+        )
+
+    def log_lift_dist(
+        self,
+        transitions: int,
+        *,
+        templates: list[str] | np.ndarray,
+        lift: list[str] | np.ndarray,
+        active: np.ndarray,
+        phase: str = "collect",
+    ) -> None:
+        templates_arr = np.asarray(templates, dtype=object)
+        lift_arr = np.asarray([str(value) for value in lift], dtype=object)
+        active_arr = np.asarray(active, dtype=bool)
+        for template in sorted({str(value) for value in templates_arr[active_arr]}):
+            mask = active_arr & (templates_arr == template)
+            n = int(mask.sum())
+            n_high = int(np.count_nonzero(lift_arr[mask] == "high"))
+            self.lift_dist_series.append(
+                {
+                    "transitions": float(transitions),
+                    "phase": str(phase),
+                    "template": template,
+                    "n": float(n),
+                    "n_high": float(n_high),
+                    "frac_high": float(n_high / n) if n else float("nan"),
+                }
+            )
+
+    def log_flip_flicker(
+        self,
+        transitions: int,
+        rows: list[dict[str, float | int | str]],
+        *,
+        phase: str = "collect",
+    ) -> None:
+        for row in rows:
+            self.flip_flicker_series.append(
+                {
+                    "transitions": float(transitions),
+                    "phase": str(phase),
+                    "template": str(row["template"]),
+                    "flip_transitions": float(row.get("flip_transitions", 0.0)),
+                    "n_active": float(row.get("n_active", 0.0)),
+                    "n_tracked": float(row.get("n_tracked", 0.0)),
+                    "active_transition_rate": float(row.get("active_transition_rate", float("nan"))),
+                    "completed_episodes": float(row.get("completed_episodes", 0.0)),
+                    "episode_flicker_rate_mean": float(
+                        row.get("episode_flicker_rate_mean", float("nan"))
+                    ),
+                }
+            )
 
     def log_eval(self, transitions: int, eval_result: dict[str, Any]) -> None:
         """Record one deterministic eval block (see driver for the fields)."""
@@ -113,6 +201,9 @@ class DiagnosticsLogger:
             "replay": self.replay_series,
             "evals": self.eval_series,
             "nan_incidents": self.nan_series,
+            "step_d": self.step_d_series,
+            "lift_dist": self.lift_dist_series,
+            "flip_flicker": self.flip_flicker_series,
             "plots_written": self.plots_written,
         }
 
@@ -131,13 +222,32 @@ class DiagnosticsLogger:
 
     def plot(self, transitions: int) -> Path:
         self.plots_dir.mkdir(parents=True, exist_ok=True)
-        fig, axes = plt.subplots(2, 4, figsize=(22, 9))
+        fig, axes = plt.subplots(3, 4, figsize=(22, 13))
         fig.suptitle(f"P1 §8 diagnostics — {self.run_tag} @ {transitions:,} transitions")
 
         def series(rows: list[dict], key: str) -> tuple[list[float], list[float]]:
             xs = [row["transitions"] for row in rows if key in row]
             ys = [row[key] for row in rows if key in row]
             return xs, ys
+
+        def templated_series(
+            rows: list[dict], key: str
+        ) -> dict[str, tuple[list[float], list[float]]]:
+            grouped: dict[str, tuple[list[float], list[float]]] = {}
+            for row in rows:
+                if key not in row:
+                    continue
+                value = row[key]
+                if value is None or not np.isfinite(float(value)):
+                    continue
+                label = str(row.get("template", "all"))
+                phase = str(row.get("phase", "collect"))
+                if phase != "collect":
+                    label = f"{label}:{phase}"
+                grouped.setdefault(label, ([], []))
+                grouped[label][0].append(float(row["transitions"]))
+                grouped[label][1].append(float(value))
+            return grouped
 
         ax = axes[0, 0]
         for key in ("q1_mean", "q2_mean", "target_mean"):
@@ -199,9 +309,43 @@ class DiagnosticsLogger:
         ax.plot(*series(self.replay_series, "replay_size"), label="replay size")
         ax.legend(loc="upper left", fontsize=7)
         ax2 = ax.twinx()
-        ax2.plot(*series(self.nan_series, "nan_incidents"), color="tab:red", label="NaN incidents")
+        ax2.plot(*series(self.nan_series, "nan_incidents"), color="tab:red", label="NaN")
+        ax2.plot(
+            *series(self.nan_series, "magnitude_incidents"),
+            color="tab:purple",
+            label="magnitude",
+        )
         ax2.legend(loc="lower right", fontsize=7)
-        ax.set_title("Replay / NaN incidents")
+        ax.set_title("Replay / incidents")
+
+        ax = axes[2, 0]
+        for key in ("d_mean", "d_p50", "d_p95"):
+            ax.plot(*series(self.step_d_series, key), label=key, alpha=0.8)
+        ax.set_title("Active-step D")
+        ax.legend(fontsize=7)
+
+        ax = axes[2, 1]
+        ax.plot(*series(self.update_series, "td_target_clamp_hit_frac"))
+        ax.set_title("TD-target clamp hit fraction")
+        ax.set_ylim(-0.05, 1.05)
+
+        ax = axes[2, 2]
+        lift_series = templated_series(self.lift_dist_series, "frac_high")
+        for name, (xs, ys) in sorted(lift_series.items()):
+            ax.plot(xs, ys, marker=".", label=name, alpha=0.8)
+        ax.set_title("Lift distribution by init template")
+        ax.set_ylim(-0.05, 1.05)
+        if lift_series:
+            ax.legend(fontsize=7)
+
+        ax = axes[2, 3]
+        flicker_series = templated_series(self.flip_flicker_series, "active_transition_rate")
+        for name, (xs, ys) in sorted(flicker_series.items()):
+            ax.plot(xs, ys, marker=".", label=name, alpha=0.8)
+        ax.set_title("Flip flicker by init template")
+        ax.set_ylim(-0.05, 1.05)
+        if flicker_series:
+            ax.legend(fontsize=7)
 
         for row in axes:
             for axis in row:

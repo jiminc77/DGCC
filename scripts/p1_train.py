@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from dgcc.envs.dlolab import DLOLabEnv
 from dgcc.goals.dual_goal import goal_curve
+from dgcc.models.networks import goal_residual_flips
 from dgcc.rl.diagnostics import DiagnosticsLogger
 from dgcc.rl.evaluation import evaluate_episodes
 from dgcc.rl.replay import ReplayBuffer
@@ -106,7 +107,11 @@ class TrainingRun:
         )
         td3_cfg = dict(self.config.get("td3", {}))
         self.agent_config = TD3Config(**{k: v for k, v in td3_cfg.items()})
-        self.agent = TD3Agent(self.agent_config, device=self.device)
+        self.agent = TD3Agent(
+            self.agent_config,
+            device=self.device,
+            reward_constants=self.episode_config.reward,
+        )
         self.buffer = ReplayBuffer(self.agent_config.replay_capacity)
         self.diag = DiagnosticsLogger(self.run_tag)
         self.rng = np.random.default_rng(self.seed)
@@ -121,6 +126,9 @@ class TrainingRun:
         self.best_success = -1.0
         self.eval_history: list[dict[str, Any]] = []
         self.halt_reason: str | None = None
+        self._prev_goal_flip = np.full(self.n_envs, -1, dtype=np.int8)
+        self._episode_flip_transitions = np.zeros(self.n_envs, dtype=int)
+        self._episode_flip_observations = np.zeros(self.n_envs, dtype=int)
 
         if self.task == "t2":
             self.train_goals = [g for _, g in load_t2_split("train")]
@@ -179,23 +187,130 @@ class TrainingRun:
                 auto_reset=True,
             )
         self.refresh_goal_curves()
+        self._reset_flip_tracking()
 
     def refresh_goal_curves(self) -> None:
         self.goal_curves = np.stack(
             [goal_curve(g, P1_LENGTH_M) for g in self.runner.goals]
         )
 
+    def _reset_flip_tracking(
+        self,
+        env_indices: np.ndarray | list[int] | None = None,
+        *,
+        prev_flip: np.ndarray | None = None,
+        flip_transitions: np.ndarray | None = None,
+        flip_observations: np.ndarray | None = None,
+    ) -> None:
+        prev = self._prev_goal_flip if prev_flip is None else prev_flip
+        transitions = (
+            self._episode_flip_transitions if flip_transitions is None else flip_transitions
+        )
+        observations = (
+            self._episode_flip_observations if flip_observations is None else flip_observations
+        )
+        if env_indices is None:
+            prev.fill(-1)
+            transitions.fill(0)
+            observations.fill(0)
+            return
+        indices = np.asarray(env_indices, dtype=int).reshape(-1)
+        if indices.size == 0:
+            return
+        prev[indices] = -1
+        transitions[indices] = 0
+        observations[indices] = 0
+
+    def _log_lift_flip_diagnostics(
+        self,
+        transitions: int,
+        *,
+        X_before: np.ndarray,
+        goal_curves: np.ndarray,
+        lift: list[str],
+        active: np.ndarray,
+        templates: list[str],
+        phase: str,
+        done: np.ndarray | None = None,
+        prev_flip: np.ndarray | None = None,
+        flip_transitions: np.ndarray | None = None,
+        flip_observations: np.ndarray | None = None,
+    ) -> np.ndarray:
+        active_arr = np.asarray(active, dtype=bool)
+        templates_arr = np.asarray(templates, dtype=object)
+        self.diag.log_lift_dist(
+            transitions,
+            templates=templates_arr,
+            lift=lift,
+            active=active_arr,
+            phase=phase,
+        )
+
+        flips = goal_residual_flips(X_before, goal_curves, P1_LENGTH_M).astype(np.int8)
+        prev = self._prev_goal_flip if prev_flip is None else prev_flip
+        episode_flips = (
+            self._episode_flip_transitions if flip_transitions is None else flip_transitions
+        )
+        observations = (
+            self._episode_flip_observations if flip_observations is None else flip_observations
+        )
+
+        tracked = active_arr & (prev >= 0)
+        changed = tracked & (prev != flips)
+        observations[active_arr] += 1
+        episode_flips[changed] += 1
+        prev[active_arr] = flips[active_arr]
+
+        done_arr = np.zeros_like(active_arr, dtype=bool) if done is None else np.asarray(done, dtype=bool)
+        rows: list[dict[str, float | int | str]] = []
+        for template in sorted({str(value) for value in templates_arr[active_arr]}):
+            template_mask = active_arr & (templates_arr == template)
+            n_active = int(template_mask.sum())
+            n_tracked = int((tracked & template_mask).sum())
+            flip_count = int((changed & template_mask).sum())
+            completed = template_mask & done_arr
+            rates: list[float] = []
+            for env_idx in np.flatnonzero(completed):
+                denominator = max(1, int(observations[int(env_idx)]) - 1)
+                rates.append(float(episode_flips[int(env_idx)] / denominator))
+            rows.append(
+                {
+                    "template": template,
+                    "flip_transitions": flip_count,
+                    "n_active": n_active,
+                    "n_tracked": n_tracked,
+                    "active_transition_rate": float(flip_count / n_tracked)
+                    if n_tracked
+                    else float("nan"),
+                    "completed_episodes": int(completed.sum()),
+                    "episode_flicker_rate_mean": float(np.mean(rates))
+                    if rates
+                    else float("nan"),
+                }
+            )
+        if rows:
+            self.diag.log_flip_flicker(transitions, rows, phase=phase)
+        if done is not None:
+            self._reset_flip_tracking(
+                np.flatnonzero(active_arr & done_arr),
+                prev_flip=prev,
+                flip_transitions=episode_flips,
+                flip_observations=observations,
+            )
+        return flips
     # ------------------------------------------------------------------
 
     def collect_round(self) -> int:
         """One batched primitive + buffer insertion. Returns active count."""
 
-        assert self.runner is not None and self.env is not None
+        assert self.runner is not None and self.env is not None and self.goal_curves is not None
 
         X = self.env.get_centerline_batch()
+        goal_curves_before = self.goal_curves.copy()
+        templates_before = list(self.runner.init_shapes)
         p, delta, lift, info = self.agent.select_actions(
             X,
-            self.goal_curves,
+            goal_curves_before,
             step=self.transitions,
             total_budget=self.total,
             rng=self.rng,
@@ -215,26 +330,58 @@ class TrainingRun:
             )
             if self.full_rebuilds > 5:
                 raise
+            self._reset_flip_tracking()
             self.build_scene()
             return 0
         if record.get("discarded"):
+            bad_envs = record.get("bad_envs", np.flatnonzero(record["active"]))
+            self._reset_flip_tracking(np.asarray(bad_envs, dtype=int))
+            self.diag.log_nan_incidents(
+                self.transitions,
+                self.runner.nan_incidents,
+                self.runner.magnitude_incidents,
+            )
             print(f"transition batch discarded (NaN covenant): {record['reason']}")
+            self.refresh_goal_curves()
             return 0
 
         active = record["active"]
         count = int(active.sum())
+        next_transitions = self.transitions + count
         if count:
+            self._log_lift_flip_diagnostics(
+                next_transitions,
+                X_before=X,
+                goal_curves=goal_curves_before,
+                lift=lift,
+                active=active,
+                templates=templates_before,
+                phase="collect",
+                done=record["done"],
+            )
+            refresh_reset = np.flatnonzero(
+                active & ~record["done"] & (self.runner.t < record["t"])
+            )
+            if refresh_reset.size:
+                self._reset_flip_tracking(refresh_reset)
+            self.diag.log_step_d(next_transitions, record["d_after"][active], phase="collect")
             self.buffer.add_batch(
                 X_before=record["X_before"][active],
                 X_after=record["X_after"][active],
-                goal_curve=self.goal_curves[active],
+                goal_curve=goal_curves_before[active],
                 p=np.asarray(p)[active],
                 delta=np.asarray(delta)[active],
                 lift=np.asarray([1 if v == "high" else 0 for v in lift])[active],
                 reward=record["reward"][active],
                 done=record["done"][active],
+                truncated=record["truncated"][active],
             )
-            self.transitions += count
+            self.transitions = next_transitions
+        self.diag.log_nan_incidents(
+            self.transitions,
+            self.runner.nan_incidents,
+            self.runner.magnitude_incidents,
+        )
         # Auto-reset may have refreshed goals for finished envs.
         self.refresh_goal_curves()
         return count
@@ -252,18 +399,66 @@ class TrainingRun:
             reward_mean=float(self.buffer.reward[: self.buffer.size].mean()),
             done_frac=float(self.buffer.done[: self.buffer.size].mean()),
         )
-        self.diag.log_nan_incidents(self.transitions, self.runner.nan_incidents)
+        self.diag.log_nan_incidents(
+            self.transitions,
+            self.runner.nan_incidents,
+            self.runner.magnitude_incidents,
+        )
 
     # ------------------------------------------------------------------
 
     def deterministic_eval(self) -> dict[str, Any]:
         assert self.runner is not None
 
+        eval_prev_flip = np.full(self.n_envs, -1, dtype=np.int8)
+        eval_flip_transitions = np.zeros(self.n_envs, dtype=int)
+        eval_flip_observations = np.zeros(self.n_envs, dtype=int)
+        magnitude_before = self.runner.magnitude_incidents
+        eval_incidents_seen = {
+            "nan": self.runner.nan_incidents,
+            "magnitude": self.runner.magnitude_incidents,
+        }
+
         def eval_action_fn(X: np.ndarray, G: np.ndarray, _rng: np.random.Generator):
-            return self.agent.select_actions(
-                X, G, step=self.transitions, total_budget=self.total,
-                rng=_rng, deterministic=True,
+            p, delta, lift = self.agent.select_actions(
+                X,
+                G,
+                step=self.transitions,
+                total_budget=self.total,
+                rng=_rng,
+                deterministic=True,
             )
+            assert self.runner is not None
+            if (
+                self.runner.nan_incidents != eval_incidents_seen["nan"]
+                or self.runner.magnitude_incidents != eval_incidents_seen["magnitude"]
+            ):
+                eval_incidents_seen["nan"] = self.runner.nan_incidents
+                eval_incidents_seen["magnitude"] = self.runner.magnitude_incidents
+                self._reset_flip_tracking(
+                    prev_flip=eval_prev_flip,
+                    flip_transitions=eval_flip_transitions,
+                    flip_observations=eval_flip_observations,
+                )
+            if np.all(self.runner.t == 0) and not np.any(self.runner.done):
+                self._reset_flip_tracking(
+                    prev_flip=eval_prev_flip,
+                    flip_transitions=eval_flip_transitions,
+                    flip_observations=eval_flip_observations,
+                )
+            self._log_lift_flip_diagnostics(
+                self.transitions,
+                X_before=X,
+                goal_curves=G,
+                lift=lift,
+                active=~self.runner.done,
+                templates=list(self.runner.init_shapes),
+                phase="eval",
+                prev_flip=eval_prev_flip,
+                flip_transitions=eval_flip_transitions,
+                flip_observations=eval_flip_observations,
+            )
+            return p, delta, lift
 
         eval_cfg = self.config.get("eval", {})
         if self.task == "t2":
@@ -291,6 +486,9 @@ class TrainingRun:
                 goal_fn=self._goal_fn,
                 q_min_fn=self.agent.q_min_executed,
             )
+        result["magnitude_incidents_during_eval"] = (
+            self.runner.magnitude_incidents - magnitude_before
+        )
         return result
 
     def eval_and_checkpoint(self, *, final: bool = False) -> None:
@@ -343,10 +541,12 @@ class TrainingRun:
             "config": self.config,
             "td3_config": self.agent_config.to_dict(),
             "reward_constants": vars(self.episode_config.reward),
+            "td_target_bound": dict(self.agent.td_target_bound),
             "total_budget": self.total,
             "transitions": self.transitions,
             "updates": self.agent.update_count,
             "nan_incidents_env": self.runner.nan_incidents if self.runner else None,
+            "magnitude_incidents_env": self.runner.magnitude_incidents if self.runner else None,
             "full_scene_rebuilds": self.full_rebuilds,
             "halt_reason": self.halt_reason,
             "best_success": self.best_success,
@@ -370,8 +570,10 @@ class TrainingRun:
             f"p1_train start {utc_now()} run_tag={self.run_tag} task={self.task} "
             f"seed={self.seed} total={self.total} n_envs={self.n_envs} device={self.device}"
         )
-        print(f"td3={self.agent_config.to_dict()}")
-        print(f"reward={vars(self.episode_config.reward)}")
+        print(
+            f"td3={self.agent_config.to_dict()} reward={vars(self.episode_config.reward)} "
+            f"td_target_bound={self.agent.td_target_bound}"
+        )
         start_wall = time.perf_counter()
         self.build_scene()
         next_eval = self.eval_every
@@ -392,7 +594,8 @@ class TrainingRun:
                         f"round transitions={self.transitions}/{self.total} "
                         f"collect_s={collect_s:.1f} update_s={update_s:.1f} "
                         f"rate={rate:.2f}tr/s eta_h={eta_h:.2f} "
-                        f"nan_env={self.runner.nan_incidents} rebuilds={self.full_rebuilds}"
+                        f"nan_env={self.runner.nan_incidents} "
+                        f"mag={self.runner.magnitude_incidents} rebuilds={self.full_rebuilds}"
                     )
                 if self.transitions >= next_eval:
                     self.eval_and_checkpoint(final=self.transitions >= self.total)
@@ -416,7 +619,8 @@ class TrainingRun:
         wall_h = (time.perf_counter() - start_wall) / 3600
         print(
             f"run complete transitions={self.transitions} updates={self.agent.update_count} "
-            f"wall_h={wall_h:.2f} nan_env={self.runner.nan_incidents} rebuilds={self.full_rebuilds}"
+            f"wall_h={wall_h:.2f} nan_env={self.runner.nan_incidents} "
+            f"mag={self.runner.magnitude_incidents} rebuilds={self.full_rebuilds}"
         )
         return 0
 

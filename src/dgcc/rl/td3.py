@@ -1,16 +1,22 @@
 """P1 §7 TD3-style off-policy learner with double-Q decoupling.
 
-Target semantics (consensus plan C4/F4 — EXACT, target networks only):
+Target semantics (P1.md §7 + verdict F1 — target networks only, timeout
+truncation bootstraps):
 
-    y = r + γ · min(Q_target_1, Q_target_2)(s′, g, p′*, ũ′),  γ = 0.95
+    terminal = done & ~truncated
+    y = r + γ · (1 − terminal) · min(Q_target_1, Q_target_2)(s′, g, p′*, ũ′)
     p′* = argmax_p Q_target_1(s′, g, p, u_target(s′, p))       # selection: Q_target_1
     ũ′  = u_target(s′, p′*) + clip(N(0, 0.05), ±0.1)           # target policy smoothing
 
-Online critics NEVER appear in the target computation.  The actor loss is the
-all-candidate objective L_actor = −E[(1/K) Σ_p Q_min(s, g, p, u_θ(s, p))];
-actor gradients flow ONLY through u (p is a discrete index and the encoder
-trunk is detached in the actor pass — the trunk is trained by the critic
-loss, which keeps P2's latent semantics critic-grounded).
+Online critics NEVER appear in the target computation.  Verdict S1 makes Huber
+loss the PRIMARY residual-containment mechanism for both critics.  Verdict S3
+adds only a derived TD-target clamp backstop from the immutable reward envelope;
+a nonzero steady clamp-hit rate is pre-registered evidence for the
+intrinsic-explosion antithesis.  The actor loss is the all-candidate objective
+L_actor = −E[(1/K) Σ_p Q_min(s, g, p, u_θ(s, p))]; actor gradients flow ONLY
+through u (p is a discrete index and the encoder trunk is detached in the actor
+pass — the trunk is trained by the critic loss, which keeps P2's latent
+semantics critic-grounded).
 
 Training-level NaN covenant (global rule 6): non-finite loss or gradients
 raise :class:`TrainingNaNError` BEFORE any optimizer step; the caller must
@@ -24,12 +30,14 @@ training, custom CUDA.
 from __future__ import annotations
 
 import copy
-from dataclasses import asdict, dataclass, field
+from decimal import Decimal
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from dgcc.models.networks import (
@@ -40,7 +48,7 @@ from dgcc.models.networks import (
     TwinCritic,
     build_node_features,
 )
-from dgcc.tasks.domain import P1_LENGTH_M
+from dgcc.tasks.domain import P1_LENGTH_M, RewardConstants
 
 
 class TrainingNaNError(RuntimeError):
@@ -59,6 +67,7 @@ class TD3Config:
     utd: int = 1
     warmup_transitions: int = 5_000
     grad_clip: float = 10.0
+    huber_delta: float = 1.0
     policy_noise: float = 0.05
     noise_clip: float = 0.1
     exploration_u_sigma: float = 0.03
@@ -92,12 +101,59 @@ def smooth_target_u(u: torch.Tensor, noise: torch.Tensor, *, noise_clip: float) 
     return torch.cat([delta, lift], dim=-1)
 
 
-def td_target(
-    reward: torch.Tensor, done: torch.Tensor, gamma: float, q_min: torch.Tensor
-) -> torch.Tensor:
-    """y = r + γ·(1 − done)·min_i Q_target_i(s′, g, p′*, ũ′)."""
+def derive_td_target_bound(
+    constants: RewardConstants, gamma: float, d_max: float = 7.0
+) -> dict[str, float]:
+    """Derive the S3 TD-target clamp from P1 reward constants.
 
-    return reward + gamma * (1.0 - done.to(reward.dtype)) * q_min
+    F3/S3 fixes the goal-node norm bound at 4.0 m, giving ``D_max=7.0`` for
+    the reward envelope.  The bound is a backstop; S1 Huber loss is the primary
+    residual-containment mechanism.
+    """
+
+    alpha = Decimal(str(constants.alpha))
+    c_step = Decimal(str(constants.c_step))
+    r_succ = Decimal(str(constants.r_succ))
+    distance = Decimal(str(d_max))
+    discount_gap = Decimal("1") - Decimal(str(gamma))
+    if distance <= 0:
+        raise ValueError("d_max must be positive")
+    if discount_gap <= 0:
+        raise ValueError("gamma must be less than 1")
+
+    r_max = alpha * distance - c_step + r_succ
+    r_min = -alpha * distance - c_step
+    v_max = r_max / discount_gap
+    return {
+        "d_max": float(distance),
+        "r_min": float(r_min),
+        "r_max": float(r_max),
+        "v_max": float(v_max),
+    }
+
+
+def td_target(
+    reward: torch.Tensor,
+    done: torch.Tensor,
+    gamma: float,
+    q_min: torch.Tensor,
+    *,
+    truncated: torch.Tensor | None = None,
+    v_max: float | None = None,
+) -> torch.Tensor:
+    """P1.md §7 TD target with verdict F1 timeout masking and S3 clamp.
+
+    ``terminal = done & ~truncated``; timeout truncations bootstrap, while true
+    success terminations zero the bootstrap term.
+    """
+
+    if truncated is None:
+        truncated = torch.zeros_like(done, dtype=torch.bool)
+    terminal = done.to(torch.bool) & ~truncated.to(torch.bool)
+    y = reward + gamma * (1.0 - terminal.to(reward.dtype)) * q_min
+    if v_max is not None:
+        y = torch.clamp(y, -float(v_max), float(v_max))
+    return y
 
 
 def epsilon_schedule(step: int, total_budget: int, config: TD3Config) -> float:
@@ -126,10 +182,16 @@ class TD3Agent:
         *,
         device: str | torch.device = "cpu",
         length_m: float = P1_LENGTH_M,
+        reward_constants: RewardConstants | None = None,
     ) -> None:
         self.config = config or TD3Config()
         self.device = torch.device(device)
         self.length_m = float(length_m)
+        self.reward_constants = reward_constants or RewardConstants()
+        self.td_target_bound = derive_td_target_bound(
+            self.reward_constants, self.config.gamma
+        )
+        self.last_clamp_hit_frac = 0.0
 
         self.encoder = Encoder().to(self.device)
         self.critic = TwinCritic().to(self.device)
@@ -192,6 +254,7 @@ class TD3Agent:
         *,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
+        """Compute the P1.md §7/F1 target and apply the S3 derived clamp."""
         feats_next = self.features(
             batch["X_after"], batch["goal_curve"], batch.get("flip_after")
         )
@@ -213,8 +276,22 @@ class TD3Agent:
         q1_t, q2_t = self.critic_target(h_star, u_tilde)
         q_min = torch.minimum(q1_t, q2_t)
         reward = torch.as_tensor(batch["reward"], dtype=torch.float32, device=self.device)
-        done = torch.as_tensor(batch["done"], dtype=torch.bool, device=self.device)
-        return td_target(reward, done, self.config.gamma, q_min)
+        done_np = np.asarray(batch["done"], dtype=bool)
+        truncated_np = np.asarray(batch.get("truncated", np.zeros_like(done_np)), dtype=bool)
+        done = torch.as_tensor(done_np, dtype=torch.bool, device=self.device)
+        truncated = torch.as_tensor(truncated_np, dtype=torch.bool, device=self.device)
+        unclamped = td_target(
+            reward,
+            done,
+            self.config.gamma,
+            q_min,
+            truncated=truncated,
+        )
+        v_max = float(self.td_target_bound["v_max"])
+        hits = unclamped.abs() >= v_max
+        y = torch.clamp(unclamped, -v_max, v_max)
+        self.last_clamp_hit_frac = float(hits.to(torch.float32).mean().cpu())
+        return y
 
     # ------------------------------------------------------------------
     # Updates
@@ -241,7 +318,9 @@ class TD3Agent:
         u = u_tensor(batch["delta"], batch["lift"], self.device)
 
         q1, q2 = self.critic(h_p, u)
-        loss = nn.functional.mse_loss(q1, y) + nn.functional.mse_loss(q2, y)
+        loss = F.huber_loss(q1, y, delta=self.config.huber_delta) + F.huber_loss(
+            q2, y, delta=self.config.huber_delta
+        )
         self._assert_finite_loss(loss, "critic loss")
 
         self.critic_optimizer.zero_grad(set_to_none=True)
@@ -256,9 +335,10 @@ class TD3Agent:
             "critic_loss": float(loss.detach().cpu()),
             "critic_grad_norm": grad_norm,
             "target_mean": float(y.mean().cpu()),
+            "td_target_clamp_hit_frac": self.last_clamp_hit_frac,
             "q1_mean": float(q1.detach().mean().cpu()),
             "q2_mean": float(q2.detach().mean().cpu()),
-            "q1_std": float(q1.detach().std().cpu()),
+            "q1_std": float(q1.detach().std(unbiased=False).cpu()),
             "td_error_mean": float(td_error.mean().cpu()),
             "td_error_p95": float(td_error.quantile(0.95).cpu()),
             "td_error_max": float(td_error.max().cpu()),
@@ -400,12 +480,24 @@ class TD3Agent:
     # Checkpointing
     # ------------------------------------------------------------------
 
+    def to_dict(self) -> dict[str, Any]:
+        """Agent metadata echoed in checkpoints and diagnostics configs."""
+
+        return {
+            "config": self.config.to_dict(),
+            "reward_constants": asdict(self.reward_constants),
+            "td_target_bound": dict(self.td_target_bound),
+        }
+
     def save_checkpoint(self, path: Path | str) -> Path:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
                 "config": self.config.to_dict(),
+                "reward_constants": asdict(self.reward_constants),
+                "td_target_bound": dict(self.td_target_bound),
+                "metadata": self.to_dict(),
                 "update_count": self.update_count,
                 "encoder": self.encoder.state_dict(),
                 "critic": self.critic.state_dict(),
@@ -464,6 +556,7 @@ __all__ = [
     "TD3Agent",
     "TD3Config",
     "TrainingNaNError",
+    "derive_td_target_bound",
     "epsilon_schedule",
     "select_p_star",
     "smooth_target_u",

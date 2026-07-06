@@ -163,6 +163,7 @@ def main() -> int:
                         lift=np.asarray([1 if v == "high" else 0 for v in lift])[active],
                         reward=record["reward"][active],
                         done=record["done"][active],
+                        truncated=record["truncated"][active],
                     )
                     transitions += int(active.sum())
 

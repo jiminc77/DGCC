@@ -343,6 +343,7 @@ def test_replay_buffer_wraps_and_samples() -> None:
             lift=np.zeros(count, dtype=int),
             reward=np.arange(count, dtype=float),
             done=np.zeros(count, dtype=bool),
+            truncated=np.zeros(count, dtype=bool),
             flip_before=np.zeros(count, dtype=bool),
             flip_after=np.zeros(count, dtype=bool),
         )

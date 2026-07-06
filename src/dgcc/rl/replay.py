@@ -70,7 +70,8 @@ class ReplayBuffer:
     """Fixed-capacity ring buffer over the v2 training fields.
 
     Training fields kept in memory: ``X_before``, ``X_after``, ``goal_curve``,
-    ``p``, ``delta``, ``lift`` (0=low, 1=high), ``reward``, ``done``.
+    ``p``, ``delta``, ``lift`` (0=low, 1=high), ``reward``, ``done``,
+    ``truncated`` (F1 timeout carrier).
     """
 
     def __init__(self, capacity: int) -> None:
@@ -87,6 +88,7 @@ class ReplayBuffer:
         self.lift = np.zeros(capacity, dtype=np.int64)
         self.reward = np.zeros(capacity, dtype=np.float32)
         self.done = np.zeros(capacity, dtype=bool)
+        self.truncated = np.zeros(capacity, dtype=bool)
         # Canonical flip decisions cached at insertion (M1 gate MEDIUM): each
         # transition's flip is computed ONCE here instead of on every sampled
         # update (~25x fewer canonical_shape_flip calls at §7 replay ratios).
@@ -104,6 +106,7 @@ class ReplayBuffer:
         lift: np.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
+        truncated: np.ndarray,
         flip_before: np.ndarray | None = None,
         flip_after: np.ndarray | None = None,
     ) -> None:
@@ -119,6 +122,14 @@ class ReplayBuffer:
             arr = np.asarray(value)
             if arr.shape != (count, *tail):
                 raise ValueError(f"{name} must have shape {(count, *tail)}, got {arr.shape}")
+        done_arr = np.asarray(done, dtype=bool)
+        truncated_arr = np.asarray(truncated, dtype=bool)
+        if done_arr.shape != (count,):
+            raise ValueError(f"done must have shape {(count,)}, got {done_arr.shape}")
+        if truncated_arr.shape != done_arr.shape:
+            raise ValueError(
+                f"truncated must have the same shape as done {done_arr.shape}, got {truncated_arr.shape}"
+            )
         indices = (self._next + np.arange(count)) % self.capacity
         self.X_before[indices] = np.asarray(X_before, dtype=np.float32)
         self.X_after[indices] = np.asarray(X_after, dtype=np.float32)
@@ -127,7 +138,8 @@ class ReplayBuffer:
         self.delta[indices] = np.asarray(delta, dtype=np.float32)
         self.lift[indices] = np.asarray(lift, dtype=np.int64)
         self.reward[indices] = np.asarray(reward, dtype=np.float32)
-        self.done[indices] = np.asarray(done, dtype=bool)
+        self.done[indices] = done_arr
+        self.truncated[indices] = truncated_arr
         if flip_before is None or flip_after is None:
             from dgcc.models.networks import goal_residual_flips
 
@@ -156,6 +168,7 @@ class ReplayBuffer:
             "lift": self.lift[indices].copy(),
             "reward": self.reward[indices].astype(np.float64),
             "done": self.done[indices].copy(),
+            "truncated": self.truncated[indices].copy(),
             "flip_before": self.flip_before[indices].copy(),
             "flip_after": self.flip_after[indices].copy(),
         }
