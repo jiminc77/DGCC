@@ -1,15 +1,15 @@
 p1_m1_dummy_loop seed=0 n_envs=8 updates_goal=100
-td3 config: {'gamma': 0.95, 'tau': 0.005, 'lr': 0.0003, 'batch_size': 32, 'replay_capacity': 500000, 'utd': 1, 'warmup_transitions': 64, 'grad_clip': 10.0, 'policy_noise': 0.05, 'noise_clip': 0.1, 'exploration_u_sigma': 0.03, 'eps_p_start': 1.0, 'eps_p_end': 0.1, 'eps_p_fraction': 0.3}
-backbone parameter count (encoder+twin critic+actor): 570,630
-update 001 transitions=66 critic_loss=1.4367 actor_loss=0.0100 critic_grad=0.106 actor_grad=0.002 q1_mean=-0.022 target_mean=0.008
-update 010 transitions=106 critic_loss=2.9960 actor_loss=-0.0522 critic_grad=0.393 actor_grad=0.006 q1_mean=0.055 target_mean=0.173
-update 020 transitions=159 critic_loss=4.3347 actor_loss=-0.1606 critic_grad=0.690 actor_grad=0.013 q1_mean=0.175 target_mean=0.330
-update 030 transitions=212 critic_loss=4.2245 actor_loss=-0.2055 critic_grad=0.541 actor_grad=0.020 q1_mean=0.214 target_mean=0.328
-update 040 transitions=274 critic_loss=0.3473 actor_loss=-0.1710 critic_grad=1.687 actor_grad=0.024 q1_mean=0.202 target_mean=-0.190
-update 050 transitions=318 critic_loss=1.5052 actor_loss=-0.0852 critic_grad=0.473 actor_grad=0.017 q1_mean=0.101 target_mean=-0.030
-update 060 transitions=371 critic_loss=8.5369 actor_loss=-0.0859 critic_grad=2.150 actor_grad=0.020 q1_mean=0.093 target_mean=0.704
-update 070 transitions=433 critic_loss=1.5102 actor_loss=-0.0842 critic_grad=0.590 actor_grad=0.021 q1_mean=0.090 target_mean=-0.020
-update 080 transitions=513 critic_loss=0.1460 actor_loss=-0.0356 critic_grad=1.483 actor_grad=0.012 q1_mean=0.048 target_mean=-0.195
-update 090 transitions=584 critic_loss=4.0965 actor_loss=0.0501 critic_grad=1.773 actor_grad=0.012 q1_mean=-0.064 target_mean=0.159
-update 100 transitions=664 critic_loss=0.5167 actor_loss=0.3401 critic_grad=7.966 actor_grad=0.056 q1_mean=-0.174 target_mean=-0.359
-loop complete: updates=100 transitions=664 wall_s=1.7 nan_incidents=0 — no errors
+td3 config: {'gamma': 0.95, 'tau': 0.005, 'lr': 0.0003, 'batch_size': 32, 'replay_capacity': 500000, 'utd': 1, 'warmup_transitions': 64, 'grad_clip': 10.0, 'huber_delta': 1.0, 'policy_noise': 0.05, 'noise_clip': 0.1, 'exploration_u_sigma': 0.03, 'eps_p_start': 1.0, 'eps_p_end': 0.1, 'eps_p_fraction': 0.3}
+backbone parameter count (encoder+twin critic+actor): 572,678
+update 001 transitions=65 critic_loss=0.3658 actor_loss=1.0923 critic_grad=6.191 actor_grad=0.128 q1_mean=-0.399 target_mean=-0.495
+update 010 transitions=105 critic_loss=0.9344 actor_loss=0.8303 critic_grad=3.122 actor_grad=0.074 q1_mean=-0.683 target_mean=-0.139
+update 020 transitions=167 critic_loss=0.6140 actor_loss=0.7879 critic_grad=0.746 actor_grad=0.091 q1_mean=-0.653 target_mean=-0.348
+update 030 transitions=220 critic_loss=0.6228 actor_loss=0.8296 critic_grad=0.936 actor_grad=0.080 q1_mean=-0.673 target_mean=-0.350
+update 040 transitions=282 critic_loss=0.0099 actor_loss=0.8231 critic_grad=0.676 actor_grad=0.077 q1_mean=-0.694 target_mean=-0.716
+update 050 transitions=326 critic_loss=0.3201 actor_loss=0.8298 critic_grad=0.948 actor_grad=0.093 q1_mean=-0.661 target_mean=-0.556
+update 060 transitions=370 critic_loss=0.9674 actor_loss=0.7307 critic_grad=1.927 actor_grad=0.109 q1_mean=-0.578 target_mean=-0.248
+update 070 transitions=414 critic_loss=0.3910 actor_loss=0.6275 critic_grad=6.174 actor_grad=0.158 q1_mean=-0.473 target_mean=-0.606
+update 080 transitions=476 critic_loss=1.1880 actor_loss=0.6665 critic_grad=0.693 actor_grad=0.193 q1_mean=-0.581 target_mean=-0.083
+update 090 transitions=529 critic_loss=1.7548 actor_loss=0.6169 critic_grad=2.547 actor_grad=0.252 q1_mean=-0.608 target_mean=0.247
+update 100 transitions=591 critic_loss=0.6023 actor_loss=0.7017 critic_grad=2.306 actor_grad=0.286 q1_mean=-0.594 target_mean=-0.459
+loop complete: updates=100 transitions=591 wall_s=1.9 nan_incidents=0 — no errors
