@@ -131,7 +131,7 @@ def main() -> int:
     lines.append("# P1-M3 — T1 기준 성능 리포트 (3 tasks × 3 seeds × 1e5 transitions)")
     lines.append("")
     if missing:
-        lines.append(f"> **PRELIMINARY DRAFT** — 미완료 run: {', '.join(missing)}")
+        lines.append(f"> **비고 — 미완주 seed:** {', '.join(missing)} (rule 6 halt 종결/처분 대기 — 하단 안정성 요약의 halt 표 참조)")
         lines.append("")
     lines.append(
         "사전 등록 기준 (issue #12): (i) 전 seed random 대비 개선 유의 (episode-level "

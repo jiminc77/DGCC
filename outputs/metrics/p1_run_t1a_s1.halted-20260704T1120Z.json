@@ -1,0 +1,90 @@
+{
+ "generated_at": "2026-07-04T11:15:31Z",
+ "git_commit": "2dc0dae9d155f22b3c9ff1c06f1c8baa9ab292cb",
+ "run_tag": "t1a_s1",
+ "task": "t1a_straighten",
+ "seed": 1,
+ "config": {
+  "task": "t1a_straighten",
+  "run": {
+   "total_transitions": 100000,
+   "seeds": [
+    0,
+    1,
+    2
+   ],
+   "n_envs": 256,
+   "eval_every_transitions": 25000,
+   "checkpoint_every_transitions": 25000
+  },
+  "eval": {
+   "t1_episodes_per_task": 100,
+   "t2_val_goals": 50,
+   "t2_episodes_per_goal": 2
+  },
+  "td3": {
+   "gamma": 0.95,
+   "tau": 0.005,
+   "lr": 0.0003,
+   "batch_size": 256,
+   "replay_capacity": 500000,
+   "utd": 1,
+   "warmup_transitions": 5000,
+   "grad_clip": 10.0,
+   "policy_noise": 0.05,
+   "noise_clip": 0.1,
+   "exploration_u_sigma": 0.03,
+   "eps_p_start": 1.0,
+   "eps_p_end": 0.1,
+   "eps_p_fraction": 0.3
+  },
+  "reward": {
+   "alpha": 10.0,
+   "c_step": 0.1,
+   "r_succ": 5.0
+  },
+  "her": false,
+  "sim": {
+   "dt": 0.001,
+   "substeps": 5,
+   "rod_damping": 10.0,
+   "rod_angular_damping": 5.0,
+   "initial_settle_steps": 0,
+   "reset_settle_max_steps": 10000,
+   "move_step_size": 0.03,
+   "move_hold_steps": 0,
+   "grasp_realism": true
+  }
+ },
+ "td3_config": {
+  "gamma": 0.95,
+  "tau": 0.005,
+  "lr": 0.0003,
+  "batch_size": 256,
+  "replay_capacity": 500000,
+  "utd": 1,
+  "warmup_transitions": 5000,
+  "grad_clip": 10.0,
+  "policy_noise": 0.05,
+  "noise_clip": 0.1,
+  "exploration_u_sigma": 0.03,
+  "eps_p_start": 1.0,
+  "eps_p_end": 0.1,
+  "eps_p_fraction": 0.3
+ },
+ "reward_constants": {
+  "alpha": 10.0,
+  "c_step": 0.1,
+  "r_succ": 5.0
+ },
+ "total_budget": 100000,
+ "transitions": 13056,
+ "updates": 7985,
+ "nan_incidents_env": 41,
+ "full_scene_rebuilds": 0,
+ "halt_reason": "TrainingNaNError: non-finite critic gradient norm; halt run and report with last checkpoint",
+ "best_success": -1.0,
+ "last_checkpoint": null,
+ "evals": [],
+ "eval_episodes": []
+}

@@ -1,0 +1,230 @@
+{
+ "bootstrap_seed": 20260703,
+ "B": 10000,
+ "preliminary": true,
+ "missing_runs": [
+  "t1a_s1",
+  "t1b_s2",
+  "t1c_s1"
+ ],
+ "tasks": {
+  "t1a": {
+   "random_success": 0.04,
+   "random_return": -5.357222813086094,
+   "seeds": {
+    "0": {
+     "final_success": 0.09,
+     "final_return": -1.0895412221233922,
+     "final_d": 0.33464531259549196,
+     "success_diff_lb": -0.009999999999999995,
+     "return_diff_lb": 3.588629309722654,
+     "success_diff_significant": false,
+     "return_diff_significant": true,
+     "gap_trajectory": [
+      0.5765800371019707,
+      35.78870597107184,
+      0.3998776108837578,
+      0.5314670341075756
+     ],
+     "per_template_success": {
+      "random_smooth": 0.12,
+      "s_curve": 0.0,
+      "straight": 0.24,
+      "u_bend": 0.0
+     },
+     "wall_h_source_log": null,
+     "full_scene_rebuilds": 0,
+     "nan_incidents_corrected": 214
+    },
+    "2": {
+     "final_success": 0.09,
+     "final_return": -5.880884432448694,
+     "final_d": 0.36452964441195035,
+     "success_diff_lb": -0.009999999999999995,
+     "return_diff_lb": -10.276419217043003,
+     "success_diff_significant": false,
+     "return_diff_significant": false,
+     "gap_trajectory": [
+      0.6460934668415856,
+      0.5144571737866004,
+      0.5078636922548153,
+      4.12733609565227
+     ],
+     "per_template_success": {
+      "random_smooth": 0.16,
+      "s_curve": 0.0,
+      "straight": 0.16,
+      "u_bend": 0.04
+     },
+     "wall_h_source_log": null,
+     "full_scene_rebuilds": 1,
+     "nan_incidents_corrected": 165
+    }
+   },
+   "final_success_std_pp": 0.0,
+   "criterion_ii_std_lt_15pp": true,
+   "criterion_iii_t1a_ge_70pct": false
+  },
+  "t1b": {
+   "random_success": 0.0,
+   "random_return": -4.056910803338964,
+   "seeds": {
+    "0": {
+     "final_success": 0.0,
+     "final_return": -1.731967534148862,
+     "final_d": 0.29779390153750795,
+     "success_diff_lb": 0.0,
+     "return_diff_lb": 1.9186101509103126,
+     "success_diff_significant": false,
+     "return_diff_significant": true,
+     "gap_trajectory": [
+      35.057659375554614,
+      13.292048122475016,
+      4.244894710097108,
+      0.5672526353195395
+     ],
+     "per_template_success": {
+      "random_smooth": 0.0,
+      "s_curve": 0.0,
+      "straight": 0.0,
+      "u_bend": 0.0
+     },
+     "wall_h_source_log": null,
+     "full_scene_rebuilds": 1,
+     "nan_incidents_corrected": 121
+    },
+    "1": {
+     "final_success": 0.01,
+     "final_return": -1.741315727769493,
+     "final_d": 0.2737524157280781,
+     "success_diff_lb": 0.0,
+     "return_diff_lb": 1.907219972323259,
+     "success_diff_significant": false,
+     "return_diff_significant": true,
+     "gap_trajectory": [
+      1.1488620478154585,
+      0.5149314860638284,
+      0.45664172218373833,
+      0.5912185847585186
+     ],
+     "per_template_success": {
+      "random_smooth": 0.0,
+      "s_curve": 0.0,
+      "straight": 0.0,
+      "u_bend": 0.04
+     },
+     "wall_h_source_log": null,
+     "full_scene_rebuilds": 0,
+     "nan_incidents_corrected": 53
+    }
+   },
+   "final_success_std_pp": 0.5,
+   "criterion_ii_std_lt_15pp": true
+  },
+  "t1c": {
+   "random_success": 0.0,
+   "random_return": -3.1685295291730626,
+   "seeds": {
+    "0": {
+     "final_success": 0.0,
+     "final_return": 0.4734232889138072,
+     "final_d": 0.252745308399817,
+     "success_diff_lb": 0.0,
+     "return_diff_lb": 3.1421903699563947,
+     "success_diff_significant": false,
+     "return_diff_significant": true,
+     "gap_trajectory": [
+      -0.8661677416299297,
+      -0.3731673554496951,
+      -0.7121376867003858,
+      0.6186904937140727
+     ],
+     "per_template_success": {
+      "random_smooth": 0.0,
+      "s_curve": 0.0,
+      "straight": 0.0,
+      "u_bend": 0.0
+     },
+     "wall_h_source_log": null,
+     "full_scene_rebuilds": 1,
+     "nan_incidents_corrected": 114
+    },
+    "2": {
+     "final_success": 0.0,
+     "final_return": 1.089301624680096,
+     "final_d": 1.2041912006005409,
+     "success_diff_lb": 0.0,
+     "return_diff_lb": 3.530650552974852,
+     "success_diff_significant": false,
+     "return_diff_significant": true,
+     "gap_trajectory": [
+      -0.3160799206088385,
+      -1.3930105564627204,
+      -1.0193988294672254,
+      -0.5009141859189975
+     ],
+     "per_template_success": {
+      "random_smooth": 0.0,
+      "s_curve": 0.0,
+      "straight": 0.0,
+      "u_bend": 0.0
+     },
+     "wall_h_source_log": null,
+     "full_scene_rebuilds": 1,
+     "nan_incidents_corrected": 142
+    }
+   },
+   "final_success_std_pp": 0.0,
+   "criterion_ii_std_lt_15pp": true
+  }
+ },
+ "halted_runs": [
+  {
+   "run_tag": "t1a_s1",
+   "archive": "halted-20260704T1120Z",
+   "transitions_at_halt": 13056,
+   "updates_at_halt": 7985,
+   "halt_reason": "TrainingNaNError: non-finite critic gradient norm; halt run and report with last checkpoint",
+   "last_checkpoint": null,
+   "gap_trajectory": []
+  },
+  {
+   "run_tag": "t1a_s1",
+   "archive": "halted-retry-20260705T2111Z",
+   "transitions_at_halt": 53504,
+   "updates_at_halt": 48470,
+   "halt_reason": "TrainingNaNError: non-finite critic gradient norm; halt run and report with last checkpoint",
+   "last_checkpoint": "outputs/models/t1a_s1/ckpt_0050176.pt",
+   "gap_trajectory": [
+    2263.7543375705827,
+    150272608.87694818
+   ]
+  },
+  {
+   "run_tag": "t1b_s2",
+   "archive": "halted-20260706T0500Z",
+   "transitions_at_halt": 65024,
+   "updates_at_halt": 60090,
+   "halt_reason": "TrainingNaNError: non-finite critic gradient norm; halt run and report with last checkpoint",
+   "last_checkpoint": "outputs/models/t1b_s2/ckpt_0050176.pt",
+   "gap_trajectory": [
+    190.60142693605354,
+    1093047.4234219217
+   ]
+  },
+  {
+   "run_tag": "t1c_s1",
+   "archive": "halted-20260705T2200Z",
+   "transitions_at_halt": 99328,
+   "updates_at_halt": 94461,
+   "halt_reason": "TrainingNaNError: non-finite critic gradient norm; halt run and report with last checkpoint",
+   "last_checkpoint": "outputs/models/t1c_s1/ckpt_0075008.pt",
+   "gap_trajectory": [
+    87.87571286809262,
+    705.1231247926473,
+    11891461.849035613
+   ]
+  }
+ ],
+ "reward_constants_adjusted": false
+}
