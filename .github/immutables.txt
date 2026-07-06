@@ -1,0 +1,15 @@
+# DGCC 불변값 매니페스트 — P0 확정 사전등록 수치가 미래 명세에서 사라지지 않도록 강제
+#
+# 유래: P0 M7 sign-off (DGCC issue #8) — issue #8 sign-off 기준의 "불변 (변경 금지)" 수치.
+#       G2 임계는 P0 §8 개정(dashboard issue #17, 성분 분해 + correspondence L2, 임계 0.9 유지).
+# 변경 절차: 이 파일의 불변값 정의 변경(또는 명세에서 값 제거)은 [Decision] 이슈 인용이 필수다
+#            (research-ops PROTOCOL §3). check_immutables.sh 가 PR 본문의 "Decision" 인용을 강제한다.
+# 제외: reward α=10 · c_step=0.1 · R_succ=5 는 P1 조정 허용(기록 의무, M6 잠금)이라 불변에서 제외.
+# 형식: <glob><TAB><ERE regex><TAB><설명>. glob P[0-9]*.md = CODE repo 루트 단계 명세(P0.md,P1.md,...).
+#
+P[0-9]*.md	(ρ\s*≥\s*0\.9)|((reward|성공 판정)[^\n]{0,24}Chamfer)|(Chamfer[^\n]{0,16}(보고용|사용 금지))	G2 임계 ρ≥0.9 / D=correspondence L2(Chamfer 보고용 배제)
+P[0-9]*.md	1e-3	settle 속도 임계 1e-3
+P[0-9]*.md	0\.05\s*·?\s*L	ε_succ = 0.05·L
+P[0-9]*.md	M\s*=\s*8	DCT 모드 M=8
+P[0-9]*.md	K\s*=\s*32	재표본 K=32
+P[0-9]*.md	correspondence\s*L2	D 정의 = correspondence L2

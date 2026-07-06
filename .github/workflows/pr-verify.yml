@@ -1,0 +1,140 @@
+# 킷 원본 — MGMT·CODE 양쪽 레포의 .github/workflows/ 로 그대로 복사해 사용 (파일 무수정 재사용).
+# research-ops — PR 기계 검증 (LLM 세션 A의 branch+PR 게시를 CI가 검사, 사람 merge 전 green 요구)
+#
+# 동작: pull_request 에서만 실행 (직접 push 는 트리거하지 않음 — gjc 의 main 직접 push 는 영향 없음).
+# 변경 파일 종류별로 킷 린터를 조건 실행:
+#   *_report.html            → lint_report.sh   (단계 리포트 계약)
+#   루트 P[0-9]*.md          → lint_spec.sh     (@goal 구조 계약)
+#   .github/immutables.txt 존재 시 → check_immutables.sh (불변값, PR 본문 Decision 강제)
+#   */status.json | status.json → lint_status.sh (대시보드 스키마)
+# 스크립트 위치: 로컬 research-ops/scripts/ 있으면 사용, 없으면 MGMT raw 에서 내려받음.
+# Job 이름은 'pr-verify' 고정 — P1 종료 시 required status check 로 등록되는 이름이다.
+name: pr-verify
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pr-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run research-ops PR checks
+        env:
+          # MGMT 레포 좌표 (vars 우선, 없으면 현재 소유자 / 기본 레포명) — 어느 CODE 레포든 무수정 재사용
+          MGMT_OWNER: ${{ vars.MGMT_OWNER || github.repository_owner }}
+          MGMT_REPO: ${{ vars.MGMT_REPO || 'research-dashboard' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          # PR 본문은 반드시 env 로 전달 (YAML/셸 인젝션 차단 — 본문을 스크립트 인자로 직접 넣지 않는다)
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -uo pipefail
+          echo "## research-ops PR 검증" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          BASE="${BASE_REF:?base ref 필요}"
+          git fetch --no-tags --depth=200 origin "$BASE" >/dev/null 2>&1 || git fetch --no-tags origin "$BASE" || true
+
+          # 변경 파일 목록 (base...HEAD)
+          CHANGED="$(git diff --name-only "origin/${BASE}...HEAD" || true)"
+          if [ -z "$CHANGED" ]; then
+            CHANGED="$(git diff --name-only "origin/${BASE}" HEAD || true)"
+          fi
+          echo "변경 파일:" >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$CHANGED" ]; then
+            echo "- (없음)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '%s\n' "$CHANGED" | sed 's/^/- `/;s/$/`/' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # ---- 스크립트 위치 결정: 로컬 우선, 없으면 MGMT raw 에서 fetch ----
+          RAW_BASE="https://raw.githubusercontent.com/${MGMT_OWNER}/${MGMT_REPO}/main/research-ops/scripts"
+          SCRIPTS=""
+          if [ -d "research-ops/scripts" ]; then
+            SCRIPTS="research-ops/scripts"
+            echo "스크립트 출처: 로컬 \`research-ops/scripts/\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            SCRIPTS="$(mktemp -d)"
+            echo "스크립트 출처: MGMT raw (\`${MGMT_OWNER}/${MGMT_REPO}\`)" >> "$GITHUB_STEP_SUMMARY"
+            for s in lint_spec.sh check_immutables.sh lint_status.sh lint_report.sh; do
+              if ! curl -fsSL "${RAW_BASE}/${s}" -o "${SCRIPTS}/${s}"; then
+                echo "::error::스크립트 다운로드 실패 — ${RAW_BASE}/${s}"
+                echo "- ❌ 스크립트 다운로드 실패: \`${s}\`" >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+              fi
+            done
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          fail=0
+          ran=0
+          run_check() {
+            # $1 라벨, 나머지 = 실행할 명령
+            local label="$1"; shift
+            ran=$((ran+1))
+            echo "### ${label}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            if "$@" >>"$GITHUB_STEP_SUMMARY" 2>&1; then
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "→ ✅ PASS" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "→ ❌ FAIL" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            fi
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # (a) 변경된 *_report.html → lint_report.sh
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              *_report.html)
+                [ -f "$f" ] && run_check "리포트 계약 — $f" bash "${SCRIPTS}/lint_report.sh" "$f" ;;
+            esac
+          done <<< "$CHANGED"
+
+          # (b) 변경된 루트 레벨 P[0-9]*.md → lint_spec.sh (루트 레벨만: 경로에 '/' 없음)
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              */*) : ;;                       # 하위 디렉토리 — 대상 아님 (canonical 명세는 레포 루트)
+              P[0-9]*.md)
+                [ -f "$f" ] && run_check "명세 @goal 구조 — $f" bash "${SCRIPTS}/lint_spec.sh" "$f" ;;
+            esac
+          done <<< "$CHANGED"
+
+          # (c) .github/immutables.txt 존재 시 → check_immutables.sh (변경 파일 전체 + PR_BODY env)
+          if [ -f ".github/immutables.txt" ]; then
+            # 변경 파일을 인자 배열로 (개행 분리)
+            mapfile -t CHANGED_ARR < <(printf '%s\n' "$CHANGED" | sed '/^$/d')
+            run_check "불변값 매니페스트" bash "${SCRIPTS}/check_immutables.sh" ".github/immutables.txt" "${CHANGED_ARR[@]}"
+          fi
+
+          # (d) 변경된 status.json (루트 또는 하위) → lint_status.sh
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              status.json|*/status.json)
+                [ -f "$f" ] && run_check "status 스키마 — $f" bash "${SCRIPTS}/lint_status.sh" "$f" ;;
+            esac
+          done <<< "$CHANGED"
+
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ran" -eq 0 ]; then
+            echo "실행된 검사 없음 (검증 대상 변경 파일 없음) — 통과." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$fail" -eq 0 ]; then
+            echo "**결과: 전체 통과 (${ran}건).**" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**결과: 실패 — 위 ❌ 항목 수정 필요.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          exit "$fail"
