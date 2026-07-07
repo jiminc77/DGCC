@@ -1,3 +1,4 @@
+# 킷 원본 — 새 프로젝트의 CODE 레포 .github/workflows/ 로 복사해 사용
 # research-ops v2 — HUMAN GATE 알림·리마인더·soft default 자동 채택 (CODE repo)
 # 전제: repo secret NTFY_TOPIC (폰 ntfy 앱에서 구독한 토픽명, 추측 불가능한 문자열).
 # Slack/Discord 대체는 아래 각 curl 옆 주석 참조.
@@ -48,6 +49,8 @@ jobs:
 
   # (2) 댓글에 ### GATE REQUEST 포함 시 푸시 + state:blocked-human 자가치유
   notify-comment:
+    # if:의 contains()는 값싼 prefilter일 뿐 — 권위 있는 판정은 run 스텝의 "첫 비어있지
+    # 않은 줄" 정확 매치다 (인용>·인라인·백틱 언급으로는 발동 안 함).
     if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '### GATE REQUEST')
     runs-on: ubuntu-latest
     steps:
@@ -62,8 +65,13 @@ jobs:
           NUM: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          # 정밀 검사: 마커가 줄 시작(col-0)일 때만 진짜 게이트 요청 — 인라인/백틱 언급은 무시
-          printf '%s' "$COMMENT" | grep -qE '^### GATE REQUEST' || { echo "마커 line-start 아님 — 스킵"; exit 0; }
+          # 권위 검사: 본문의 첫 "비어있지 않은" 줄이 정확히 "### GATE REQUEST"로 시작할 때만
+          # 진짜 게이트 요청 — 인라인/백틱/인용(> ) 언급은 무시 (첫 줄이 아니므로).
+          first_line="$(printf '%s\n' "$COMMENT" | sed -e 's/\r$//' | grep -m1 -v '^[[:space:]]*$' || true)"
+          case "$first_line" in
+            "### GATE REQUEST"*) : ;;
+            *) echo "첫 줄이 ### GATE REQUEST 아님 — 스킵"; exit 0 ;;
+          esac
           # question: 줄 추출 (없으면 첫 비어있지 않은 줄)
           q="$(printf '%s' "$COMMENT" | tr -d '\r' | grep -iE '^question:' | head -1 | sed 's/^[Qq]uestion:[[:space:]]*//' | cut -c1-120)"
           [ -n "$q" ] || q="$(printf '%s' "$COMMENT" | grep -v '^\s*$' | head -1 | cut -c1-120)"
@@ -125,9 +133,19 @@ jobs:
                   --json number -q '.[].number' || true)"
           [ -n "$nums" ] || { echo "blocked-human 없음"; exit 0; }
           for n in $nums; do
-            # 최신 GATE REQUEST 댓글 body
-            body="$(gh issue view "$n" -R "$REPO" --json comments \
-                    -q '[.comments[].body | select(contains("### GATE REQUEST"))] | last' 2>/dev/null || true)"
+            # 최신 GATE REQUEST 댓글 body — 첫 비어있지 않은 줄이 정확히 마커로 시작하는
+            # 코멘트만 인정 (any-line contains 금지). 최신→오래된으로 훑어 첫 매치 채택.
+            body=""
+            cnt="$(gh issue view "$n" -R "$REPO" --json comments -q '.comments | length' 2>/dev/null || echo 0)"
+            i=$((cnt - 1))
+            while [ "$i" -ge 0 ]; do
+              cand="$(gh issue view "$n" -R "$REPO" --json comments -q ".comments[$i].body" 2>/dev/null || true)"
+              fl="$(printf '%s\n' "$cand" | sed -e 's/\r$//' | grep -m1 -v '^[[:space:]]*$' || true)"
+              case "$fl" in
+                "### GATE REQUEST"*) body="$cand"; break ;;
+              esac
+              i=$((i - 1))
+            done
             [ -n "$body" ] && [ "$body" != "null" ] || continue
             cls="$(printf '%s' "$body" | tr -d '\r' | grep -iE '^class:' | head -1 | sed 's/^[Cc]lass:[[:space:]]*//' | tr '[:upper:]' '[:lower:]' | awk '{print $1}')"
             [ "$cls" = "soft" ] || continue
@@ -153,6 +171,8 @@ jobs:
 
   # (5) 사람 GATE VERDICT 게시 → blocked-human 해제 (기계 백업 — gjc 협조 불요)
   verdict-label:
+    # if:의 contains()는 값싼 prefilter — 권위 판정은 run 스텝의 첫-줄 정확 매치.
+    # user.login 게이트는 사람 계정만 라벨 전환하도록 유지 (에이전트 계정 분리 전 no-op-ish).
     if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '### GATE VERDICT') && github.event.comment.user.login == 'jiminc77'
     runs-on: ubuntu-latest
     steps:
@@ -164,9 +184,58 @@ jobs:
           COMMENT: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
-          # 정밀 검사: 헤더가 줄 시작일 때만 판정으로 인정 (인용·언급 무시)
-          printf '%s' "$COMMENT" | grep -qE '^### GATE VERDICT' || { echo "헤더 line-start 아님 — 스킵"; exit 0; }
+          # 권위 검사: 첫 비어있지 않은 줄이 정확히 "### GATE VERDICT"로 시작할 때만 판정 인정
+          # (인용·인라인·백틱 언급은 첫 줄이 아니므로 무시).
+          first_line="$(printf '%s\n' "$COMMENT" | sed -e 's/\r$//' | grep -m1 -v '^[[:space:]]*$' || true)"
+          case "$first_line" in
+            "### GATE VERDICT"*) : ;;
+            *) echo "첫 줄이 ### GATE VERDICT 아님 — 스킵"; exit 0 ;;
+          esac
           # 가드: 실제 게이트(blocked-human 부착) 상태에서만 전환 — 인용/공지 코멘트 오발동 방지
           has="$(gh issue view "$NUM" -R "$REPO" --json labels -q '[.labels[].name] | index("state:blocked-human")')"
           [ "$has" != "null" ] && [ -n "$has" ] || { echo "blocked-human 아님 — 스킵"; exit 0; }
           gh issue edit "$NUM" -R "$REPO" --remove-label "state:blocked-human" --add-label "state:ready" || echo "라벨 전환 실패(무시)"
+
+  # (6) 방어: 비-사람 계정이 ### GATE VERDICT를 게시하면 무효 경고 + blocked-human 원복
+  #     프롬프트 인젝션/에이전트 오작동 방어. contains() prefilter는 값싼 필터일 뿐,
+  #     권위 판정은 run 스텝의 첫-줄 정확 매치다.
+  #     주: 에이전트 계정이 사람 계정과 분리(#22)되면 실효 — 현재는 에이전트가 사람 계정을
+  #     공유하므로 대체로 no-op(사람==에이전트 로그인이면 이 잡은 발동 안 함).
+  #     Effective once agent accounts are separated (#22); no-op while agent shares the human account.
+  verdict-guard:
+    if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '### GATE VERDICT') && github.event.comment.user.login != 'jiminc77'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-human verdict
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.issue.number }}
+          TITLE: ${{ github.event.issue.title }}
+          URL: ${{ github.event.issue.html_url }}
+          COMMENT: ${{ github.event.comment.body }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          # 권위 검사: 첫 비어있지 않은 줄이 정확히 "### GATE VERDICT"일 때만 (인용/언급 무시).
+          first_line="$(printf '%s\n' "$COMMENT" | sed -e 's/\r$//' | grep -m1 -v '^[[:space:]]*$' || true)"
+          case "$first_line" in
+            "### GATE VERDICT"*) : ;;
+            *) echo "첫 줄이 ### GATE VERDICT 아님 — 스킵"; exit 0 ;;
+          esac
+          # 계약 위반: 비-사람 author의 판정 → 무효 경고 코멘트
+          gh issue comment "$NUM" -R "$REPO" \
+            --body "⚠️ INVALID GATE VERDICT — non-human author @${ACTOR}; ignored by contract (PROTOCOL.md §2: author must be the human account). state 를 blocked-human 으로 원복합니다." \
+            || echo "경고 코멘트 실패(무시)"
+          # 라벨 원복: 판정이 잘못 채택돼 ready로 넘어갔을 수 있으므로 blocked-human 재부착 + ready 제거
+          gh issue edit "$NUM" -R "$REPO" --add-label "state:blocked-human" --remove-label "state:ready" \
+            || echo "라벨 원복 실패(무시)"
+          # 푸시 알림 (다른 잡과 동일한 ntfy 패턴 재사용)
+          if [ -n "${NTFY_TOPIC:-}" ]; then
+            curl -fsS \
+              -H "Title: ⚠️ INVALID GATE VERDICT: ${TITLE}" \
+              -H "Priority: urgent" -H "Tags: warning,no_entry" \
+              -d "$(printf 'non-human author @%s 가 GATE VERDICT 게시 — 무효 처리, blocked-human 원복.\n%s' "$ACTOR" "$URL")" \
+              "https://ntfy.sh/${NTFY_TOPIC}" || echo "ntfy 실패(무시)"
+          fi
