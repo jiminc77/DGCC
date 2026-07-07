@@ -1,6 +1,6 @@
 # P1-M3R — T1 결과 리포트
 
-> run files present: 0/9; completed: 0/9; preliminary=True
+> run files present: 2/9; completed: 0/9; preliminary=True
 > 미완료/누락 M3R runs: m3r_t1a_s0, m3r_t1a_s1, m3r_t1a_s2, m3r_t1b_s0, m3r_t1b_s1, m3r_t1b_s2, m3r_t1c_s0, m3r_t1c_s1, m3r_t1c_s2
 
 사전 등록 기준 M3R (i′): task random success > 1%이면 success-diff bootstrap, 그 외에는 return-diff bootstrap (B=10,000, seed 20260703, CI95 LB=경험적 5퍼센타일 > 0). (ii) seed 간 최종 성공률 std < 15%p. (iii) t1a ≥ 70%는 factual record. final_d와 d_at_done은 함께 보고한다.
@@ -11,7 +11,7 @@ random 참조선: success 0.040, return -5.357; criterion (i′) metric = succes
 
 | seed | status | final success | final return | final_d | d_at_done | min_d | i′ LB(5%) | i′ pass | gap p95 bounded/max | clamp hit tail |
 |---|---|---:|---:|---:|---:|---:|---:|---|---|---|
-| 0 | missing | — | — | — | — | — | — | — | — | — |
+| 0 | incomplete | — | — | — | — | — | — | — | — | — |
 | 1 | missing | — | — | — | — | — | — | — | — | — |
 | 2 | missing | — | — | — | — | — | — | — | — | — |
 
@@ -22,10 +22,10 @@ random 참조선: success 0.040, return -5.357; criterion (i′) metric = succes
 
 | template | n | policy final D mean | policy d_at_done mean | policy min-D mean | min-D p10/p50/p90 | O1 ON d_at_done/min-D | O1 OFF d_at_done/min-D |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| straight | 0 | — | — | — | — | —/— | —/— |
-| u_bend | 0 | — | — | — | — | —/— | —/— |
-| s_curve | 0 | — | — | — | — | —/— | —/— |
-| random_smooth | 0 | — | — | — | — | —/— | —/— |
+| straight | 0 | — | — | — | — | 0.0939/0.0582 | 0.1536/0.0851 |
+| u_bend | 0 | — | — | — | — | 0.2695/0.1613 | 0.2773/0.1812 |
+| s_curve | 0 | — | — | — | — | 0.2869/0.1668 | 0.2790/0.1733 |
+| random_smooth | 0 | — | — | — | — | 0.2621/0.1414 | 0.2552/0.1521 |
 
 학습 곡선: `outputs/plots/p1_m3r_curves_t1a.png`
 
@@ -36,7 +36,7 @@ random 참조선: success 0.000, return -4.057; criterion (i′) metric = return
 | seed | status | final success | final return | final_d | d_at_done | min_d | i′ LB(5%) | i′ pass | gap p95 bounded/max | clamp hit tail |
 |---|---|---:|---:|---:|---:|---:|---:|---|---|---|
 | 0 | missing | — | — | — | — | — | — | — | — | — |
-| 1 | missing | — | — | — | — | — | — | — | — | — |
+| 1 | incomplete | — | — | — | — | — | — | — | — | — |
 | 2 | missing | — | — | — | — | — | — | — | — | — |
 
 기준 (ii): 완료 seed 0개 — preliminary 산출 불가
@@ -45,10 +45,10 @@ random 참조선: success 0.000, return -4.057; criterion (i′) metric = return
 
 | template | n | policy final D mean | policy d_at_done mean | policy min-D mean | min-D p10/p50/p90 | O1 ON d_at_done/min-D | O1 OFF d_at_done/min-D |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| straight | 0 | — | — | — | — | —/— | —/— |
-| u_bend | 0 | — | — | — | — | —/— | —/— |
-| s_curve | 0 | — | — | — | — | —/— | —/— |
-| random_smooth | 0 | — | — | — | — | —/— | —/— |
+| straight | 0 | — | — | — | — | 0.2304/0.1543 | 0.2201/0.1808 |
+| u_bend | 0 | — | — | — | — | 0.2519/0.1533 | 0.2242/0.1473 |
+| s_curve | 0 | — | — | — | — | 0.2804/0.1522 | 0.2262/0.1703 |
+| random_smooth | 0 | — | — | — | — | 0.2392/0.1384 | 0.2333/0.1655 |
 
 학습 곡선: `outputs/plots/p1_m3r_curves_t1b.png`
 
@@ -68,10 +68,10 @@ random 참조선: success 0.000, return -3.169; criterion (i′) metric = return
 
 | template | n | policy final D mean | policy d_at_done mean | policy min-D mean | min-D p10/p50/p90 | O1 ON d_at_done/min-D | O1 OFF d_at_done/min-D |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| straight | 0 | — | — | — | — | —/— | —/— |
-| u_bend | 0 | — | — | — | — | —/— | —/— |
-| s_curve | 0 | — | — | — | — | —/— | —/— |
-| random_smooth | 0 | — | — | — | — | —/— | —/— |
+| straight | 0 | — | — | — | — | 0.2812/0.1869 | 0.2354/0.1499 |
+| u_bend | 0 | — | — | — | — | 0.3230/0.1721 | 0.2270/0.1630 |
+| s_curve | 0 | — | — | — | — | 0.2283/0.1511 | 0.2001/0.1278 |
+| random_smooth | 0 | — | — | — | — | 0.2537/0.1682 | 0.2281/0.1427 |
 
 학습 곡선: `outputs/plots/p1_m3r_curves_t1c.png`
 
@@ -101,7 +101,7 @@ bounded := all `np.isfinite(overestimation_gap_p95)` across evals; max reported 
 
 > oracle 성공 → 과제 달성 가능 확정 · oracle ≫ policy → 학습 문제 확정 · oracle ≈ 0 → 판정 불능 (불가능 증명 아님)
 
-O1 oracle reference loaded: False (`outputs/metrics/p1_o1_oracle.json`). Oracle 성공은 feasibility reference이며 upper bound가 아니다.
+O1 oracle reference loaded: True (`outputs/metrics/p1_o1_oracle.json`). Oracle 성공은 feasibility reference이며 upper bound가 아니다.
 
 ## TD-target clamp hit-rate reading
 
@@ -109,7 +109,8 @@ O1 oracle reference loaded: False (`outputs/metrics/p1_o1_oracle.json`). Oracle 
 
 | run | n | max | final | tail mean | tail series | reading |
 |---|---:|---:|---:|---:|---|---|
-| — | 0 | — | — | — | — | no completed diag clamp series |
+| m3r_t1a_s0 | 632 | 0.0000 | 0.0000 | 0.0000 | 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 | zero steady |
+| m3r_t1b_s1 | 632 | 0.0000 | 0.0000 | 0.0000 | 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 → 0.0000 | zero steady |
 
 ## Stability — NaN vs magnitude incidents
 
