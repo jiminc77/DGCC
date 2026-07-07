@@ -62,6 +62,8 @@ jobs:
           NUM: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
+          # 정밀 검사: 마커가 줄 시작(col-0)일 때만 진짜 게이트 요청 — 인라인/백틱 언급은 무시
+          printf '%s' "$COMMENT" | grep -qE '^### GATE REQUEST' || { echo "마커 line-start 아님 — 스킵"; exit 0; }
           # question: 줄 추출 (없으면 첫 비어있지 않은 줄)
           q="$(printf '%s' "$COMMENT" | tr -d '\r' | grep -iE '^question:' | head -1 | sed 's/^[Qq]uestion:[[:space:]]*//' | cut -c1-120)"
           [ -n "$q" ] || q="$(printf '%s' "$COMMENT" | grep -v '^\s*$' | head -1 | cut -c1-120)"
@@ -159,8 +161,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           NUM: ${{ github.event.issue.number }}
+          COMMENT: ${{ github.event.comment.body }}
         run: |
           set -euo pipefail
+          # 정밀 검사: 헤더가 줄 시작일 때만 판정으로 인정 (인용·언급 무시)
+          printf '%s' "$COMMENT" | grep -qE '^### GATE VERDICT' || { echo "헤더 line-start 아님 — 스킵"; exit 0; }
           # 가드: 실제 게이트(blocked-human 부착) 상태에서만 전환 — 인용/공지 코멘트 오발동 방지
           has="$(gh issue view "$NUM" -R "$REPO" --json labels -q '[.labels[].name] | index("state:blocked-human")')"
           [ "$has" != "null" ] && [ -n "$has" ] || { echo "blocked-human 아님 — 스킵"; exit 0; }
