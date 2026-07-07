@@ -55,7 +55,11 @@ for tag in "$@"; do
     exit 2
   fi
   if [ "${status}" -ne 0 ]; then
-    exit "${status}"
+    # Non-halt crash (e.g. rebuild-limit escalation): document and continue
+    # with the lane's remaining runs (M3 lane semantics — only exit=2 stops a
+    # lane). Crashed-run disposition is a gate matter; the leader archives the
+    # incomplete artifacts so the skip-check cannot silently re-run the seed.
+    echo "[${lane}] ${tag} crashed (exit=${status}) — documented; continuing lane"
   fi
 done
 
