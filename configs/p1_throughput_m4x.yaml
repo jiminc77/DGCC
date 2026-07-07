@@ -1,0 +1,36 @@
+# M4/파일럿 계획용 확장 프로브 (HUMAN 지시 A-1, issue #12 comment 4900347634)
+# report-only — M3R 미적용. 실행 창: lane 소진 후 유휴 GPU (라이브 lane 경합 금지).
+# 4096에서 비선형 이상 시에만 2048 추가. 목적: knee + 실측 VRAM 곡선.
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 10000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
+probe:
+  n_env_candidates:
+  - 4096
+  - 8192
+  - 16384
+  warmup_rounds: 1
+  measured_rounds: 6
+actions:
+  delta_min_m: 0.02
+  delta_max_m: 0.15
+  lift_choices:
+  - low
+  - high
+budgets:
+  smoke_transitions: 50000
+  t1_run_transitions: 100000
+  t2_run_transitions: 300000
+  t1_runs: 9
+  t2_runs: 3
+outputs:
+  json: outputs/metrics/p1_throughput_m4x.json
+  report: outputs/reports/p1_throughput_m4x.md
+  stdout_log: outputs/reports/p1_throughput_m4x_stdout.log
