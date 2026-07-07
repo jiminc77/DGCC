@@ -64,27 +64,27 @@ jobs:
           echo
           echo "세션 A를 아래 **두 경로 중 하나**로 실행하세요."
           echo
-          echo "### (a) 기존 Claude/Cowork 경로"
-          echo "아래 프롬프트를 **새 세션 A(메인 오케스트레이터)에 그대로 붙여넣으세요.** (branch+PR 게시가 어려운 환경이면 이 경로.)"
+          echo "### (a) 셸 세션 A 경로 (gh CLI 가능)"
+          echo "셸/\`gh\` 를 가진 세션 A(Claude/CLI)에 아래 프롬프트를 **그대로 붙여넣으세요.** (branch+PR 게시가 어려운 환경이면 이 경로.)"
           echo
           echo '~~~text'
-          echo "새 단계 오케스트레이션을 맡긴다(세션 A). ${OWNER}/${MGMT_REPO} 의"
-          echo "research-ops/ORCHESTRATOR.md 와 PROTOCOL.md, templates/ 를 읽고 그대로 따른다."
-          echo "STEP 0(프로젝트 설정 로드)부터 시작 — 라벨·마일스톤·워크플로는 이미 생성됨."
+          echo "새 단계 오케스트레이션을 맡긴다(세션 A, 셸 변형). ${OWNER}/${MGMT_REPO} 의"
+          echo "research-ops/ORCHESTRATOR.md 와 PROTOCOL.md, SESSION_B.md, templates/ 를 읽고 그대로 따른다."
+          echo "STEP 0(설정 로드)부터 시작 — 라벨·마일스톤·워크플로는 이미 생성됨."
           echo "- 구현 레포: ${REPO} · 관리 레포: ${OWNER}/${MGMT_REPO}"
-          echo "- 프로젝트 설정: 관리 레포 projects/ 에서 이 구현 레포(${REPO})와 일치하는 파일을 읽어라"
-          echo "  (code_repo·ssh_host·workdir·모델·ntfy 토픽명)."
+          echo "- 프로젝트 설정: 관리 레포 projects/<slug>/project.yml 에서 이 구현 레포(${REPO})와 일치하는 파일을 읽어라"
+          echo "  (code_repo·phases·모델·ntfy 토픽명; 민감값 SSH_HOST/WORKDIR/MODEL_* 는 공란 — 사람이 세션 B 지시서용으로 제공)."
           echo "- 단계: P${NEXT}"
           echo "- **시작 전 회고: P${K}의 리포트·[CHECKPOINT] 코멘트·게이트(GATE VERDICT) 기록을 읽고"
           echo "  P${NEXT}.md 설계에 반영할 목록을 명시**(승계 수치·리스크·바뀐 가정·follow-up)."
-          echo "- 회고 산출물: P${K}(방금 끝난 단계) 리포트 HTML을 research-ops/templates/phase_report_guide.md 형식으로 생성해 관리 레포 projects/{project}/reports/ 에 커밋하라"
+          echo "- 회고 산출물: P${K}(방금 끝난 단계) 리포트 HTML을 research-ops/templates/phase_report_guide.md 형식으로 생성해 관리 레포 projects/<slug>/reports/ 에 커밋하라 (MGMT 게시는 branch+PR — pr-verify green 후 사람 merge)"
           echo "- P${NEXT}.md 작성: templates/phase_spec.md 뼈대. @goal 블록마다 Exit에 primary+guard 지표"
           echo "  사전등록, HUMAN GATE는 class(hard/soft) 지정. 완료 후 CODE repo에 push."
           echo "- dev 이슈 발행: bash research-ops/scripts/setup_phase.sh P${NEXT} <P${NEXT}.md 경로>"
           echo "  (착수 시 state:ready, 게이트는 GATE REQUEST+state:blocked-human, 완료는 EVIDENCE"
           echo "  (primary+guard) 후 CI VERIFIED ✅ 기다렸다 close, 진행은 PROGRESS 코멘트 편집)."
           echo "- **마지막에 세션 B 지시서(SESSION_B.md)를 프로젝트·단계 값으로 채워 복사 블록으로 출력하고 정지.**"
-          echo "  사람이 그걸 새 세션 B에 붙여넣어 gjc를 감독한다."
+          echo "  사람이 그걸 새 세션 B에 붙여넣어 gjc를 감독한다(gjc는 자동 시작되지 않는다)."
           echo '~~~'
           echo
           echo "### (b) 웹 pro 경로 (GitHub 쓰기 앱 + PR/CI)"
