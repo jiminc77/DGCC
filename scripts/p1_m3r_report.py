@@ -369,6 +369,15 @@ def run_status(runs: dict[str, dict[int, dict[str, Any]]], incomplete: list[dict
 def main() -> int:
     parser = argparse.ArgumentParser(description="P1-M3R T1 results report")
     parser.add_argument("--preliminary", action="store_true", help="allow missing/incomplete M3R runs")
+    parser.add_argument(
+        "--dispositions",
+        default=None,
+        help=(
+            "comma-separated run tags that are factually non-complete with a gate-referred "
+            "disposition (crash/stuck archives); when the missing set matches exactly, the "
+            "report is generated as final (not preliminary) over the completed runs"
+        ),
+    )
     args = parser.parse_args()
 
     ref = load_json(Path("outputs/metrics/p1_random_reference.json"))
@@ -376,17 +385,23 @@ def main() -> int:
     runs, incomplete, halted, present = load_runs()
     completed = sum(len(seed_map) for seed_map in runs.values())
     missing = [run_tag(task, seed) for task in TASKS for seed in SEEDS if seed not in runs[task]]
+    dispositions = sorted(t.strip() for t in args.dispositions.split(",")) if args.dispositions else []
     if missing and not args.preliminary:
-        raise SystemExit(f"missing/incomplete M3R runs {missing}; use --preliminary to draft")
+        if sorted(missing) != dispositions:
+            raise SystemExit(
+                f"missing/incomplete M3R runs {missing}; use --preliminary to draft or "
+                f"--dispositions with the exact non-complete tag set"
+            )
 
     payload: dict[str, Any] = {
         "bootstrap_seed": BOOTSTRAP_SEED,
         "B": BOOTSTRAP_B,
-        "preliminary": bool(missing),
+        "preliminary": bool(missing) and not dispositions,
         "expected_runs": EXPECTED_RUNS,
         "run_files_present": int(present),
         "completed_runs": int(completed),
         "missing_runs": missing,
+        "disposition_runs": dispositions,
         "incomplete_runs": incomplete,
         "halted_runs": halted,
         "tasks": {},
@@ -409,7 +424,8 @@ def main() -> int:
     lines: list[str] = []
     lines.append("# P1-M3R — T1 결과 리포트")
     lines.append("")
-    lines.append(f"> run files present: {present}/{EXPECTED_RUNS}; completed: {completed}/{EXPECTED_RUNS}; preliminary={bool(missing)}")
+    prelim_flag = payload["preliminary"]
+    lines.append(f"> run files present: {present}/{EXPECTED_RUNS}; completed: {completed}/{EXPECTED_RUNS}; preliminary={prelim_flag}")
     if missing:
         lines.append(f"> 미완료/누락 M3R runs: {', '.join(missing)}")
     lines.append("")
@@ -675,7 +691,7 @@ def main() -> int:
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
     JSON_PATH.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
     print(
-        f"wrote {REPORT_PATH} (+json, plots); preliminary={bool(missing)}; "
+        f"wrote {REPORT_PATH} (+json, plots); preliminary={payload['preliminary']}; "
         f"run files present={present}/{EXPECTED_RUNS}; completed={completed}/{EXPECTED_RUNS}"
     )
     return 0
