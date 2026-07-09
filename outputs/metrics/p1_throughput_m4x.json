@@ -1,0 +1,137 @@
+{
+  "generated_at": "2026-07-09T22:59:15Z",
+  "git_commit": "0556273c4a428edb9925ba2f9859ed95e052bd4c",
+  "seed": 0,
+  "config": {
+    "sim": {
+      "dt": 0.001,
+      "substeps": 5,
+      "rod_damping": 10.0,
+      "rod_angular_damping": 5.0,
+      "initial_settle_steps": 0,
+      "reset_settle_max_steps": 10000,
+      "move_step_size": 0.03,
+      "move_hold_steps": 0,
+      "grasp_realism": true
+    },
+    "probe": {
+      "n_env_candidates": [
+        4096,
+        8192,
+        16384
+      ],
+      "warmup_rounds": 1,
+      "measured_rounds": 6
+    },
+    "actions": {
+      "delta_min_m": 0.02,
+      "delta_max_m": 0.15,
+      "lift_choices": [
+        "low",
+        "high"
+      ]
+    },
+    "budgets": {
+      "smoke_transitions": 50000,
+      "t1_run_transitions": 100000,
+      "t2_run_transitions": 300000,
+      "t1_runs": 9,
+      "t2_runs": 3
+    },
+    "outputs": {
+      "json": "outputs/metrics/p1_throughput_m4x.json",
+      "report": "outputs/reports/p1_throughput_m4x.md",
+      "stdout_log": "outputs/reports/p1_throughput_m4x_stdout.log"
+    }
+  },
+  "scheduling": "S1 (one run at a time; R2 concurrency probing rejected at reconciliation)",
+  "candidates": [
+    {
+      "n_envs": 4096,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 16.99983110651374,
+      "light_reset_wall_s": 53.605421770364046,
+      "round_wall_s": [
+        55.46017472539097,
+        55.51821800414473,
+        55.890030059963465,
+        55.57991638220847,
+        55.45970377512276,
+        108.67012008465827
+      ],
+      "mean_s_per_round": 64.42969383858144,
+      "transitions_per_s": 63.57317187106134,
+      "grasp_success_rate": 0.948974609375,
+      "settle_convergence_rate": 0.931201171875,
+      "nan_incidents_runner": 1,
+      "nan_discarded_rounds": 1,
+      "full_scene_rebuilds": 0,
+      "reset_settle_converged_rate": 0.99853515625,
+      "cuda_memory": {
+        "max_allocated_gib": 0.07050085067749023,
+        "max_reserved_gib": 0.0859375,
+        "device_used_gib": 4.51129150390625,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    },
+    {
+      "n_envs": 8192,
+      "warmup_rounds": 1,
+      "measured_rounds": 6,
+      "build_wall_s": 11.10102061741054,
+      "light_reset_wall_s": 79.89107343461365,
+      "round_wall_s": [
+        84.86763061862439,
+        84.67665905598551,
+        84.82439460791647,
+        84.7458584625274,
+        164.72772529814392,
+        84.95813409052789
+      ],
+      "mean_s_per_round": 98.13340035562094,
+      "transitions_per_s": 83.47820385631603,
+      "grasp_success_rate": 0.95087890625,
+      "settle_convergence_rate": 0.942041015625,
+      "nan_incidents_runner": 0,
+      "nan_discarded_rounds": 1,
+      "full_scene_rebuilds": 0,
+      "reset_settle_converged_rate": 0.9991455078125,
+      "cuda_memory": {
+        "max_allocated_gib": 0.13034534454345703,
+        "max_reserved_gib": 0.146484375,
+        "device_used_gib": 4.95660400390625,
+        "device_total_gib": 94.9625244140625
+      },
+      "settle_budget": {
+        "vel_threshold": 0.001,
+        "max_steps": 10000
+      }
+    },
+    {
+      "n_envs": 16384,
+      "error": "RuntimeError: [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling module_load_data_ex (cuModuleLoadDataEx)"
+    }
+  ],
+  "recommendation": {
+    "n_envs": 8192,
+    "transitions_per_s": 83.47820385631603,
+    "rule": "max measured transitions/s, tie-break smaller n_envs"
+  },
+  "budgets": {
+    "smoke_transitions": 50000,
+    "t1_run_transitions": 100000,
+    "t2_run_transitions": 300000,
+    "t1_runs": 9,
+    "t2_runs": 3
+  },
+  "p0_reference": {
+    "n_envs": 64,
+    "transitions_per_s": 3.61,
+    "settle_max_steps": 5000
+  }
+}
