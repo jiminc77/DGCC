@@ -1,0 +1,44 @@
+# 킷 원본 — CODE 레포의 .github/workflows/ 로 복사해 사용.
+# 이슈 이벤트가 생기면 MGMT 의 dashboard-data 워크플로에 repository_dispatch 신호를 보내
+# data.json 을 즉시(~1분) 갱신한다. 없어도 대시보드는 15분 스케줄로 동작한다 (선택 설치).
+#
+# 이 워크플로는 이슈를 읽지도 쓰지도 않는다 — 신호 1발이 전부. 실패해도 이슈 흐름 무영향.
+# 시크릿 미설정 시 조용히 skip 하므로, PAT 준비 전에 설치해도 실패 메일이 오지 않는다.
+#
+# 필요 설정 (CODE 레포):
+#   secrets.DASHBOARD_PING_TOKEN — MGMT 레포 Contents:RW fine-grained PAT
+#     (repository_dispatch 발신 권한. 계정 계약상 jiminc77-agent 명의 권장.)
+#   vars.MGMT_REPO (선택) — 기본값 jiminc77/research-dashboard
+name: dashboard-ping
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: dashboard-ping
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: repository_dispatch → MGMT dashboard-data
+        env:
+          TOKEN: ${{ secrets.DASHBOARD_PING_TOKEN }}
+          MGMT: ${{ vars.MGMT_REPO || 'jiminc77/research-dashboard' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then
+            echo "DASHBOARD_PING_TOKEN 미설정 — skip (15분 스케줄만으로 동작)"
+            exit 0
+          fi
+          curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${MGMT}/dispatches" \
+            -d '{"event_type":"dashboard-refresh"}'
