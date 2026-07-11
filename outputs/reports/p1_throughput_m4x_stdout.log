@@ -1,0 +1,49 @@
+p1_throughput_probe start 2026-07-09T22:37:56Z seed=0
+probe n_envs=4096 start 2026-07-09T22:37:56Z
+[38;5;226m[Genesis] [07:38:08] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:38:08] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:38:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:38:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:02] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:02] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:41:53] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:41:53] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:42:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:42:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:43:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:43:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:44:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:44:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+probe n_envs=4096 transitions_per_s=63.573 mean_s_per_round=64.43 grasp_success_rate=0.949 settle_convergence_rate=0.931
+probe n_envs=8192 start 2026-07-09T22:46:29Z
+[38;5;226m[Genesis] [07:46:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:46:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:46:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:46:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:49:24] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:49:24] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:50:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:50:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:52:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:52:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:53:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:53:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:55:03] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:55:03] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:59:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:59:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+probe n_envs=8192 transitions_per_s=83.478 mean_s_per_round=98.13 grasp_success_rate=0.951 settle_convergence_rate=0.942
+probe n_envs=16384 start 2026-07-09T22:59:13Z
+probe n_envs=16384 FAILED RuntimeError: [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling module_load_data_ex (cuModuleLoadDataEx)
+recommended n_envs=8192 transitions_per_s=83.478
+wrote outputs/metrics/p1_throughput_m4x.json and outputs/reports/p1_throughput_m4x.md

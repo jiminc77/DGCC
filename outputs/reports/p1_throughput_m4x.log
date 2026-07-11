@@ -1,0 +1,240 @@
+p1_throughput_probe start 2026-07-09T22:37:56Z seed=0
+probe n_envs=4096 start 2026-07-09T22:37:56Z
+[I 07/10/26 07:37:56.805 34641] [shell.py:_shell_pop_print@25] Graphical python shell detected, using wrapped sys.stdout
+[W 07/10/26 07:37:59.464 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1463, in _kernel_add_rods:
+            self.rods_stretching_stiffness[rod_idx, i_b] = stretching_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.464 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1464, in _kernel_add_rods:
+            self.rods_bending_stiffness[rod_idx, i_b] = bending_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.464 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1465, in _kernel_add_rods:
+            self.rods_twisting_stiffness[rod_idx, i_b] = twisting_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.464 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1466, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_yield = plastic_yield
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.464 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1467, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_creep = plastic_creep
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.464 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1500, in _kernel_add_rods:
+                edge_idx = qm.mod(i_iv - 1, n_internal_verts) + e_start
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: i32 <- f32
+[W 07/10/26 07:37:59.635 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1527, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mass = segment_mass
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.635 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1528, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].radius = segment_radius
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.635 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1529, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_s = static_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.635 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1530, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_k = kinetic_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:37:59.635 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1531, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].restitution = restitution
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/_test_tools/warnings_helper.py:11: UserWarning: cannot create weak reference to 'tuple' object. Template mapper caching disabled.
+  warnings.warn(message)
+[38;5;226m[Genesis] [07:38:08] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:38:08] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:38:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:38:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/_test_tools/warnings_helper.py:11: UserWarning: cannot create weak reference to 'numpy.int32' object. Template mapper caching disabled.
+  warnings.warn(message)
+[38;5;226m[Genesis] [07:40:02] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:02] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:40:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:41:53] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:41:53] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:42:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:42:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:43:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:43:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:44:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:44:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:45:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+probe n_envs=4096 transitions_per_s=63.573 mean_s_per_round=64.43 grasp_success_rate=0.949 settle_convergence_rate=0.931
+probe n_envs=8192 start 2026-07-09T22:46:29Z
+[W 07/10/26 07:46:29.471 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1463, in _kernel_add_rods:
+            self.rods_stretching_stiffness[rod_idx, i_b] = stretching_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.471 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1464, in _kernel_add_rods:
+            self.rods_bending_stiffness[rod_idx, i_b] = bending_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.471 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1465, in _kernel_add_rods:
+            self.rods_twisting_stiffness[rod_idx, i_b] = twisting_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.471 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1466, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_yield = plastic_yield
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.471 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1467, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_creep = plastic_creep
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.471 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1500, in _kernel_add_rods:
+                edge_idx = qm.mod(i_iv - 1, n_internal_verts) + e_start
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: i32 <- f32
+[W 07/10/26 07:46:29.642 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1527, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mass = segment_mass
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.643 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1528, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].radius = segment_radius
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.643 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1529, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_s = static_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.643 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1530, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_k = kinetic_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:46:29.643 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1531, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].restitution = restitution
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[38;5;226m[Genesis] [07:46:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:46:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:46:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:46:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:49:24] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:49:24] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:50:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:50:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:52:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:52:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:53:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:53:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:55:03] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:55:03] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:56:28] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:59:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [07:59:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+probe n_envs=8192 transitions_per_s=83.478 mean_s_per_round=98.13 grasp_success_rate=0.951 settle_convergence_rate=0.942
+probe n_envs=16384 start 2026-07-09T22:59:13Z
+[W 07/10/26 07:59:14.171 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1463, in _kernel_add_rods:
+            self.rods_stretching_stiffness[rod_idx, i_b] = stretching_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.171 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1464, in _kernel_add_rods:
+            self.rods_bending_stiffness[rod_idx, i_b] = bending_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.171 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1465, in _kernel_add_rods:
+            self.rods_twisting_stiffness[rod_idx, i_b] = twisting_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.171 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1466, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_yield = plastic_yield
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.171 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1467, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_creep = plastic_creep
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.171 34641] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1500, in _kernel_add_rods:
+                edge_idx = qm.mod(i_iv - 1, n_internal_verts) + e_start
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: i32 <- f32
+[W 07/10/26 07:59:14.341 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1527, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mass = segment_mass
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.341 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1528, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].radius = segment_radius
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.341 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1529, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_s = static_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.341 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1530, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_k = kinetic_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[W 07/10/26 07:59:14.341 34641] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_2`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1531, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].restitution = restitution
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64
+[E 07/10/26 07:59:15.190 34641] [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling module_load_data_ex (cuModuleLoadDataEx)
+
+
+probe n_envs=16384 FAILED RuntimeError: [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling module_load_data_ex (cuModuleLoadDataEx)
+recommended n_envs=8192 transitions_per_s=83.478
+wrote outputs/metrics/p1_throughput_m4x.json and outputs/reports/p1_throughput_m4x.md
+[E 07/10/26 07:59:15.317 34641] [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling stream_synchronize (cuStreamSynchronize)
+
+
+Exception ignored in atexit callback: <function destroy at 0x7b5aa1e73920>
+Traceback (most recent call last):
+  File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/__init__.py", line 390, in destroy
+    qd.reset()
+  File "/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/lang/misc.py", line 203, in reset
+    impl.reset()
+  File "/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/lang/impl.py", line 608, in reset
+    pyquadrants.clear()
+  File "/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/lang/impl.py", line 570, in clear
+    self._prog.finalize()
+RuntimeError: [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling stream_synchronize (cuStreamSynchronize)
+[E 07/10/26 07:59:15.429 34641] [cuda_driver.h:operator()@94] CUDA Error CUDA_ERROR_ILLEGAL_ADDRESS: an illegal memory access was encountered while calling mem_free_async_impl (cuMemFreeAsync)
+
+
+terminate called after throwing an instance of 'std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >'

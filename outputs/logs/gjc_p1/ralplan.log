@@ -1,0 +1,4 @@
+ralplan seed run_id=dgcc-p1-main
+state_path=/home/simx2204/Workspaces/DGCC/.gjc/_session-dgcc-p1-main/state/ralplan-state.json
+mode=short interactive=true architect=default critic=default
+handoff=/skill:ralplan
