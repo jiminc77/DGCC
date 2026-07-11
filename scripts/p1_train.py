@@ -50,6 +50,18 @@ from dgcc.utils.meta import get_git_commit_hash
 
 T1_TASKS = ("t1a_straighten", "t1b_single_bend", "t1c_endpoint_reposition")
 
+# Env-stability operational limits (M3R gate verdict gate-m3r-reconvene-20260710,
+# choice D follow-ups — env/driver layer only; training code, hyperparameters,
+# reward constants and covenant thresholds unchanged):
+#   (a) a discard storm exceeding DISCARD_STORM_REBUILD_AFTER *consecutive*
+#       discarded rounds escalates to a forced full scene rebuild (livelock
+#       exit — m3r_t1a_s2 stalled 10.5 h at 272 discards with rebuild=0),
+#   (b) the full-rebuild limit rises 5 -> 8 and the freshest agent state is
+#       checkpointed before a rebuild-limit crash (m3r_t1a_s1 lost ~12k
+#       transitions of progress past its last periodic checkpoint).
+MAX_FULL_REBUILDS = 8
+DISCARD_STORM_REBUILD_AFTER = 10
+
 
 class Tee:
     def __init__(self, *streams: TextIO) -> None:
@@ -94,6 +106,10 @@ class TrainingRun:
         self.total = int(args.total_override or run_cfg.get("total_transitions", 100_000))
         self.n_envs = int(run_cfg.get("n_envs", 256))
         self.eval_every = int(run_cfg.get("eval_every_transitions", 25_000))
+        self.max_full_rebuilds = int(run_cfg.get("max_full_rebuilds", MAX_FULL_REBUILDS))
+        self.discard_storm_rebuild_after = int(
+            run_cfg.get("discard_storm_rebuild_after", DISCARD_STORM_REBUILD_AFTER)
+        )
         self.device = args.device
         self.params = p1_rope_params()
 
@@ -122,6 +138,7 @@ class TrainingRun:
         self.transitions = 0
         self.episode_index = 0
         self.full_rebuilds = 0
+        self._consecutive_discards = 0
         self.last_checkpoint: Path | None = None
         self.best_success = -1.0
         self.eval_history: list[dict[str, Any]] = []
@@ -300,6 +317,39 @@ class TrainingRun:
         return flips
     # ------------------------------------------------------------------
 
+    def _register_rebuild(self, *, context: str, error: object) -> bool:
+        """Count a full-scene rebuild escalation.
+
+        Returns True when the rebuild limit (verdict (b): 8) is exceeded; in
+        that case the freshest agent state has already been checkpointed and
+        the caller must raise (lane contract: non-halt crash, exit=1).
+        """
+
+        self.full_rebuilds += 1
+        print(
+            f"{context} rebuild={self.full_rebuilds} error={error} "
+            f"action=full_scene_rebuild transitions={self.transitions}"
+        )
+        if self.full_rebuilds > self.max_full_rebuilds:
+            self._preserve_crash_checkpoint()
+            return True
+        return False
+
+    def _preserve_crash_checkpoint(self) -> None:
+        """Preserve the latest agent state before a rebuild-limit crash (verdict (b))."""
+
+        try:
+            ckpt = self.agent.save_checkpoint(
+                self.models_dir / f"ckpt_crash_{self.transitions:07d}.pt"
+            )
+            self.last_checkpoint = ckpt
+            print(f"crash checkpoint preserved: {ckpt}")
+        except Exception as exc:  # keep the original crash path alive
+            print(f"crash checkpoint preservation failed: {exc}")
+        self.diag.save_history()
+        self.save_run_summary()
+    # ------------------------------------------------------------------
+
     def collect_round(self) -> int:
         """One batched primitive + buffer insertion. Returns active count."""
 
@@ -323,13 +373,9 @@ class TrainingRun:
         except (FloatingPointError, ValueError, RuntimeError) as exc:
             if not is_nonfinite_error(exc):
                 raise
-            self.full_rebuilds += 1
-            print(
-                f"round_recovery rebuild={self.full_rebuilds} error={exc} "
-                f"action=full_scene_rebuild transitions={self.transitions}"
-            )
-            if self.full_rebuilds > 5:
+            if self._register_rebuild(context="round_recovery", error=exc):
                 raise
+            self._consecutive_discards = 0
             self._reset_flip_tracking()
             self.build_scene()
             return 0
@@ -341,11 +387,30 @@ class TrainingRun:
                 self.runner.nan_incidents,
                 self.runner.magnitude_incidents,
             )
-            print(f"transition batch discarded (NaN covenant): {record['reason']}")
+            self._consecutive_discards += 1
+            print(
+                f"transition batch discarded (NaN covenant): {record['reason']} "
+                f"consecutive={self._consecutive_discards}"
+            )
+            if self._consecutive_discards > self.discard_storm_rebuild_after:
+                storm = self._consecutive_discards
+                self._consecutive_discards = 0
+                if self._register_rebuild(
+                    context="discard_storm_escalation",
+                    error=f"consecutive_discarded_rounds={storm}",
+                ):
+                    raise FloatingPointError(
+                        f"rebuild limit ({self.max_full_rebuilds}) exceeded during "
+                        f"discard-storm escalation (consecutive discarded rounds={storm})"
+                    )
+                self._reset_flip_tracking()
+                self.build_scene()
+                return 0
             self.refresh_goal_curves()
             return 0
 
         active = record["active"]
+        self._consecutive_discards = 0
         count = int(active.sum())
         next_transitions = self.transitions + count
         if count:
@@ -500,12 +565,7 @@ class TrainingRun:
             except (FloatingPointError, ValueError, RuntimeError) as exc:
                 if not is_nonfinite_error(exc):
                     raise
-                self.full_rebuilds += 1
-                print(
-                    f"eval_recovery rebuild={self.full_rebuilds} error={exc} "
-                    "action=full_scene_rebuild (eval restarted)"
-                )
-                if self.full_rebuilds > 5:
+                if self._register_rebuild(context="eval_recovery", error=exc):
                     raise
                 self.build_scene()
         result["wall_s"] = time.perf_counter() - start
@@ -548,6 +608,8 @@ class TrainingRun:
             "nan_incidents_env": self.runner.nan_incidents if self.runner else None,
             "magnitude_incidents_env": self.runner.magnitude_incidents if self.runner else None,
             "full_scene_rebuilds": self.full_rebuilds,
+            "max_full_rebuilds": self.max_full_rebuilds,
+            "discard_storm_rebuild_after": self.discard_storm_rebuild_after,
             "halt_reason": self.halt_reason,
             "best_success": self.best_success,
             "last_checkpoint": str(self.last_checkpoint) if self.last_checkpoint else None,
