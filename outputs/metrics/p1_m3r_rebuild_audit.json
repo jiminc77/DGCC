@@ -1,0 +1,56 @@
+{
+ "m3r_t1a_s0": {
+  "log_path": "outputs/reports/p1_train_m3r_t1a_s0.log",
+  "rebuilds_log": 4,
+  "rebuilds_json": 4,
+  "match": true
+ },
+ "m3r_t1a_s1": {
+  "log_path": "outputs/reports/p1_train_m3r_t1a_s1.log",
+  "rebuilds_log": 6,
+  "rebuilds_json": 6,
+  "match": true
+ },
+ "m3r_t1a_s2": {
+  "log_path": "outputs/reports/p1_train_m3r_t1a_s2.log",
+  "rebuilds_log": 4,
+  "rebuilds_json": 4,
+  "match": true
+ },
+ "m3r_t1b_s0": {
+  "log_path": "outputs/reports/p1_train_m3r_t1b_s0.log",
+  "rebuilds_log": 2,
+  "rebuilds_json": 2,
+  "match": true
+ },
+ "m3r_t1b_s1": {
+  "log_path": "outputs/reports/p1_train_m3r_t1b_s1.log",
+  "rebuilds_log": 4,
+  "rebuilds_json": 4,
+  "match": true
+ },
+ "m3r_t1b_s2": {
+  "log_path": "outputs/reports/p1_train_m3r_t1b_s2.log",
+  "rebuilds_log": 3,
+  "rebuilds_json": 3,
+  "match": true
+ },
+ "m3r_t1c_s0": {
+  "log_path": "outputs/reports/p1_train_m3r_t1c_s0.log",
+  "rebuilds_log": 0,
+  "rebuilds_json": 0,
+  "match": true
+ },
+ "m3r_t1c_s1": {
+  "log_path": "outputs/reports/p1_train_m3r_t1c_s1.log",
+  "rebuilds_log": 4,
+  "rebuilds_json": 4,
+  "match": true
+ },
+ "m3r_t1c_s2": {
+  "log_path": "outputs/reports/p1_train_m3r_t1c_s2.log",
+  "rebuilds_log": 5,
+  "rebuilds_json": 5,
+  "match": true
+ }
+}
