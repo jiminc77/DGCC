@@ -109,9 +109,20 @@ fi
 
 # ---------- halfway supervisor -----------------------------------------------
 PGID=$(cat "$OPS/${TAG}.pgid")
-# Re-assert identity from the published file before ANY signal (plan P5).
-line=$(ps -o pgid=,sid= -p "$PGID" 2>/dev/null) || { echo "leader vanished pre-poll"; wait_trainer; exit $?; }
-[ "$(echo "$line" | awk '{print $1}')" = "$PGID" ] || { echo "identity mismatch"; exit 71; }
+
+assert_group_identity() {  # full stage-5 re-assertion — run before ANY signal
+  line=$(ps -o pgid=,sid=,cmd= -p "$PGID" 2>/dev/null) || return 1
+  [ "$(echo "$line" | awk '{print $1}')" = "$PGID" ] || return 1
+  [ "$(echo "$line" | awk '{print $2}')" = "$PGID" ] || return 1
+  case "$line" in *scripts/p1_train.py*"--run-tag ${TAG}"*) : ;; *)
+    # leader may be the uv wrapper whose argv still names the trainer+tag;
+    # otherwise require a group member carrying it
+    ps -o cmd= -g "$PGID" 2>/dev/null | grep -q "p1_train.py .*--run-tag ${TAG}" || return 1 ;;
+  esac
+  [ -n "$(ps -o pid= -g "$PGID" 2>/dev/null)" ] || return 1   # non-empty group enumeration
+  return 0
+}
+assert_group_identity || { echo "identity mismatch pre-poll"; wait_trainer 2>/dev/null; exit 71; }
 
 # (a) flush-confirmed STOP trigger: run-JSON poll ONLY (never the eval print).
 echo "[lane] ${TAG} halfway supervisor armed at ${HALFWAY} (poll ${RUN_JSON})"
@@ -135,6 +146,7 @@ PY
 done
 
 # (b) group STOP + bounded all-member-T verification (single-PID STOP forbidden)
+assert_group_identity || { echo "identity mismatch pre-STOP"; wait_trainer 2>/dev/null; exit 71; }
 kill -STOP -- "-$PGID"
 stopped=""
 for i in $(seq 1 20); do
@@ -172,13 +184,16 @@ durable_write(os.path.join("outputs/archive/m4ops", os.path.basename(marker)))
 print(f"HALF_STOPPED marker durable: {marker}")
 PY
 
-# (d) 60 s no-advance hold: all members T; log size unchanged vs marker
-LOG_SIZE=$(python3 -c "import json,sys;print(json.load(open('$MARKER'))['log_size'])")
+# (d) 60 s no-advance hold: all members T; log size AND run-JSON sha256
+#     unchanged vs marker (plan step 4)
+LOG_SIZE=$(python3 -c "import json;print(json.load(open('$MARKER'))['log_size'])")
+JSON_SHA=$(python3 -c "import json;print(json.load(open('$MARKER'))['run_json_sha256'])")
 sleep 60
 stats=$(ps -o stat= -g "$PGID" 2>/dev/null | tr -d ' ')
 now_size=$(stat -c %s "$TRAIN_LOG")
-if echo "$stats" | grep -qv '^T' || [ "$now_size" != "$LOG_SIZE" ]; then
-  echo "NO-ADVANCE FAIL: stats=[$stats] log ${LOG_SIZE}->${now_size} — CONT + fail closed"
+now_sha=$(sha256sum "$RUN_JSON" | awk '{print $1}')
+if echo "$stats" | grep -qv '^T' || [ "$now_size" != "$LOG_SIZE" ] || [ "$now_sha" != "$JSON_SHA" ]; then
+  echo "NO-ADVANCE FAIL: stats=[$stats] log ${LOG_SIZE}->${now_size} json-sha changed=$([ "$now_sha" != "$JSON_SHA" ] && echo yes || echo no) — CONT + fail closed"
   kill -CONT -- "-$PGID" 2>/dev/null
   exit 72
 fi
