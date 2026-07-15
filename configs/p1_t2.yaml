@@ -3,7 +3,7 @@ task: t2
 run:
   total_transitions: 300000
   seeds: [0, 1, 2]
-  n_envs: 2048             # gate-m3r-reconvene-2-20260713 choice B: 256→2048 (knee 8192 rejected — regime preservation; smoke-gated before main)
+  n_envs: 1024             # gate-m3r-reconvene-2-20260713 choice B pre-registered ladder: 2048 smoke FAIL (median 23.1<31.04) -> 1024 re-smoke PASS (median 25.7>=17.52, stability clean) -> main regime 1024
   eval_every_transitions: 25000
   checkpoint_every_transitions: 25000
 eval:

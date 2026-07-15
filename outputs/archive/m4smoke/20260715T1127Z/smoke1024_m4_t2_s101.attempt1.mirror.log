@@ -1,0 +1,481 @@
+cd ~/Workspaces/DGCC && scripts/p1_m4_lane.sh --drill --tag smoke1024_m4_t2_s101 --config configs/p1_t2_smoke1024.yaml --seed 101 --total 50000 --halfway 25000; echo LANE-EXIT=$?
+-bash: /home/simx2204/snap/code/247/.local/share/../bin/env: No such file or directory
+-bash: /home/simx2204/snap/code/247/.local/share/../bin/env: No such file or directory
+-bash: /home/simx2204/snap/code/247/.local/share/../bin/env: No such file or directory
+[?2004h(base) simx2204@simx2204-X870E-AORUS-PRO-ICE:~/Workspaces/DGCC$ cd ~/Workspaces/DGCC && scripts/p1_m4_lane.sh --drill --tag smoke1024_m4_t2_s101 --config configs/p1_t2_smoke1024.yaml --seed 101 --total 50000 --halfway 25000; echo LANE-EXIT=$?
+[?2004l[lane] smoke1024_m4_t2_s101 launched pid/pgid=2154970 2026-07-15T09:57:24Z
+[lane] smoke1024_m4_t2_s101 halfway supervisor armed at 25000 (poll outputs/metrics/p1_run_smoke1024_m4_t2_s101.json)
+p1_train start 2026-07-15T09:57:25Z run_tag=smoke1024_m4_t2_s101 task=t2 seed=101 total=50000 n_envs=1024 device=cuda
+td3={'gamma': 0.95, 'tau': 0.005, 'lr': 0.0003, 'batch_size': 256, 'replay_capacity': 500000, 'utd': 1, 'warmup_transitions': 10240, 'grad_clip': 10.0, 'huber_delta': 1.0, 'policy_noise': 0.05, 'noise_clip': 0.1, 'exploration_u_sigma': 0.03, 'eps_p_start': 1.0, 'eps_p_end': 0.1, 'eps_p_fraction': 0.3} reward={'alpha': 10.0, 'c_step': 0.1, 'r_succ': 5.0} td_target_bound={'d_max': 7.0, 'r_min': -70.1, 'r_max': 74.9, 'v_max': 1498.0}
+initial_weights_sha256=1f8461d0e67e08b62c69a1631b8e60e1e91d803388a6d0c091632eed478dded5
+[32m[I 07/15/26 18:57:25.519 2154983] [shell.py:_shell_pop_print@25] Graphical python shell detected, using wrapped sys.stdout[m
+[33m[1m[W 07/15/26 18:57:28.313 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1463, in _kernel_add_rods:
+            self.rods_stretching_stiffness[rod_idx, i_b] = stretching_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.313 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1464, in _kernel_add_rods:
+            self.rods_bending_stiffness[rod_idx, i_b] = bending_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.313 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1465, in _kernel_add_rods:
+            self.rods_twisting_stiffness[rod_idx, i_b] = twisting_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.313 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1466, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_yield = plastic_yield
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.313 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1467, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_creep = plastic_creep
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.313 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1500, in _kernel_add_rods:
+                edge_idx = qm.mod(i_iv - 1, n_internal_verts) + e_start
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: i32 <- f32[m
+[33m[1m[W 07/15/26 18:57:28.481 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1527, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mass = segment_mass
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.481 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1528, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].radius = segment_radius
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.481 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1529, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_s = static_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.481 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1530, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_k = kinetic_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 18:57:28.481 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_0`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1531, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].restitution = restitution
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/_test_tools/warnings_helper.py:11: UserWarning: cannot create weak reference to 'tuple' object. Template mapper caching disabled.
+  warnings.warn(message)
+[38;5;226m[Genesis] [18:57:36] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [18:57:36] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [18:57:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [18:57:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+/home/simx2204/Workspaces/DGCC/.venv/lib/python3.12/site-packages/quadrants/_test_tools/warnings_helper.py:11: UserWarning: cannot create weak reference to 'numpy.int32' object. Template mapper caching disabled.
+  warnings.warn(message)
+[38;5;226m[Genesis] [18:58:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [18:58:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=1024 count=1024 collect_s=40.0 update_s=0.0
+[38;5;226m[Genesis] [18:59:36] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [18:59:36] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=2048 count=1024 collect_s=39.8 update_s=0.0
+[38;5;226m[Genesis] [19:00:16] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:00:16] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=3072 count=1024 collect_s=39.7 update_s=0.0
+[38;5;226m[Genesis] [19:00:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:00:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=4096 count=1024 collect_s=39.7 update_s=0.0
+[38;5;226m[Genesis] [19:01:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:01:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=5120 count=1024 collect_s=39.5 update_s=0.0
+[38;5;226m[Genesis] [19:02:15] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:02:15] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=6144 count=1024 collect_s=39.6 update_s=0.0
+[38;5;226m[Genesis] [19:02:54] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:02:54] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=7168 count=1024 collect_s=39.6 update_s=0.0
+[38;5;226m[Genesis] [19:03:34] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:03:34] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:03:34] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:03:34] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=7168 count=0 collect_s=77.9 update_s=0.0
+[38;5;226m[Genesis] [19:04:52] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:04:52] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=8192 count=1024 collect_s=39.8 update_s=0.0
+[38;5;226m[Genesis] [19:05:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:05:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=9216 count=1024 collect_s=39.8 update_s=0.0
+[38;5;226m[Genesis] [19:06:12] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:06:12] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:06:12] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:06:12] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=10240 count=1024 collect_s=78.6 update_s=7.6
+[38;5;226m[Genesis] [19:06:59] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:06:59] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): env raise: DLO-Lab rod vertices contain non-finite values consecutive=1
+roundlog transitions=10240 count=0 collect_s=39.4 update_s=0.0
+[38;5;226m[Genesis] [19:08:17] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:08:17] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=11264 count=1024 collect_s=39.7 update_s=7.7
+[38;5;226m[Genesis] [19:09:05] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:09:05] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=12288 count=1024 collect_s=39.9 update_s=7.3
+[38;5;226m[Genesis] [19:09:52] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:09:52] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=13312 count=1024 collect_s=39.9 update_s=7.5
+[38;5;226m[Genesis] [19:10:39] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:10:39] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:10:39] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:10:39] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=13312 count=0 collect_s=78.0 update_s=0.0
+[38;5;226m[Genesis] [19:11:57] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:11:57] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=14336 count=1024 collect_s=39.8 update_s=7.7
+[38;5;226m[Genesis] [19:12:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:12:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=15360 count=1024 collect_s=39.6 update_s=7.6
+[38;5;226m[Genesis] [19:13:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:13:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:13:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:13:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=15360 count=0 collect_s=78.1 update_s=0.0
+[38;5;226m[Genesis] [19:14:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:14:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=16384 count=1024 collect_s=39.9 update_s=7.6
+[38;5;226m[Genesis] [19:15:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:15:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:15:38] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:15:38] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=16384 count=0 collect_s=78.2 update_s=0.0
+[38;5;226m[Genesis] [19:16:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:16:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:16:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:16:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=17408 count=1024 collect_s=78.4 update_s=7.4
+[38;5;226m[Genesis] [19:18:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:18:21] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=18432 count=1024 collect_s=39.7 update_s=7.5
+[38;5;226m[Genesis] [19:19:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:19:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=19456 count=1024 collect_s=39.9 update_s=7.4
+[38;5;226m[Genesis] [19:19:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:19:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:19:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:19:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=20480 count=1024 collect_s=78.2 update_s=7.3
+round transitions=20480/50000 collect_s=78.2 update_s=7.3 rate=14.66tr/s eta_h=0.56 nan_env=1 mag=6 rebuilds=0
+[38;5;226m[Genesis] [19:21:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:21:22] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=21504 count=1024 collect_s=39.7 update_s=7.7
+[38;5;226m[Genesis] [19:22:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:22:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=22528 count=1024 collect_s=39.8 update_s=7.2
+[38;5;226m[Genesis] [19:22:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:22:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:22:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:22:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=23552 count=1024 collect_s=78.1 update_s=7.5
+[38;5;226m[Genesis] [19:24:22] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:24:22] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=24576 count=1024 collect_s=39.9 update_s=7.4
+[38;5;226m[Genesis] [19:25:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:25:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:25:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:25:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=25600 count=1024 collect_s=78.6 update_s=7.6
+[38;5;226m[Genesis] [19:25:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:25:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:27:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:27:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:27:54] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:27:54] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:28:33] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:28:33] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:29:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:29:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:29:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:29:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:30:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:30:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:31:12] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:31:12] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:31:51] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:31:52] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:32:31] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:32:31] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:33:10] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:33:10] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:33:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:33:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:34:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:34:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:35:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:35:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:35:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:35:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:36:29] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:36:29] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+eval transitions=25600 success=0.000 return=-3.598 final_d=0.4516 overest_gap=6.139112595698975 wall_s=633
+new best checkpoint at 25600 (success=0.000)
+[38;5;226m[Genesis] [19:36:29] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:36:29] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+HALF_STOPPED marker durable: /tmp/dgcc_ops/m4_half_s101.marker
+[lane] smoke1024_m4_t2_s101 HALF_STOPPED verified (no-advance 60s) marker=/tmp/dgcc_ops/m4_half_s101.marker
+[lane] smoke1024_m4_t2_s101 drill CONT issued 2026-07-15T10:37:34Z
+[38;5;226m[Genesis] [19:38:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:38:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:38:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:38:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=26624 count=1024 collect_s=78.6 update_s=7.6
+[38;5;226m[Genesis] [19:40:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:40:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=27648 count=1024 collect_s=39.8 update_s=7.7
+[38;5;226m[Genesis] [19:41:02] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:41:02] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=28672 count=1024 collect_s=40.0 update_s=7.7
+[38;5;226m[Genesis] [19:41:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:41:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=29696 count=1024 collect_s=39.8 update_s=7.4
+[38;5;226m[Genesis] [19:42:36] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:42:36] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=30720 count=1024 collect_s=39.9 update_s=7.3
+[38;5;226m[Genesis] [19:43:24] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:43:24] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:43:24] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:43:24] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=30720 count=0 collect_s=78.3 update_s=0.0
+[38;5;226m[Genesis] [19:44:03] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:44:03] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): env raise: DLO-Lab rod vertices contain non-finite values consecutive=2
+roundlog transitions=30720 count=0 collect_s=39.4 update_s=0.0
+[38;5;226m[Genesis] [19:45:21] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:45:21] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=31744 count=1024 collect_s=39.8 update_s=7.6
+[38;5;226m[Genesis] [19:46:09] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:46:09] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=32768 count=1024 collect_s=40.0 update_s=7.8
+[38;5;226m[Genesis] [19:46:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:46:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=33792 count=1024 collect_s=39.9 update_s=7.7
+[38;5;226m[Genesis] [19:47:44] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:47:44] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=34816 count=1024 collect_s=39.6 update_s=7.8
+[38;5;226m[Genesis] [19:48:31] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:48:31] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:48:31] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:48:31] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=34816 count=0 collect_s=78.2 update_s=0.0
+[38;5;226m[Genesis] [19:49:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:49:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:49:50] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:49:50] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=35840 count=1024 collect_s=78.7 update_s=7.5
+[38;5;226m[Genesis] [19:51:16] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:51:16] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:51:16] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:51:16] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=36864 count=1024 collect_s=78.8 update_s=7.4
+[38;5;226m[Genesis] [19:52:42] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:52:42] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=37888 count=1024 collect_s=39.9 update_s=7.6
+[38;5;226m[Genesis] [19:53:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:30] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:53:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=37888 count=0 collect_s=78.2 update_s=0.0
+[38;5;226m[Genesis] [19:54:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:54:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:54:48] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:54:48] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=2
+roundlog transitions=37888 count=0 collect_s=78.3 update_s=0.0
+[38;5;226m[Genesis] [19:56:06] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:56:06] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:56:06] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:56:06] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=3
+roundlog transitions=37888 count=0 collect_s=78.5 update_s=0.0
+[38;5;226m[Genesis] [19:57:25] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:57:25] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): env raise: vertices contain non-finite values consecutive=4
+roundlog transitions=37888 count=0 collect_s=78.4 update_s=0.0
+[38;5;226m[Genesis] [19:58:04] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:58:04] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:58:43] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:58:43] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): env raise: DLO-Lab rod vertices contain non-finite values consecutive=5
+roundlog transitions=37888 count=0 collect_s=78.4 update_s=0.0
+[38;5;226m[Genesis] [19:59:23] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [19:59:23] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): env raise: DLO-Lab rod vertices contain non-finite values consecutive=6
+roundlog transitions=37888 count=0 collect_s=39.7 update_s=0.0
+[38;5;226m[Genesis] [20:00:41] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:00:41] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:00:41] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:00:41] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=7
+roundlog transitions=37888 count=0 collect_s=78.4 update_s=0.0
+[38;5;226m[Genesis] [20:02:00] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:02:00] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:02:00] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:02:00] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=8
+roundlog transitions=37888 count=0 collect_s=78.4 update_s=0.0
+[38;5;226m[Genesis] [20:03:18] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:03:18] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:03:18] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:03:18] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=9
+roundlog transitions=37888 count=0 collect_s=78.6 update_s=0.0
+[38;5;226m[Genesis] [20:04:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:04:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:04:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:04:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=10
+roundlog transitions=37888 count=0 collect_s=78.3 update_s=0.0
+[38;5;226m[Genesis] [20:05:55] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:05:55] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:05:55] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:05:55] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=11
+discard_storm_escalation rebuild=1 error=consecutive_discarded_rounds=11 action=full_scene_rebuild transitions=37888
+[33m[1m[W 07/15/26 20:06:34.607 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1463, in _kernel_add_rods:
+            self.rods_stretching_stiffness[rod_idx, i_b] = stretching_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.607 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1464, in _kernel_add_rods:
+            self.rods_bending_stiffness[rod_idx, i_b] = bending_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.607 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1465, in _kernel_add_rods:
+            self.rods_twisting_stiffness[rod_idx, i_b] = twisting_stiffness
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.607 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1466, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_yield = plastic_yield
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.607 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1467, in _kernel_add_rods:
+            self.rods_param[rod_idx, i_b].plastic_creep = plastic_creep
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.607 2154983] QuadrantsWarning
+While compiling `_kernel_add_rods_c968_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1500, in _kernel_add_rods:
+                edge_idx = qm.mod(i_iv - 1, n_internal_verts) + e_start
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: i32 <- f32[m
+[33m[1m[W 07/15/26 20:06:34.754 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1527, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mass = segment_mass
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.754 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1528, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].radius = segment_radius
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.754 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1529, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_s = static_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.754 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1530, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].mu_k = kinetic_friction
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[33m[1m[W 07/15/26 20:06:34.754 2154983] QuadrantsWarning
+While compiling `_kernel_finalize_rest_states_c970_1`, File "/home/simx2204/Workspaces/DGCC/external/DLO-Lab/genesis/engine/solvers/rod_solver.py", line 1531, in _kernel_finalize_rest_states:
+            self.vertices_param[i_global, i_b].restitution = restitution
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Assign may lose precision: f32 <- f64[m
+[38;5;226m[Genesis] [20:06:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:06:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:06:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:06:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=37888 count=0 collect_s=118.3 update_s=0.0
+[38;5;226m[Genesis] [20:07:53] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:07:53] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=38912 count=1024 collect_s=39.7 update_s=7.4
+[38;5;226m[Genesis] [20:08:40] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:08:40] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=39936 count=1024 collect_s=39.8 update_s=7.5
+[38;5;226m[Genesis] [20:09:27] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:09:27] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=40960 count=1024 collect_s=39.8 update_s=7.6
+round transitions=40960/50000 collect_s=39.8 update_s=7.6 rate=9.46tr/s eta_h=0.27 nan_env=0 mag=0 rebuilds=1
+[38;5;226m[Genesis] [20:10:15] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:10:15] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=41984 count=1024 collect_s=39.8 update_s=7.8
+[38;5;226m[Genesis] [20:11:02] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:11:02] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=43008 count=1024 collect_s=39.6 update_s=7.5
+[38;5;226m[Genesis] [20:11:49] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:11:49] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=44032 count=1024 collect_s=39.5 update_s=7.6
+[38;5;226m[Genesis] [20:12:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:12:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=45056 count=1024 collect_s=39.7 update_s=7.6
+[38;5;226m[Genesis] [20:13:24] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:13:24] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=46080 count=1024 collect_s=39.7 update_s=7.6
+[38;5;226m[Genesis] [20:14:11] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:14:11] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:14:11] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:14:11] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+transition batch discarded (NaN covenant): magnitude covenant: coord norm > 3 m consecutive=1
+roundlog transitions=46080 count=0 collect_s=77.7 update_s=0.0
+[38;5;226m[Genesis] [20:15:29] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:15:29] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=47104 count=1024 collect_s=39.7 update_s=7.5
+[38;5;226m[Genesis] [20:16:16] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:16:16] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:16:16] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:16:16] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=48128 count=1024 collect_s=77.9 update_s=8.0
+[38;5;226m[Genesis] [20:17:42] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:17:42] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=49152 count=1024 collect_s=39.7 update_s=7.9
+[38;5;226m[Genesis] [20:18:29] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:18:30] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+roundlog transitions=50176 count=1024 collect_s=39.6 update_s=7.5
+[38;5;226m[Genesis] [20:18:37] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:18:37] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:19:56] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:19:56] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:20:35] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:20:35] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:21:14] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:21:14] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:21:54] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:21:54] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:22:34] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:22:34] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:23:13] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:23:13] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:23:52] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:23:52] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:24:32] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:24:32] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:25:11] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:25:11] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:25:51] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:25:51] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+eval transitions=50176 success=0.000 return=-2.175 final_d=0.3351 overest_gap=0.49061040104923476 wall_s=433
+[38;5;226m[Genesis] [20:25:51] [WARNING] Manually setting element positions. This is not recommended and could break gradient flow.[0m
+[38;5;226m[Genesis] [20:25:51] [WARNING] Manually setting element velocities. This is not recommended and could break gradient flow.[0m
+run complete transitions=50176 updates=40960 wall_h=1.48 nan_env=0 mag=1 rebuilds=1
+[lane] smoke1024_m4_t2_s101 trainer exit=0 2026-07-15T11:26:32Z
+LANE-EXIT=0
+[?2004h(base) simx2204@simx2204-X870E-AORUS-PRO-ICE:~/Workspaces/DGCC$ 
