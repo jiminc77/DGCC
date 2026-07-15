@@ -3,7 +3,7 @@ task: t2
 run:
   total_transitions: 300000
   seeds: [0, 1, 2]
-  n_envs: 256              # M0 probe recommendation (S1 — one run at a time)
+  n_envs: 2048             # gate-m3r-reconvene-2-20260713 choice B: 256→2048 (knee 8192 rejected — regime preservation; smoke-gated before main)
   eval_every_transitions: 25000
   checkpoint_every_transitions: 25000
 eval:
@@ -17,7 +17,7 @@ td3:                       # §7 start values (adjustable tier — changes leave
   batch_size: 256
   replay_capacity: 500000
   utd: 1
-  warmup_transitions: 5000
+  warmup_transitions: 10240  # gate-m3r-reconvene-2-20260713 choice B: 5000→10240 (=5 collection rounds × 2048; approved with n_envs change)
   grad_clip: 10.0
   policy_noise: 0.05       # target policy smoothing sigma (u scale)
   noise_clip: 0.1

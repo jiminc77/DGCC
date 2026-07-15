@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 
+from dgcc.goals.distance import canonical_shape_flip, flip_consistent_shape_distance
 from dgcc.goals.dual_goal import DualGoal, goal_curve
 from dgcc.tasks.domain import P1_LENGTH_M
 from dgcc.tasks.episode import BatchedEpisodeRunner
@@ -72,6 +73,20 @@ def evaluate_episodes(
             )
         goal_curves = np.stack([goal_curve(g, P1_LENGTH_M) for g in runner.goals])
 
+        # P2b D_shape (M4, observation-only — risk #2): initial centerlines
+        # captured immediately after begin_episodes; the orientation flip is
+        # decided ONCE per episode from the initial state and applied
+        # identically to the initial and terminal measurements.
+        X_initial = np.asarray(runner.env.get_centerline_batch(), dtype=float)
+        shape_flips = [
+            canonical_shape_flip(X_initial[slot], runner.goals[slot], P1_LENGTH_M)
+            for slot in range(n_envs)
+        ]
+        # Terminal centerline per episode: last X_after row observed while the
+        # slot was still ACTIVE (same lifecycle hook as d_at_done) — never the
+        # post-terminal batch state of early-finished environments.
+        x_terminal: list[np.ndarray | None] = [None] * n_envs
+
         returns = np.zeros(n_envs, dtype=float)
         discounted = np.zeros(n_envs, dtype=float)
         q_first = np.full(n_envs, np.nan, dtype=float)
@@ -89,6 +104,7 @@ def evaluate_episodes(
             active = record["active"]
             for slot in np.flatnonzero(active):
                 d_step_traces[int(slot)].append(float(record["d_after"][int(slot)]))
+                x_terminal[int(slot)] = np.asarray(record["X_after"][int(slot)], dtype=float)
             returns += np.where(active, record["reward"], 0.0)
             discounted += np.where(active, (gamma**step_index) * record["reward"], 0.0)
             step_index += 1
@@ -104,6 +120,18 @@ def evaluate_episodes(
                 d_at_done = final_d
             d_steps = [float(v) for v in d_step_traces[slot][: runner.config.horizon]]
             min_d = float(np.min(d_steps)) if d_steps else final_d
+            flip = shape_flips[slot]
+            d_shape_initial = flip_consistent_shape_distance(
+                X_initial[slot], goal_curves[slot], P1_LENGTH_M, flip=flip
+            )
+            terminal = x_terminal[slot]
+            d_shape_at_done = (
+                d_shape_initial
+                if terminal is None
+                else flip_consistent_shape_distance(
+                    terminal, goal_curves[slot], P1_LENGTH_M, flip=flip
+                )
+            )
             episodes.append(
                 {
                     "episode_id": episode_id,
@@ -123,6 +151,8 @@ def evaluate_episodes(
                     "d_steps": d_steps,
                     "min_d": min_d,
                     "d_initial": float(begin_info["d_initial"][slot]),
+                    "d_shape_initial": float(d_shape_initial),
+                    "d_shape_at_done": float(d_shape_at_done),
                     "q_first": None if np.isnan(q_first[slot]) else float(q_first[slot]),
                 }
             )
@@ -141,6 +171,9 @@ def summarize_episodes(episodes: list[dict[str, Any]]) -> dict[str, Any]:
     final_d = np.asarray([ep["final_d"] for ep in episodes], dtype=float)
     d_at_done = np.asarray([ep["d_at_done"] for ep in episodes], dtype=float)
     min_d = np.asarray([ep["min_d"] for ep in episodes], dtype=float)
+    # P2b D_shape rows are absent in pre-M4 logged episodes; guard for reuse
+    # of this summarizer over historical data.
+    d_shape_rows = [ep["d_shape_at_done"] for ep in episodes if "d_shape_at_done" in ep]
 
     per_template: dict[str, float] = {}
     per_template_n: dict[str, int] = {}
@@ -161,6 +194,7 @@ def summarize_episodes(episodes: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_final_d": float(final_d.mean()) if episodes else float("nan"),
         "mean_d_at_done": float(d_at_done.mean()) if episodes else float("nan"),
         "mean_min_d": float(min_d.mean()) if episodes else float("nan"),
+        "mean_d_shape_at_done": float(np.mean(d_shape_rows)) if d_shape_rows else None,
         "per_template_success": per_template,
         "per_template_episodes": per_template_n,
         "overestimation_gap_mean": float(np.mean(gaps)) if gaps else None,
