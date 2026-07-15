@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -61,6 +63,65 @@ T1_TASKS = ("t1a_straighten", "t1b_single_bend", "t1c_endpoint_reposition")
 #       transitions of progress past its last periodic checkpoint).
 MAX_FULL_REBUILDS = 8
 DISCARD_STORM_REBUILD_AFTER = 10
+
+# M4-prep reproducibility fixes (gate verdict gate-m3r-reconvene-2-20260713,
+# choice B follow-up 3 — batch boundary, forensics outputs/reports/
+# p1_m3r_t1a_s2_forensics.md):
+#   F-a  All RNGs are seeded BEFORE TD3Agent construction so same-seed
+#        processes start from identical weights; the initial-weights hash is
+#        captured immediately after construction and persisted (never
+#        recomputed). This formally breaks M3R<->M4 same-seed comparability
+#        (M3R runs seeded Torch after construction). No bitwise-CUDA-
+#        determinism claim is added (extra determinism flags NOT approved).
+#   F-b  Deterministic-eval episode indexing uses a one-based successful-eval
+#        ordinal instead of the rebuild-coupled self.episode_index, so eval
+#        curve seeds are identical across attempts regardless of rebuild
+#        history. First eval -> 90_001.
+#   P1b  Smoke-only dense round logging behind P1_LOG_EVERY_ROUND=1 (approved
+#        at intent reconciliation 2026-07-15); main lanes launch with
+#        `env -u P1_LOG_EVERY_ROUND` and assert zero roundlog lines post-run.
+
+
+def initial_weights_sha256(agent: TD3Agent) -> str:
+    """F-a: deterministic digest of all module state dicts (incl. targets).
+
+    Sorted keys; each tensor contributes name, dtype, shape and its
+    contiguous CPU bytes.
+    """
+    digest = hashlib.sha256()
+    for name, module in (
+        ("encoder", agent.encoder),
+        ("critic", agent.critic),
+        ("actor", agent.actor),
+        ("encoder_target", agent.encoder_target),
+        ("critic_target", agent.critic_target),
+        ("actor_target", agent.actor_target),
+    ):
+        state = module.state_dict()
+        for key in sorted(state):
+            tensor = state[key]
+            digest.update(f"{name}.{key}:{tensor.dtype}:{tuple(tensor.shape)}".encode())
+            digest.update(tensor.detach().contiguous().cpu().numpy().tobytes())
+    return digest.hexdigest()
+
+
+def eval_episode_index_start(completed_evals: int) -> int:
+    """F-b: rebuild-independent eval episode index (one-based ordinal).
+
+    ``completed_evals`` counts previously *successful* evals; the first eval
+    therefore starts at 90_001 for every attempt of a given seed.
+    """
+    return 90_000 + completed_evals + 1
+
+
+def roundlog_line(transitions: int, count: int, collect_s: float, update_s: float) -> str | None:
+    """P1b: dense per-round emission, active only when P1_LOG_EVERY_ROUND == "1"."""
+    if os.environ.get("P1_LOG_EVERY_ROUND") != "1":
+        return None
+    return (
+        f"roundlog transitions={transitions} count={count} "
+        f"collect_s={collect_s:.1f} update_s={update_s:.1f}"
+    )
 
 
 class Tee:
@@ -123,15 +184,23 @@ class TrainingRun:
         )
         td3_cfg = dict(self.config.get("td3", {}))
         self.agent_config = TD3Config(**{k: v for k, v in td3_cfg.items()})
+        # F-a (gate-m3r-reconvene-2-20260713 follow-up 3): seed ALL RNGs
+        # strictly BEFORE agent construction so same-seed processes start
+        # from identical weights.
+        self.rng = np.random.default_rng(self.seed)
+        torch.manual_seed(self.seed)
         self.agent = TD3Agent(
             self.agent_config,
             device=self.device,
             reward_constants=self.episode_config.reward,
         )
+        # F-a: hash captured immediately after construction, before any
+        # training; persisted via save_run_summary, never recomputed.
+        self.initial_weights_sha256 = initial_weights_sha256(self.agent)
         self.buffer = ReplayBuffer(self.agent_config.replay_capacity)
         self.diag = DiagnosticsLogger(self.run_tag)
-        self.rng = np.random.default_rng(self.seed)
-        torch.manual_seed(self.seed)
+        # F-b: one-based successful-eval ordinal (rebuild-independent).
+        self._eval_ordinal = 0
 
         self.models_dir = Path("outputs/models") / self.run_tag
         self.models_dir.mkdir(parents=True, exist_ok=True)
@@ -472,7 +541,7 @@ class TrainingRun:
 
     # ------------------------------------------------------------------
 
-    def deterministic_eval(self) -> dict[str, Any]:
+    def deterministic_eval(self, *, episode_index_start: int) -> dict[str, Any]:
         assert self.runner is not None
 
         eval_prev_flip = np.full(self.n_envs, -1, dtype=np.int8)
@@ -531,7 +600,7 @@ class TrainingRun:
                 self.runner,
                 n_episodes=len(self.val_goals),
                 seed=self.seed + 500,
-                episode_index_start=90_000 + self.episode_index,
+                episode_index_start=episode_index_start,
                 action_fn=eval_action_fn,
                 rng=np.random.default_rng(self.seed + 501),
                 gamma=self.agent_config.gamma,
@@ -544,7 +613,7 @@ class TrainingRun:
                 self.runner,
                 n_episodes=int(eval_cfg.get("t1_episodes_per_task", 100)),
                 seed=self.seed + 500,
-                episode_index_start=90_000 + self.episode_index,
+                episode_index_start=episode_index_start,
                 action_fn=eval_action_fn,
                 rng=np.random.default_rng(self.seed + 501),
                 gamma=self.agent_config.gamma,
@@ -558,9 +627,12 @@ class TrainingRun:
 
     def eval_and_checkpoint(self, *, final: bool = False) -> None:
         start = time.perf_counter()
+        # F-b: capture the rebuild-independent eval index ONCE, outside the
+        # recovery-retry loop, so retries reuse the same episode set.
+        eval_index_start = eval_episode_index_start(self._eval_ordinal)
         while True:
             try:
-                result = self.deterministic_eval()
+                result = self.deterministic_eval(episode_index_start=eval_index_start)
                 break
             except (FloatingPointError, ValueError, RuntimeError) as exc:
                 if not is_nonfinite_error(exc):
@@ -568,6 +640,10 @@ class TrainingRun:
                 if self._register_rebuild(context="eval_recovery", error=exc):
                     raise
                 self.build_scene()
+        # F-b: increment only on successful eval completion; record the
+        # index actually used so run JSONs are auditable per attempt.
+        self._eval_ordinal += 1
+        result["eval_episode_index_start"] = eval_index_start
         result["wall_s"] = time.perf_counter() - start
         result["transitions"] = self.transitions
         self.eval_history.append(result)
@@ -602,6 +678,7 @@ class TrainingRun:
             "td3_config": self.agent_config.to_dict(),
             "reward_constants": vars(self.episode_config.reward),
             "td_target_bound": dict(self.agent.td_target_bound),
+            "initial_weights_sha256": self.initial_weights_sha256,
             "total_budget": self.total,
             "transitions": self.transitions,
             "updates": self.agent.update_count,
@@ -636,6 +713,7 @@ class TrainingRun:
             f"td3={self.agent_config.to_dict()} reward={vars(self.episode_config.reward)} "
             f"td_target_bound={self.agent.td_target_bound}"
         )
+        print(f"initial_weights_sha256={self.initial_weights_sha256}")
         start_wall = time.perf_counter()
         self.build_scene()
         next_eval = self.eval_every
@@ -648,6 +726,9 @@ class TrainingRun:
                 update_start = time.perf_counter()
                 self.train_updates(count)
                 update_s = time.perf_counter() - update_start
+                dense_line = roundlog_line(self.transitions, count, collect_s, update_s)
+                if dense_line:
+                    print(dense_line)
                 if count and (self.transitions // count) % 20 == 0:
                     elapsed = time.perf_counter() - start_wall
                     rate = self.transitions / elapsed if elapsed > 0 else 0.0
