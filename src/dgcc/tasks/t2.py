@@ -239,6 +239,31 @@ def build_t2_goal(spec: dict[str, Any]) -> DualGoal:
     )
 
 
+def _log_heldout_access(n_pairs: int) -> Path:
+    """Append a durable audit record for a held-out split materialization.
+
+    Leakage guard (HUMAN instruction, issue #13 comment 4978169975): the
+    held-out split must not be loaded before the final one-shot evaluation;
+    every load is therefore logged so any premature access is auditable.
+    Evaluator code-path validation uses the val split only.
+    """
+
+    import os as _os
+    import sys as _sys
+    from datetime import datetime as _dt, timezone as _tz
+
+    record = (
+        f"{_dt.now(_tz.utc).isoformat()} pid={_os.getpid()} n_pairs={n_pairs} "
+        f"argv={' '.join(_sys.argv[:4])}\n"
+    )
+    log_path = Path("outputs/metrics") / "t2_heldout_access.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a", encoding="utf-8") as fh:
+        fh.write(record)
+    print(f"T2 HELDOUT SPLIT ACCESS logged -> {log_path}", file=_sys.stderr)
+    return log_path
+
+
 def load_t2_split(split: str, path: Path | None = None) -> list[tuple[dict[str, Any], DualGoal]]:
     """Return ``(spec, goal)`` pairs for one split from the committed file."""
 
@@ -253,6 +278,8 @@ def load_t2_split(split: str, path: Path | None = None) -> list[tuple[dict[str, 
     ]
     if len(pairs) != len(wanted):
         raise RuntimeError(f"split {split!r} resolved {len(pairs)} of {len(wanted)} goals")
+    if split == "heldout":
+        _log_heldout_access(len(pairs))
     return pairs
 
 

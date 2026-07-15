@@ -51,16 +51,46 @@ def test_claim_durability_failure_denies_permission(tmp_path: Path, monkeypatch)
         heldout.acquire_heldout_claim(tmp_path / "claim.json", {"run_tag": "x"})
 
 
-# ---- exact 200-row expansion ----------------------------------------------
+# ---- exact 200-row expansion (leakage guard: NO heldout load in tests — ----
+# ---- HUMAN instruction issue #13 comment 4978169975: code-path validation ---
+# ---- via the val split only; the heldout split is loaded exactly once, ----
+# ---- at final evaluation, with access logging) ------------------------------
 
-def test_heldout_expansion_is_exactly_200() -> None:
+def test_expansion_code_path_via_val_split_only() -> None:
     from dgcc.tasks.t2 import load_t2_split
 
-    pairs = load_t2_split("heldout")
-    assert len(pairs) == 100
+    pairs = load_t2_split("val")  # 50 goals — validates the code path
+    assert len(pairs) == 50
     goals, labels, families = heldout.expand_heldout_goals(pairs)
-    assert len(goals) == len(labels) == len(families) == 200
+    assert len(goals) == len(labels) == len(families) == 100
     assert labels[0] == labels[1] and labels[0] != labels[2]  # per-goal pairing
+
+
+def test_heldout_contract_is_exactly_200_rows_synthetic() -> None:
+    # The 100-goal x2 = 200-row contract, proven WITHOUT touching the
+    # held-out split: synthetic (spec, goal) pairs of the heldout cardinality.
+    synthetic = [({"goal_id": f"g{i:03d}", "family": "s"}, object()) for i in range(100)]
+    goals, labels, families = heldout.expand_heldout_goals(synthetic)
+    assert len(goals) == 200 and len(labels) == 200 and len(families) == 200
+
+
+def test_heldout_access_logging_mechanism(tmp_path: Path, monkeypatch) -> None:
+    # The audit mechanism itself (no heldout materialization here).
+    import dgcc.tasks.t2 as t2
+
+    monkeypatch.chdir(tmp_path)
+    log = t2._log_heldout_access(100)
+    assert log.exists()
+    line = log.read_text().strip()
+    assert "n_pairs=100" in line and "pid=" in line
+
+
+def test_val_split_load_does_not_log(tmp_path: Path, monkeypatch) -> None:
+    import dgcc.tasks.t2 as t2
+
+    monkeypatch.chdir(tmp_path)
+    t2.load_t2_split("val")
+    assert not (tmp_path / "outputs" / "metrics" / "t2_heldout_access.log").exists()
 
 
 # ---- provenance rejection --------------------------------------------------
