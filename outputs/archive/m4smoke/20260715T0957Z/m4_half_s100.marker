@@ -1,0 +1,8 @@
+{
+ "tag": "smoke_m4_t2_s100",
+ "pgid": 2079117,
+ "stopped_at": "2026-07-15T09:14:59.750169+00:00",
+ "evals_len": 1,
+ "run_json_sha256": "eea1caee64f0e0d141147da254936a1f5541d4bbffcd6605c0ab5f40e7943441",
+ "log_size": 16427
+}
