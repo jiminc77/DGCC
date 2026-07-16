@@ -51,8 +51,20 @@ def z_align(curve: np.ndarray) -> np.ndarray:
     return out
 
 
+def _to_native(curve32: np.ndarray, n_native: int) -> np.ndarray:
+    """Arc-length linear interpolation of the 32-node goal curve to the
+    env's native vertex count (dgcc.phi.resample is 32-node-only)."""
+
+    seg = np.linalg.norm(np.diff(curve32, axis=0), axis=1)
+    s = np.concatenate([[0.0], np.cumsum(seg)])
+    s /= s[-1]
+    t = np.linspace(0.0, 1.0, n_native)
+    return np.column_stack([np.interp(t, s, curve32[:, k]) for k in range(3)])
+
+
 def measure(env, params, curve32: np.ndarray) -> dict:
-    placed = z_align(resample(curve32, env._n_vertices() if hasattr(env, "_n_vertices") else 33))
+    n_native = env.get_centerline_raw_batch().shape[1]
+    placed = z_align(_to_native(curve32, n_native))
     env.place_rod_vertices_batch(placed[None])
     converged = env.settle(max_steps=SETTLE_MAX_STEPS)
     settled = env.get_centerline_batch()[0]
