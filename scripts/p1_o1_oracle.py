@@ -28,10 +28,14 @@ from dgcc.rl.evaluation import evaluate_episodes
 from dgcc.tasks.domain import RewardConstants, SETTLE_MAX_STEPS, p1_rope_params
 from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, is_nonfinite_error
 from dgcc.tasks.t1 import T1_TASKS, sample_t1_goal
+from dgcc.tasks.t2 import load_t2_split
 from dgcc.utils.meta import get_git_commit_hash
 
 P_C_INTERPRETATION_RULE = "oracle 성공 → 과제 달성 가능 확정 · oracle ≫ policy → 학습 문제 확정 · oracle ≈ 0 → 판정 불능 (불가능 증명 아님)"
-TASK_CHOICES = tuple(T1_TASKS)
+# T2 re-aim (mechanical, #13 instruction 4985559491 directive 3): "t2" is an
+# opt-in task choice; DEFAULT task list stays T1-only so existing O1
+# invocations and their default artifacts are byte-identical.
+TASK_CHOICES = tuple(T1_TASKS) + ("t2",)
 DEFAULT_JSON = Path("outputs/metrics/p1_o1_oracle.json")
 DEFAULT_REPORT = Path("outputs/reports/p1_o1_oracle.md")
 DEFAULT_STDOUT_LOG = Path("outputs/reports/p1_o1_oracle_stdout.log")
@@ -150,6 +154,25 @@ def evaluate_task_block(
     episode_index_start: int,
     action_rng: np.random.Generator,
 ) -> dict[str, Any]:
+    if task == "t2":
+        # Directive-3 leakage guard: VAL split only — held-out contact forbidden.
+        pairs = load_t2_split("val")
+        goals = [g for _, g in pairs for _ in range(2)]
+        labels = [s["goal_id"] for s, _ in pairs for _ in range(2)]
+        families = {s["goal_id"]: str(s["family"]) for s, _ in pairs}
+        result = evaluate_episodes(
+            runner,
+            n_episodes=len(goals),
+            seed=seed + 500,
+            episode_index_start=episode_index_start,
+            action_fn=greedy_oracle_actions,
+            rng=action_rng,
+            goals=goals,
+            goal_labels=labels,
+        )
+        result["per_template_stats"] = template_stats(result["episodes"])
+        result["per_family_stats"] = family_stats(result["episodes"], families)
+        return result
     result = evaluate_episodes(
         runner,
         n_episodes=episodes,
@@ -161,6 +184,28 @@ def evaluate_task_block(
     )
     result["per_template_stats"] = template_stats(result["episodes"])
     return result
+
+
+def family_stats(episodes: list[dict[str, Any]], families: dict[str, str]) -> dict[str, Any]:
+    """T2 goal-family decomposition (mirrors template_stats shape)."""
+
+    by_family: dict[str, list[dict[str, Any]]] = {}
+    for row in episodes:
+        fam = families.get(str(row.get("goal_label")), "?")
+        by_family.setdefault(fam, []).append(row)
+    stats: dict[str, Any] = {}
+    for fam in sorted(by_family):
+        rows = by_family[fam]
+        success = np.asarray([bool(r["success"]) for r in rows])
+        min_d = np.asarray([float(r.get("min_d", r["final_d"])) for r in rows])
+        d_at_done = np.asarray([float(r.get("d_at_done", r["final_d"])) for r in rows])
+        stats[fam] = {
+            "n": len(rows),
+            "success_rate": float(success.mean()),
+            "mean_d_at_done": float(d_at_done.mean()),
+            "mean_min_d": float(min_d.mean()),
+        }
+    return stats
 
 
 def build_runner(
@@ -243,6 +288,29 @@ def write_report(payload: dict[str, Any], report_path: Path) -> None:
                     )
             lines.append(f"| {template} | " + " | ".join(cells) + " |")
         lines.append("")
+        # T2 branch: per-goal-family table (present only when blocks carry it)
+        families: set[str] = set()
+        for pass_data in payload["passes"].values():
+            block = pass_data["blocks"].get(task) or {}
+            families.update((block.get("per_family_stats") or {}).keys())
+        if families:
+            lines.append("| family | ON success | ON d_at_done | ON min D | OFF success | OFF d_at_done | OFF min D |")
+            lines.append("|---|---:|---:|---:|---:|---:|---:|")
+            for fam in sorted(families):
+                cells = []
+                for pass_key in ("grasp_realism_on", "grasp_realism_off"):
+                    block = payload["passes"].get(pass_key, {}).get("blocks", {}).get(task)
+                    stats = (block or {}).get("per_family_stats", {}).get(fam)
+                    if stats is None:
+                        cells.extend(["—", "—", "—"])
+                    else:
+                        cells.extend([
+                            f"{stats['success_rate']:.3f}",
+                            f"{stats['mean_d_at_done']:.4f}",
+                            f"{stats['mean_min_d']:.4f}",
+                        ])
+                lines.append(f"| {fam} | " + " | ".join(cells) + " |")
+            lines.append("")
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -253,7 +321,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--episodes", type=int, default=100, help="episodes per T1 task")
     parser.add_argument("--n-envs", type=int, default=256, help="batched env count, matching driver eval lanes")
-    parser.add_argument("--tasks", type=parse_tasks, default=list(TASK_CHOICES), help="comma-separated T1 tasks")
+    parser.add_argument("--tasks", type=parse_tasks, default=list(T1_TASKS), help="comma-separated tasks (T1 trio default; 't2' opt-in)")
     parser.add_argument("--skip-off-pass", action="store_true", help="run only grasp-realism ON/config-default pass")
     parser.add_argument("--json", type=Path, default=DEFAULT_JSON)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
