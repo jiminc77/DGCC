@@ -36,6 +36,8 @@ def evaluate_episodes(
     goal_fn: Any | None = None,
     goal_labels: Sequence[str] | None = None,
     q_min_fn: QMinFn | None = None,
+    wall_guard_k: int | None = None,
+    record_raw: bool = False,
 ) -> dict[str, Any]:
     """Run ``n_episodes`` evaluation episodes in batches over the runner's env.
 
@@ -44,6 +46,19 @@ def evaluate_episodes(
     ``q_min_fn``: optional Q(s, a) evaluator for the §8 overestimation gap
     (recorded at each episode's FIRST executed action vs the realized
     discounted return).
+
+    sprint_spec deltas (both default OFF — historical M4/P1 behavior intact):
+
+    ``wall_guard_k`` (§5 eval-wall guard): per-episode discarded-retry cap.
+    An episode whose environment is hit by more than ``k`` discarded-round
+    reseeds is counted as FAILURE (conservative direction) and flagged
+    ``eval_wall_guard=True``; when every unfinished slot in a batch is
+    guarded the batch stops retrying.  ``None`` = unlimited retries.
+
+    ``record_raw`` (§3 instrumentation prerequisite): adds per-episode raw
+    trajectory fields — ``x_initial``, ``x_steps`` (active-step X_after
+    list), ``x_terminal`` — plus ``truncated``/``reseed_boundary`` flags.
+    Intended for FINAL/held-out/sprint-heldout evals only.
     """
 
     if (goals is None) == (goal_fn is None):
@@ -91,8 +106,14 @@ def evaluate_episodes(
         discounted = np.zeros(n_envs, dtype=float)
         q_first = np.full(n_envs, np.nan, dtype=float)
         d_step_traces: list[list[float]] = [[] for _ in range(n_envs)]
+        raw_traces: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
+        discard_exposure = np.zeros(n_envs, dtype=int)
+        guarded = np.zeros(n_envs, dtype=bool)
         step_index = 0
         while not runner.all_done() and step_index < 2 * runner.config.horizon:
+            unfinished = ~np.asarray(runner.done, dtype=bool)
+            if wall_guard_k is not None and bool(np.all(guarded[unfinished])) and unfinished.any():
+                break
             X = runner.env.get_centerline_batch()
             p, delta, lift = action_fn(X, goal_curves, rng)
             if q_min_fn is not None and step_index == 0:
@@ -100,11 +121,20 @@ def evaluate_episodes(
                 q_first = np.asarray(q_min_fn(X, goal_curves, p, delta, lift_num), dtype=float)
             record = runner.step(p, delta, lift, rng=rng)
             if record.get("discarded"):
+                bad = np.asarray(record.get("bad_envs", np.arange(n_envs)), dtype=int)
+                bad = bad[bad < n_envs]
+                discard_exposure[bad] += 1
+                if wall_guard_k is not None:
+                    guarded |= discard_exposure > int(wall_guard_k)
                 continue
             active = record["active"]
             for slot in np.flatnonzero(active):
                 d_step_traces[int(slot)].append(float(record["d_after"][int(slot)]))
                 x_terminal[int(slot)] = np.asarray(record["X_after"][int(slot)], dtype=float)
+                if record_raw:
+                    raw_traces[int(slot)].append(
+                        np.asarray(record["X_after"][int(slot)], dtype=float)
+                    )
             returns += np.where(active, record["reward"], 0.0)
             discounted += np.where(active, (gamma**step_index) * record["reward"], 0.0)
             step_index += 1
@@ -132,34 +162,50 @@ def evaluate_episodes(
                     terminal, goal_curves[slot], P1_LENGTH_M, flip=flip
                 )
             )
-            episodes.append(
-                {
-                    "episode_id": episode_id,
-                    "goal_label": (
-                        goal_labels[episode_id % len(goal_labels)]
-                        if goal_labels is not None
-                        else None
-                    ),
-                    "init_template": begin_info["init_shapes"][slot],
-                    "success": bool(runner.succeeded[slot]),
-                    "steps": int(runner.t[slot]),
-                    "return": float(returns[slot]),
-                    "discounted_return": float(discounted[slot]),
-                    "final_d": float(runner.d_current[slot]),
-                    "d_at_done": d_at_done,
-                    "d_at_done_fallback": bool(d_at_done_fallback),
-                    "d_steps": d_steps,
-                    "min_d": min_d,
-                    "d_initial": float(begin_info["d_initial"][slot]),
-                    "d_shape_initial": float(d_shape_initial),
-                    "d_shape_at_done": float(d_shape_at_done),
-                    "q_first": None if np.isnan(q_first[slot]) else float(q_first[slot]),
-                }
-            )
+            ep_guarded = bool(guarded[slot]) if wall_guard_k is not None else False
+            row = {
+                "episode_id": episode_id,
+                "goal_label": (
+                    goal_labels[episode_id % len(goal_labels)]
+                    if goal_labels is not None
+                    else None
+                ),
+                "init_template": begin_info["init_shapes"][slot],
+                # §5 guard: guarded episodes are counted as failure
+                # (conservative — arm-internal success cannot be inflated).
+                "success": False if ep_guarded else bool(runner.succeeded[slot]),
+                "steps": int(runner.t[slot]),
+                "return": float(returns[slot]),
+                "discounted_return": float(discounted[slot]),
+                "final_d": float(runner.d_current[slot]),
+                "d_at_done": d_at_done,
+                "d_at_done_fallback": bool(d_at_done_fallback),
+                "d_steps": d_steps,
+                "min_d": min_d,
+                "d_initial": float(begin_info["d_initial"][slot]),
+                "d_shape_initial": float(d_shape_initial),
+                "d_shape_at_done": float(d_shape_at_done),
+                "q_first": None if np.isnan(q_first[slot]) else float(q_first[slot]),
+                "eval_wall_guard": ep_guarded,
+                "discard_exposure": int(discard_exposure[slot]),
+            }
+            if record_raw:
+                row["truncated"] = bool(np.asarray(runner.truncated)[slot]) if hasattr(runner, "truncated") else None
+                row["reseed_boundary"] = bool(discard_exposure[slot] > 0)
+                row["x_initial"] = X_initial[slot].tolist()
+                row["x_steps"] = [x.tolist() for x in raw_traces[slot][: runner.config.horizon]]
+                row["x_terminal"] = None if x_terminal[slot] is None else x_terminal[slot].tolist()
+                row["goal_index"] = episode_id % (len(goals) if goals is not None else n_envs)
+            episodes.append(row)
 
     return summarize_episodes(episodes) | {
         "episodes": episodes,
         "nan_incidents_during_eval": runner.nan_incidents - incidents_before,
+        "wall_guard_k": wall_guard_k,
+        "record_raw": bool(record_raw),
+        "eval_wall_guard_rate": (
+            float(np.mean([ep["eval_wall_guard"] for ep in episodes])) if episodes else None
+        ),
     }
 
 

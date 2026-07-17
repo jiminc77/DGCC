@@ -541,7 +541,9 @@ class TrainingRun:
 
     # ------------------------------------------------------------------
 
-    def deterministic_eval(self, *, episode_index_start: int) -> dict[str, Any]:
+    def deterministic_eval(
+        self, *, episode_index_start: int, record_raw: bool = False
+    ) -> dict[str, Any]:
         assert self.runner is not None
 
         eval_prev_flip = np.full(self.n_envs, -1, dtype=np.int8)
@@ -595,6 +597,10 @@ class TrainingRun:
             return p, delta, lift
 
         eval_cfg = self.config.get("eval", {})
+        # sprint_spec §5: per-episode discarded-retry cap (config flag,
+        # default off = historical unlimited retries; sprint configs only).
+        wall_guard_k = eval_cfg.get("wall_guard_k")
+        wall_guard_k = int(wall_guard_k) if wall_guard_k is not None else None
         if self.task == "t2":
             result = evaluate_episodes(
                 self.runner,
@@ -607,6 +613,8 @@ class TrainingRun:
                 goals=self.val_goals,
                 goal_labels=self.val_labels,
                 q_min_fn=self.agent.q_min_executed,
+                wall_guard_k=wall_guard_k,
+                record_raw=record_raw,
             )
         else:
             result = evaluate_episodes(
@@ -619,6 +627,8 @@ class TrainingRun:
                 gamma=self.agent_config.gamma,
                 goal_fn=self._goal_fn,
                 q_min_fn=self.agent.q_min_executed,
+                wall_guard_k=wall_guard_k,
+                record_raw=record_raw,
             )
         result["magnitude_incidents_during_eval"] = (
             self.runner.magnitude_incidents - magnitude_before
@@ -630,9 +640,14 @@ class TrainingRun:
         # F-b: capture the rebuild-independent eval index ONCE, outside the
         # recovery-retry loop, so retries reuse the same episode set.
         eval_index_start = eval_episode_index_start(self._eval_ordinal)
+        # sprint_spec §3: raw trajectories on the FINAL eval only (periodic
+        # evals excluded), behind a config flag (sprint configs only).
+        record_raw = bool(final and self.config.get("eval", {}).get("record_raw_final", False))
         while True:
             try:
-                result = self.deterministic_eval(episode_index_start=eval_index_start)
+                result = self.deterministic_eval(
+                    episode_index_start=eval_index_start, record_raw=record_raw
+                )
                 break
             except (FloatingPointError, ValueError, RuntimeError) as exc:
                 if not is_nonfinite_error(exc):
@@ -646,6 +661,29 @@ class TrainingRun:
         result["eval_episode_index_start"] = eval_index_start
         result["wall_s"] = time.perf_counter() - start
         result["transitions"] = self.transitions
+        if record_raw:
+            # Preserve raw trajectories in a separate gz artifact; strip the
+            # bulky fields from the in-memory history so run JSONs stay lean.
+            import gzip
+
+            raw_path = (
+                Path("outputs/metrics")
+                / f"p1_raw_final_eval_{self.run_tag}_{self.transitions:07d}.json.gz"
+            )
+            raw_payload = {
+                "run_tag": self.run_tag,
+                "transitions": self.transitions,
+                "eval_episode_index_start": eval_index_start,
+                "wall_guard_k": result.get("wall_guard_k"),
+                "record_raw": True,
+                "episodes": result["episodes"],
+            }
+            with gzip.open(raw_path, "wt", encoding="utf-8") as handle:
+                json.dump(raw_payload, handle)
+            print(f"raw final-eval trajectories: {raw_path}")
+            for ep in result["episodes"]:
+                for key in ("x_initial", "x_steps", "x_terminal"):
+                    ep.pop(key, None)
         self.eval_history.append(result)
         summary = {k: v for k, v in result.items() if k != "episodes"}
         self.diag.log_eval(self.transitions, summary)
