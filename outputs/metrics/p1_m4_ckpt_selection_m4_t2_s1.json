@@ -1,0 +1,13 @@
+{
+ "generated_at": "2026-07-17T13:10:49.143191+00:00",
+ "run_tag": "m4_t2_s1",
+ "run_json": "outputs/metrics/p1_run_m4_t2_s1.json",
+ "selection_rule": "max val success_rate; tie -> max mean_return; tie -> min transitions",
+ "selected_transitions": 275456,
+ "selected_ckpt": "outputs/models/m4_t2_s1/ckpt_0275456.pt",
+ "ckpt_sha256": "1e2f665621147de8a472f7efcad3eac91dc7753ae54cb8c586f24217bbd873a1",
+ "val_success_rate": 0.19,
+ "val_mean_return": 0.7759015856407226,
+ "eval_rows_considered": 12,
+ "initial_weights_sha256": "06912e7d30d471d57834a8504f10648011f58911f04edefc8078e893a9ec36e8"
+}

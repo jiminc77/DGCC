@@ -1,0 +1,11 @@
+{
+ "run_tag": "m4_t2_s1",
+ "ckpt_path": "outputs/models/m4_t2_s1/ckpt_0275456.pt",
+ "ckpt_sha256": "1e2f665621147de8a472f7efcad3eac91dc7753ae54cb8c586f24217bbd873a1",
+ "selection_manifest": "outputs/metrics/p1_m4_ckpt_selection_m4_t2_s1.json",
+ "episode_index_start": 95001,
+ "n_goals": 100,
+ "episodes_per_goal": 2,
+ "created_at": "2026-07-17T13:18:57.570192+00:00",
+ "pid": 293367
+}

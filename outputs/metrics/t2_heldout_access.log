@@ -1,0 +1,3 @@
+2026-07-17T13:11:14.897793+00:00 pid=288239 n_pairs=100 argv=scripts/p1_t2_heldout_eval.py --run-tag m4_t2_s0 --seed
+2026-07-17T13:18:57.570011+00:00 pid=293367 n_pairs=100 argv=scripts/p1_t2_heldout_eval.py --run-tag m4_t2_s1 --seed
+2026-07-17T13:26:45.984040+00:00 pid=298553 n_pairs=100 argv=scripts/p1_t2_heldout_eval.py --run-tag m4_t2_s2 --seed
