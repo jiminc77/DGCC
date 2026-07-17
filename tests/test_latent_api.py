@@ -59,7 +59,15 @@ def test_same_input_reproducibility(checkpoint, batch):
 def test_frozen_guarantee(checkpoint, batch):
     ex = FrozenLatentExtractor.from_checkpoint(checkpoint)
     before = ex.parameter_sha256()
-    for module in (ex.agent.encoder, ex.agent.critic, ex.agent.actor):
+    frozen_modules = (
+        ex.agent.encoder,
+        ex.agent.critic,
+        ex.agent.actor,
+        ex.agent.encoder_target,
+        ex.agent.critic_target,
+        ex.agent.actor_target,
+    )
+    for module in frozen_modules:
         assert not module.training
         assert all(not p.requires_grad for p in module.parameters())
     ex.extract(batch["X"], batch["G"], batch["p"], batch["delta"], batch["lift"])

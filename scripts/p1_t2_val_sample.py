@@ -61,7 +61,12 @@ def main() -> int:
     params_json = json.dumps(params.__dict__, sort_keys=True, default=float)
 
     for round_idx in range(args.rounds):
-        curves = np.stack([goal_curve(g, P1_LENGTH_M) for g in runner.goals])
+        # Snapshot goals/steps BEFORE runner.step: auto-reset may swap in the
+        # next episode's goal for terminal envs, which would mislabel
+        # goal_id/step_index on the completed transition.
+        goals_before = list(runner.goals)
+        curves = np.stack([goal_curve(g, P1_LENGTH_M) for g in goals_before])
+        steps_before = np.asarray(runner.t, dtype=int).copy() if hasattr(runner, "t") else np.zeros(args.n_envs, dtype=int)
         X = env.get_centerline_batch()
         p = rng.integers(0, K_NODES, size=args.n_envs)
         delta = rng.uniform(-DELTA_SCALE, DELTA_SCALE, size=(args.n_envs, 3))
@@ -72,7 +77,7 @@ def main() -> int:
             continue
         active = np.asarray(record["active"], dtype=bool)
         for i in np.flatnonzero(active):
-            g = runner.goals[i]
+            g = goals_before[i]
             rows["X_before"].append(record["X_before"][i])
             rows["X_after"].append(record["X_after"][i])
             rows["p"].append(int(p[i]))
@@ -90,7 +95,7 @@ def main() -> int:
             rows["goal_spec_hash"].append(goal_spec_hash(curves[i]))
             rows["goal_curve"].append(curves[i])
             rows["episode_id"].append(round_idx)
-            rows["step_index"].append(int(runner.t[i]) if hasattr(runner, "t") else 0)
+            rows["step_index"].append(int(steps_before[i]))
             rows["reward"].append(float(record["reward"][i]))
             rows["done"].append(bool(record["done"][i]))
             rows["provenance"].append("m5_t2_val_sample")
