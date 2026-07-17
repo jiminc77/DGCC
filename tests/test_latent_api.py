@@ -74,6 +74,19 @@ def test_frozen_guarantee(checkpoint, batch):
     assert ex.parameter_sha256() == before
 
 
+def test_frozen_reenforced_against_tampering(checkpoint, batch):
+    """External .train() tampering must not leak into an extraction (QA G006)."""
+
+    ex = FrozenLatentExtractor.from_checkpoint(checkpoint)
+    clean = ex.extract(batch["X"], batch["G"], batch["p"], batch["delta"], batch["lift"])
+    ex.agent.critic.train()
+    ex.agent.encoder.train()
+    out = ex.extract(batch["X"], batch["G"], batch["p"], batch["delta"], batch["lift"])
+    assert not ex.agent.critic.training and not ex.agent.encoder.training
+    for name in LATENT_SPEC:
+        np.testing.assert_array_equal(out[name], clean[name])
+
+
 def test_q_recomputation_matches_training_path(checkpoint, batch):
     ex = FrozenLatentExtractor.from_checkpoint(checkpoint)
     out = ex.extract(batch["X"], batch["G"], batch["p"], batch["delta"], batch["lift"])

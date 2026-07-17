@@ -71,14 +71,28 @@ class FrozenLatentExtractor:
         self.agent = agent
         self.ckpt_path = Path(ckpt_path)
         self.ckpt_sha256 = ckpt_sha256
-        for module in (
+        self._enforce_frozen()
+
+    def _frozen_modules(self):
+        agent = self.agent
+        return (
             agent.encoder,
             agent.critic,
             agent.actor,
             agent.encoder_target,
             agent.critic_target,
             agent.actor_target,
-        ):
+        )
+
+    def _enforce_frozen(self) -> None:
+        """(Re-)apply the frozen contract: eval mode + requires_grad False.
+
+        Called at construction AND at every extract() so external
+        ``.train()``/``requires_grad_`` tampering cannot silently leak into
+        an extraction (QA finding, G006 review cycle).
+        """
+
+        for module in self._frozen_modules():
             module.eval()
             module.requires_grad_(False)
 
@@ -153,6 +167,7 @@ class FrozenLatentExtractor:
             lift: ``(B,)`` "high"/"low" strings or 0/1 numerics.
         """
 
+        self._enforce_frozen()
         agent = self.agent
         from dgcc.models.networks import goal_residual_flips
 
