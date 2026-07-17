@@ -85,6 +85,27 @@ def build_run(config_path: str, seed: int, run_tag: str, device: str):
     return run
 
 
+def eval_with_recovery(run, *, episode_index_start: int, record_raw: bool = False, max_rebuilds: int = 8):
+    """Mirror p1_train.eval_and_checkpoint's NaN-recovery loop (scene rebuild + retry)."""
+
+    from dgcc.tasks.episode import is_nonfinite_error
+
+    rebuilds = 0
+    while True:
+        try:
+            return run.deterministic_eval(
+                episode_index_start=episode_index_start, record_raw=record_raw
+            )
+        except (FloatingPointError, ValueError, RuntimeError) as exc:
+            if not is_nonfinite_error(exc):
+                raise
+            rebuilds += 1
+            if rebuilds > max_rebuilds:
+                raise
+            print(f"eval_recovery rebuild={rebuilds} error={exc}")
+            run.build_scene()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--m4-tag", required=True, help="e.g. m4_t2_s0")
@@ -111,7 +132,7 @@ def main() -> int:
         transitions = int(ckpt.stem.split("_")[1])
         run.agent.load_checkpoint(ckpt)
         start = time.perf_counter()
-        result = run.deterministic_eval(episode_index_start=90_001 + transitions // 25_000)
+        result = eval_with_recovery(run, episode_index_start=90_001 + transitions // 25_000)
         wall = time.perf_counter() - start
         rows.append(
             {
@@ -175,8 +196,8 @@ def main() -> int:
     run.val_labels = labels
     run.build_scene()
     start = time.perf_counter()
-    result = run.deterministic_eval(
-        episode_index_start=SPRINT_HELDOUT_EPISODE_INDEX_START, record_raw=True
+    result = eval_with_recovery(
+        run, episode_index_start=SPRINT_HELDOUT_EPISODE_INDEX_START, record_raw=True
     )
     wall = time.perf_counter() - start
     episodes = result["episodes"]
