@@ -2,10 +2,19 @@
 
 **Deformation-Grounded Contact Critic** 구현 코드 레포. 연구 관리·문서는 [research-dashboard](https://github.com/jiminc77/research-dashboard) 참조.
 
-## 현재 단계: P1 진행 중 (M0–M2 완료, M3 진행)
+## 현재 단계: P1 진행 중 (M0–M3 완료, M4 진행)
 
 - 실행 명세: [`P1.md`](P1.md) — P0 위에 HACMan-style black-box contact critic baseline을 구축하는 P1 brief. Milestone = `@goal` 블록 (M0–M6), GitHub issue #9–#15 대응. 커밋 규약 `P1-M<k>: <요약>`.
-- P1 산출물 (M0–M2): `src/dgcc/tasks/` (T1/T2 task·episode·reward), `src/dgcc/models/`+`src/dgcc/rl/` (§6 네트워크, §7 TD3 decoupled double-Q, replay v2, §8 계측), 커밋된 T2 분할 `src/dgcc/tasks/splits/t2_v1.json`, `outputs/reports/p1_throughput.md` (권고 n_envs=256), `outputs/metrics/p1_random_reference.json` (random 바닥선), `outputs/metrics/p1_smoke_judgment.json` (T1-a 스모크 사전 등록 판정 PASS).
+
+| P1 milestone | issue | 상태 |
+|---|---|---|
+| M0 task layer / M1 networks·TD3 / M2 smoke·계측 | #9 · #10 · #11 | done |
+| M3 T1 본학습 (M3R 통제 재수행 경유 — verdict choice B) | #12 (closed, gate archive) | done |
+| M4 T2 본학습 (n_envs=1024, 스모크 관문 통과; s0 완주 24%, s1 재실행 진행, s2 대기) | #13 | running |
+| M5 latent API / M6 sign-off·reward 잠금 | #14 · #15 | ready (M6는 GNG-2 전 close 금지) |
+
+- paper-sprint 사전등록: Decision rd#35/#36 · sprint_spec@`82230d8` · 에픽 #17 — sprint 전용 held-out `t2_sprint_heldout_v1.json` (M4 held-out은 P1 판정 전용).
+- P1 산출물 (M0–M3): `src/dgcc/tasks/` (T1/T2 task·episode·reward), `src/dgcc/models/`+`src/dgcc/rl/` (§6 네트워크, §7 TD3 decoupled double-Q, replay v2, §8 계측), 커밋된 T2 분할 `src/dgcc/tasks/splits/t2_v1.json`, `outputs/reports/p1_m3r_results.md` (M3R 9/9), `outputs/metrics/p1_random_reference.json`, F-a/F-b 재현성 수정 (`initial_weights_sha256`, rebuild-독립 eval ordinal).
 - 수치 정책 (issue #8 sign-off 승계): 불변 — ε_succ=0.05·L, settle 1e-3/10000, grasp realism ±1node/5%, D = 길이 정규화 correspondence L2 + orientation canonicalization (Chamfer는 보고용), K=32, M=8. 조정 허용 (STEP_LOG 기록, M6 잠금) — α=10, c_step=0.1, R_succ=5, RL 하이퍼파라미터.
 - HUMAN GATE: M2 (스모크 2회 실패 시), M3/M4 (판정 미달 분기 + M4 HER 중간 체크), M6 (sign-off + reward 상수 잠금).
 
