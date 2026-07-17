@@ -60,6 +60,7 @@ def main() -> int:
     now = datetime.now(timezone.utc).isoformat()
     params_json = json.dumps(params.__dict__, sort_keys=True, default=float)
 
+    episode_counter = np.zeros(args.n_envs, dtype=int)
     for round_idx in range(args.rounds):
         # Snapshot goals/steps BEFORE runner.step: auto-reset may swap in the
         # next episode's goal for terminal envs, which would mislabel
@@ -94,11 +95,13 @@ def main() -> int:
             rows["goal_id"].append(goal_ids.get(id(g), "t2_val_unknown"))
             rows["goal_spec_hash"].append(goal_spec_hash(curves[i]))
             rows["goal_curve"].append(curves[i])
-            rows["episode_id"].append(round_idx)
+            rows["episode_id"].append(int(i) * 1000 + int(episode_counter[i]))
             rows["step_index"].append(int(steps_before[i]))
             rows["reward"].append(float(record["reward"][i]))
             rows["done"].append(bool(record["done"][i]))
             rows["provenance"].append("m5_t2_val_sample")
+        done_now = np.asarray(record["done"], dtype=bool) & active
+        episode_counter[done_now] += 1
 
     count = len(rows["p"])
     meta = {
