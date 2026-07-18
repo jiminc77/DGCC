@@ -118,24 +118,24 @@ def main() -> int:
     args = parser.parse_args()
     args.m4_tag = args.run_tag
     if args.audit_legacy:
-        print(json.dumps({"schema_version": 1, "legacy": audit_claims(Path("outputs/metrics"))}, indent=1))
+        print(json.dumps({"schema_version": 1, "legacy": audit_claims(REPO / "outputs/metrics")}, indent=1))
         return 0
     if not args.run_tag or not args.selection_out or not args.claim or not args.out or args.seed is None:
         raise SprintClaimError("--run-tag, --selection-out, --claim, and --out are required for evaluation")
     if not args.human_disposition_receipt or not Path(args.human_disposition_receipt).is_file():
         raise SprintClaimError("new canonical claim requires a human disposition receipt")
     expected_selection = REPO / "outputs/metrics" / f"p1_sprint_retro_val_{args.run_tag}.json"
-    expected_claim = REPO / "outputs/metrics" / f"p1_sprint_heldout_claim_{args.run_tag}.json"
+    legacy_claim = REPO / "outputs/metrics" / f"p1_bb_sprint_heldout_{args.run_tag}_claim.json"
+    expected_claim = REPO / "outputs/metrics" / f"p1_bb_sprint_heldout_{args.run_tag}_reeval_claim.json"
     expected_out = REPO / "outputs/metrics" / f"p1_t2_sprint_heldout_{args.run_tag}.json"
-    if tuple(Path(v).resolve() for v in (args.selection_out, args.claim, args.out)) != (expected_selection, expected_claim, expected_out):
-        raise SprintClaimError("selection, claim, and out paths must be canonical run-identity paths")
-    legacy_claim = expected_claim
+    if any(Path(v).is_symlink() for v in (args.selection_out, args.claim, args.out)) or tuple(Path(v).absolute() for v in (args.selection_out, args.claim, args.out)) != (expected_selection.absolute(), expected_claim.absolute(), expected_out.absolute()):
+        raise SprintClaimError("selection, claim, and out paths must be canonical non-symlink run-identity paths")
     if not legacy_claim.is_file(): raise SprintClaimError("disposition receipt must bind an existing legacy claim")
     _, receipt_sha = parse_disposition_receipt(args.human_disposition_receipt, legacy_claim_sha256=sha256_file(legacy_claim), run_tag=args.run_tag)
     receipt = json.loads(Path(args.human_disposition_receipt).read_text(encoding="utf-8"))
     if receipt["decision"] != "allow_reevaluation": raise SprintClaimError("disposition receipt does not allow re-evaluation")
 
-    models_dir = Path("outputs/models") / args.m4_tag
+    models_dir = REPO / "outputs/models" / args.m4_tag
     ckpts = sorted(models_dir.glob("ckpt_*.pt"))
     ckpts = [c for c in ckpts if "crash" not in c.name]
     assert ckpts, f"no checkpoints under {models_dir}"
@@ -200,6 +200,9 @@ def main() -> int:
         {
             "run_tag": args.m4_tag, "arm": "bb", "ckpt_sha256": selected["ckpt_sha256"],
             "split_sha256": CANONICAL_SPLIT_SHA256, "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
+            "episode_namespace": SPRINT_HELDOUT_EPISODE_INDEX_START, "seed": args.seed,
+            "config_sha256": retro_val["config_sha256"], "generation": "reeval",
+            "legacy_claim_sha256": sha256_file(legacy_claim),
             "selection_manifest": str(out_val.resolve()), "selection_manifest_sha256": selection_sha,
             "disposition_receipt_sha256": receipt_sha,
         },

@@ -32,34 +32,35 @@ def _pairs(payload: dict[str, Any]):
 
 def write_probe_h5(path: Path, episodes: list[dict[str, Any]], *, ckpt_sha: str, split_sha: str, claim_sha: str) -> None:
     import h5py
-    required = ("x_initial", "x_terminal", "probe_p", "probe_u", "probe_x_before", "probe_x_after", "probe_goal_curve", "goal_id", "episode_id", "step_index", "truncated", "reseed_boundary", "eval_wall_guard")
+    required = ("probe_p", "probe_u", "probe_x_before", "probe_x_after", "probe_goal_curve", "goal_id", "episode_id", "step_index", "truncated", "reseed_boundary", "eval_wall_guard")
     if len(episodes) != 200: raise SprintClaimError("probe requires exactly 200 episodes")
+    validated = []
     for ep in episodes:
         missing = [key for key in required if key not in ep or ep[key] is None]
         if missing: raise SprintClaimError(f"probe episode missing frozen-schema fields: {', '.join(missing)}")
-        step_count = len(ep["probe_p"])
-        if not step_count or any(len(ep[key]) != step_count for key in ("probe_u", "probe_x_before", "probe_x_after", "step_index")): raise SprintClaimError("probe requires non-empty aligned per-step fields")
-        arrays = [np.asarray(ep[key]) for key in ("x_initial", "x_terminal", "probe_goal_curve", "probe_p", "probe_u", "probe_x_before", "probe_x_after")]
-        if any(not np.all(np.isfinite(a)) for a in arrays): raise SprintClaimError("probe values must be finite")
-        if arrays[0].shape != (32, 3) or arrays[1].shape != (32, 3) or arrays[2].shape != (32, 3): raise SprintClaimError("probe centerline and goal dimensions must be 32x3")
-        if arrays[5].shape[1:] != (32, 3) or arrays[6].shape[1:] != (32, 3): raise SprintClaimError("probe per-step centerline dimensions must be 32x3")
+        p, u = np.asarray(ep["probe_p"], dtype=np.float64), np.asarray(ep["probe_u"], dtype=np.float64)
+        before, after, goal = (np.asarray(ep[key], dtype=np.float64) for key in ("probe_x_before", "probe_x_after", "probe_goal_curve"))
+        steps = np.asarray(ep["step_index"])
+        if p.ndim != 1 or not len(p) or u.shape != (len(p), 3) or before.shape != (len(p), 32, 3) or after.shape != (len(p), 32, 3) or goal.shape != (32, 3) or steps.shape != (len(p),):
+            raise SprintClaimError("probe frozen schema shapes are invalid")
+        if not all(np.all(np.isfinite(x)) for x in (p, u, before, after, goal)): raise SprintClaimError("probe values must be finite")
+        validated.append((p, u, before, after, goal, steps))
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as h5:
-        h5.attrs.update(schema_version=2, ckpt_sha256=ckpt_sha, split_sha256=split_sha, claim_sha256=claim_sha)
+        h5.attrs.update(schema_version=3, ckpt_sha256=ckpt_sha, split_sha256=split_sha, claim_sha256=claim_sha)
         text = h5py.string_dtype()
-        h5.create_dataset("x_before", data=np.asarray([e["probe_x_before"] for e in episodes]))
-        h5.create_dataset("x_after", data=np.asarray([e["probe_x_after"] for e in episodes]))
-        h5.create_dataset("goal_curve", data=np.asarray([e["probe_goal_curve"] for e in episodes]))
-        p_group = h5.create_group("p"); u_group = h5.create_group("u")
-        for index, episode in enumerate(episodes):
-            p_group.create_dataset(str(index), data=np.asarray(episode["probe_p"]))
-            u_group.create_dataset(str(index), data=np.asarray(episode["probe_u"]))
-        h5.create_dataset("goal_id", data=np.asarray([str(e["goal_id"]) for e in episodes], dtype=text))
-        h5.create_dataset("episode_id", data=np.asarray([e["episode_id"] for e in episodes], dtype=np.int64))
-        h5.create_dataset("step_index", data=np.asarray([e["step_index"] for e in episodes]))
-        flags = h5.create_group("flags")
-        for key in ("truncated", "reseed_boundary", "eval_wall_guard"):
-            flags.create_dataset(key, data=np.asarray([e[key] for e in episodes], dtype=bool))
+        for index, (p, u, before, after, goal, steps) in enumerate(validated):
+            group = h5.create_group(str(index))
+            group.create_dataset("x_before", data=before)
+            group.create_dataset("x_after", data=after)
+            group.create_dataset("goal", data=goal)
+            group.create_dataset("goal_id", data=str(episodes[index]["goal_id"]), dtype=text)
+            group.create_dataset("p", data=p)
+            group.create_dataset("u", data=u)
+            group.create_dataset("episode_id", data=np.asarray(episodes[index]["episode_id"], dtype=np.int64))
+            group.create_dataset("step_index", data=steps)
+            for key in ("truncated", "reseed_boundary", "eval_wall_guard"):
+                group.create_dataset(key, data=np.asarray(episodes[index][key], dtype=np.bool_))
 
 def build_run(config: str, seed: int, run_tag: str, device: str):
     spec = importlib.util.spec_from_file_location("p1_train", REPO / "scripts/p1_train.py"); module = importlib.util.module_from_spec(spec); sys.modules["p1_train"] = module
@@ -70,11 +71,11 @@ def build_run(config: str, seed: int, run_tag: str, device: str):
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__); p.add_argument("--run-tag", required=True); p.add_argument("--arm", required=True); p.add_argument("--selection-manifest", required=True); p.add_argument("--claim", required=True); p.add_argument("--out", required=True); p.add_argument("--lock"); p.add_argument("--config", default="configs/p1_t2.yaml"); p.add_argument("--seed", type=int, required=True); p.add_argument("--device", default="cuda"); args = p.parse_args()
     expected_claim, expected_out = canonical_paths(args.run_tag, args.arm)
-    if Path(args.claim).resolve() != expected_claim or Path(args.out).resolve() != expected_out: raise SprintClaimError("claim and out paths must be canonical run-identity paths")
+    if Path(args.claim).is_symlink() or Path(args.out).is_symlink() or Path(args.claim).absolute() != expected_claim.absolute() or Path(args.out).absolute() != expected_out.absolute(): raise SprintClaimError("claim and out paths must be canonical non-symlink run-identity paths")
     manifest = load_selection_manifest(Path(args.selection_manifest), args.run_tag, args.arm, args.seed, args.config); require_metric_lock(Path(args.lock) if args.lock else None, args.arm)
     validate_checkpoint_arm(Path(manifest["selected_ckpt"]), args.arm)
     selection_sha = sha256_file(Path(args.selection_manifest))
-    capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(Path(args.selection_manifest).resolve()),"selection_manifest_sha256":selection_sha})
+    capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(Path(args.selection_manifest).resolve()),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START})
     payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG); pairs = _pairs(payload); goals=[g for _,g in pairs for _ in range(2)]; labels=[s["goal_id"] for s,_ in pairs for _ in range(2)]
     run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"])); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
     if len(episodes)!=200: raise SprintClaimError("sprint evaluation must produce 200 episodes")

@@ -1,44 +1,185 @@
 """Synthetic contracts for canonical sprint authorization primitives."""
 from __future__ import annotations
-import json, threading
+
+import hashlib
+import json
+import threading
 from pathlib import Path
+
 import pytest
+
 from dgcc.analysis import sprint_claims as claims
 
-def payload() -> dict[str, str]: return {"run_tag":"synthetic","arm":"BB","ckpt_sha256":"c"*64,"split_sha256":claims.CANONICAL_SPLIT_SHA256}
 
-def test_claim_contains_preload_attestation(tmp_path: Path) -> None:
-    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload()); assert json.loads(claim.read_text())["claim_before_load"] is True
+@pytest.fixture
+def canonical_sprint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Redirect the source-anchored repository only for isolated synthetic tests."""
+    root = tmp_path / "repo"
+    split = root / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json"
+    split.parent.mkdir(parents=True)
+    split.write_text(json.dumps({"n_goals": 100, "specs": [{} for _ in range(100)]}))
+    monkeypatch.setattr(claims, "REPO_ROOT", root)
+    monkeypatch.setattr(claims, "CANONICAL_SPLIT_PATH", split)
+    monkeypatch.setattr(claims, "CANONICAL_SPLIT_SHA256", claims.sha256_file(split))
+    claims._ISSUED_CAPABILITIES.clear()
+    yield root
+    claims._ISSUED_CAPABILITIES.clear()
 
-def test_existing_claim_hard_refuse(tmp_path: Path) -> None:
-    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload())
-    with pytest.raises(claims.SprintClaimError,match="already exists"): claims.acquire_claim(claim,payload())
 
-def test_lock_schema_rejects_empty_and_bb_is_only_bypass(tmp_path: Path) -> None:
-    lock=tmp_path/"lock.json"; lock.write_text("{}")
-    with pytest.raises(claims.SprintClaimError): claims.require_metric_lock(lock,"V1")
-    claims.require_metric_lock(None,"BB")
+def payload(*, generation: str | None = None) -> dict[str, object]:
+    body: dict[str, object] = {
+        "run_tag": "synthetic",
+        "arm": "BB",
+        "ckpt_sha256": "c" * 64,
+        "split_sha256": claims.CANONICAL_SPLIT_SHA256,
+        "seed": 7,
+        "config_sha256": "d" * 64,
+        "selection_manifest": "/synthetic/selection.json",
+        "selection_manifest_sha256": "e" * 64,
+        "episode_namespace": 97_001,
+    }
+    if generation is not None:
+        body.update(generation=generation, legacy_claim_sha256="a" * 64, disposition_receipt_sha256="b" * 64)
+    return body
 
-def test_consumer_binds_claim_to_access_and_canonical_split(tmp_path: Path) -> None:
-    claim=tmp_path/"claim.json"; capability=claims.acquire_claim(claim,payload()); log=tmp_path/"access.jsonl"
-    split=Path(claims.CANONICAL_SPLIT_PATH); loaded=claims.consume_claim_and_load_split(capability,split,access_log=log)
-    assert loaded["n_goals"]==100 and json.loads(log.read_text())["claim_sha256"]==claims.sha256_file(claim)
 
-def test_consumer_rejects_symlink_alias(tmp_path: Path) -> None:
-    claim=tmp_path/"claim.json"; capability=claims.acquire_claim(claim,payload()); alias=tmp_path/"split.json"; alias.symlink_to(claims.CANONICAL_SPLIT_PATH)
-    # An alias resolves to canonical and is intentionally accepted; a different target is not.
-    assert claims.consume_claim_and_load_split(capability,alias,access_log=tmp_path/"log")["n_goals"]==100
-def test_consumer_rejects_forged_mapping() -> None:
-    with pytest.raises(claims.SprintClaimError): claims.consume_claim_and_load_split(payload(), claims.CANONICAL_SPLIT_PATH)
+def claim_path(*, generation: str | None = None) -> Path:
+    return claims.canonical_claim_path("synthetic", "bb", generation)
 
-def test_probe_manifest_content_address_and_parallel_registration(tmp_path: Path) -> None:
-    manifest=tmp_path/"manifest.json"; probes=[]
-    for i in range(16):
-        path=tmp_path/f"p{i}.h5"; path.write_bytes(str(i).encode()); probes.append(path)
-    threads=[threading.Thread(target=claims.probe_manifest_register,args=(manifest,path,{"production_goal":"G-EV"})) for path in probes]
-    [t.start() for t in threads]; [t.join() for t in threads]
-    assert len(json.loads(manifest.read_text())["files"] )==16
 
-def test_audit_claims_is_claim_only_and_non_mutating(tmp_path: Path) -> None:
-    claim=tmp_path/"p1_claim_synthetic.json"; claims.acquire_claim(claim,payload()); before=claim.read_bytes(); rows=claims.audit_claims(tmp_path)
-    assert rows and rows[0]["status"]=="needs_human_disposition" and claim.read_bytes()==before
+def test_happy_path_contains_preload_attestation_and_access_audit(canonical_sprint: Path) -> None:
+    claim = claim_path()
+    capability = claims.acquire_claim(claim, payload())
+    access_log = canonical_sprint / "access.jsonl"
+    loaded = claims.consume_claim_and_load_split(capability, claims.CANONICAL_SPLIT_PATH, access_log=access_log)
+    record = json.loads(access_log.read_text())
+    assert loaded["n_goals"] == len(loaded["specs"]) == 100
+    assert json.loads(claim.read_text())["claim_before_load"] is True
+    assert record["claim_sha256"] == claims.sha256_file(claim)
+    assert record["split_sha256"] == claims.CANONICAL_SPLIT_SHA256
+
+
+def test_claim_path_is_canonical_and_independent_of_cwd(canonical_sprint: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    expected = claim_path()
+    monkeypatch.chdir(canonical_sprint.parent)
+    with pytest.raises(claims.SprintClaimError, match="canonical"):
+        claims.acquire_claim(canonical_sprint / "claim.json", payload())
+    capability = claims.acquire_claim(expected, payload())
+    assert capability._path == expected
+
+
+def test_existing_canonical_claim_hard_refuses(canonical_sprint: Path) -> None:
+    claims.acquire_claim(claim_path(), payload())
+    with pytest.raises(claims.SprintClaimError, match="already exists"):
+        claims.acquire_claim(claim_path(), payload())
+
+
+@pytest.mark.parametrize("field", ["seed", "config_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace"])
+def test_claim_requires_each_provenance_field(canonical_sprint: Path, field: str) -> None:
+    body = payload()
+    body.pop(field)
+    with pytest.raises(claims.SprintClaimError, match="schema"):
+        claims.acquire_claim(claim_path(), body)
+
+
+def test_capability_must_be_registry_issued_and_claim_cannot_be_tampered(canonical_sprint: Path) -> None:
+    with pytest.raises(claims.SprintClaimError, match="unconsumed"):
+        claims.consume_claim_and_load_split(claims.ClaimCapability(claim_path()), claims.CANONICAL_SPLIT_PATH)
+    claim = claim_path()
+    capability = claims.acquire_claim(claim, payload())
+    body = json.loads(claim.read_text())
+    body["seed"] = 8
+    claim.write_text(json.dumps(body))
+    with pytest.raises(claims.SprintClaimError, match="modified"):
+        claims.consume_claim_and_load_split(capability, claims.CANONICAL_SPLIT_PATH)
+
+
+def test_duplicate_claim_json_keys_are_rejected(canonical_sprint: Path) -> None:
+    claim = claim_path()
+    capability = claims.acquire_claim(claim, payload())
+    claim.write_text('{"seed":7,"seed":8}')
+    with pytest.raises(claims.SprintClaimError, match="unreadable or modified"):
+        claims.consume_claim_and_load_split(capability, claims.CANONICAL_SPLIT_PATH)
+
+
+def test_consumer_rejects_split_symlink_alias_and_second_consumption(canonical_sprint: Path) -> None:
+    claim = claim_path()
+    capability = claims.acquire_claim(claim, payload())
+    alias = canonical_sprint / "split-alias.json"
+    alias.symlink_to(claims.CANONICAL_SPLIT_PATH)
+    with pytest.raises(claims.SprintClaimError, match="canonical non-symlink"):
+        claims.consume_claim_and_load_split(capability, alias)
+    with pytest.raises(claims.SprintClaimError, match="unconsumed"):
+        claims.consume_claim_and_load_split(capability, claims.CANONICAL_SPLIT_PATH)
+
+
+def test_reevaluation_claim_binds_receipt_and_is_single_use(canonical_sprint: Path) -> None:
+    receipt = canonical_sprint / "receipt.json"
+    legacy_digest = "a" * 64
+    receipt.write_text(json.dumps({"schema_version": 1, "legacy_claim_sha256": legacy_digest, "run_tag": "synthetic", "decision": "allow_reevaluation", "decided_by": "reviewer", "decided_at": "2026-01-01T00:00:00Z"}))
+    _, receipt_digest = claims.parse_disposition_receipt(receipt, legacy_claim_sha256=legacy_digest, run_tag="synthetic")
+    body = payload(generation="reeval")
+    body["disposition_receipt_sha256"] = receipt_digest
+    claim = claim_path(generation="reeval")
+    capability = claims.acquire_claim(claim, body)
+    assert json.loads(claim.read_text())["disposition_receipt_sha256"] == receipt_digest
+    claims.consume_claim_and_load_split(capability, claims.CANONICAL_SPLIT_PATH)
+    with pytest.raises(claims.SprintClaimError, match="unconsumed"):
+        claims.consume_claim_and_load_split(capability, claims.CANONICAL_SPLIT_PATH)
+    with pytest.raises(claims.SprintClaimError, match="identity"):
+        claims.parse_disposition_receipt(receipt, legacy_claim_sha256="f" * 64, run_tag="synthetic")
+
+
+def test_probe_manifest_reopens_h5_and_canonicalizes_alias(canonical_sprint: Path) -> None:
+    manifest = canonical_sprint / "manifest.json"
+    probe = canonical_sprint / "probe.h5"
+    probe.write_bytes(b"first")
+    alias = canonical_sprint / "probe-alias.h5"
+    alias.symlink_to(probe)
+    first = claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
+    same = claims.probe_manifest_register(manifest, alias, {"production_goal": "G-EV"})
+    assert len(first["files"]) == len(same["files"]) == 1
+    probe.write_bytes(b"reopened")
+    with pytest.raises(claims.SprintClaimError, match="immutable"):
+        claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
+
+
+def test_probe_manifest_content_address_and_parallel_registration(canonical_sprint: Path) -> None:
+    manifest = canonical_sprint / "manifest.json"
+    probes = []
+    for index in range(16):
+        probe = canonical_sprint / f"p{index}.h5"
+        probe.write_bytes(str(index).encode())
+        probes.append(probe)
+    threads = [threading.Thread(target=claims.probe_manifest_register, args=(manifest, probe, {"production_goal": "G-EV"})) for probe in probes]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(json.loads(manifest.read_text())["files"]) == 16
+
+
+def test_metric_lock_has_strict_schema_and_bb_only_bypasses(canonical_sprint: Path) -> None:
+    lock = canonical_sprint / "lock.json"
+    valid = {"schema_version": 1, "endpoint": "success_rate", "aggregate": 0.5, "created_at": "now", "bb_claim_sha256": [f"{index:064x}" for index in range(8)], "primitive_version": "v1"}
+    lock.write_text(json.dumps(valid))
+    claims.require_metric_lock(lock, "v1")
+    valid["extra"] = True
+    lock.write_text(json.dumps(valid))
+    with pytest.raises(claims.SprintClaimError, match="schema"):
+        claims.require_metric_lock(lock, "v1")
+    claims.require_metric_lock(None, "bb")
+    with pytest.raises(claims.SprintClaimError, match="requires"):
+        claims.require_metric_lock(None, "matched")
+
+
+def test_audit_claim_content_is_non_mutating_and_result_binding_suppresses_row(canonical_sprint: Path) -> None:
+    claim = claim_path()
+    claims.acquire_claim(claim, payload())
+    before = claim.read_bytes()
+    rows = claims.audit_claims(claim.parent)
+    assert rows == [{"schema_version": 1, "status": "needs_human_disposition", "claim": str(claim), "claim_sha256": hashlib.sha256(before).hexdigest(), "run_tag": "synthetic", "arm": "bb", "re_evaluation_permitted": False}]
+    result = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
+    result.write_text(json.dumps({"run_tag": "synthetic", "arm": "bb", "claim_sha256": hashlib.sha256(before).hexdigest()}))
+    assert claims.audit_claims(claim.parent) == []
+    assert claim.read_bytes() == before

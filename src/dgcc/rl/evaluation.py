@@ -216,16 +216,18 @@ def evaluate_episodes(
                     row["step_index"] = list(range(len(probe_p[slot])))
             episodes.append(row)
 
-    return summarize_episodes(episodes) | {
+    result = summarize_episodes(episodes) | {
         "episodes": episodes,
         "nan_incidents_during_eval": runner.nan_incidents - incidents_before,
         "wall_guard_k": wall_guard_k,
         "record_raw": bool(record_raw),
-        "record_probe": bool(record_probe),
         "eval_wall_guard_rate": (
             float(np.mean([ep["eval_wall_guard"] for ep in episodes])) if episodes else None
         ),
     }
+    if record_probe:
+        result["record_probe"] = True
+    return result
 
 
 def summarize_episodes(episodes: list[dict[str, Any]]) -> dict[str, Any]:
