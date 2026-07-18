@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import torch
+import pytest
 
 from dgcc.rl.sprint_arms import SprintTD3Agent
 from dgcc.rl.td3 import TD3Agent, TD3Config
@@ -30,3 +31,11 @@ def test_legacy_baseline_checkpoint_loads(tmp_path) -> None:
     assert adapter.update_count == 3
     for left, right in zip(legacy.encoder.parameters(), adapter.encoder.parameters(), strict=True): assert torch.equal(left, right)
     for left, right in zip(before, adapter.f_resp.parameters(), strict=True): assert torch.equal(left, right)
+    with pytest.warns(UserWarning, match="checkpoint config drift"):
+        SprintTD3Agent(TD3Config(lr=1e-3)).load_checkpoint(path)
+
+
+def test_v2_checkpoint_config_drift_warns(tmp_path) -> None:
+    path = SprintTD3Agent(TD3Config()).save_checkpoint(tmp_path / "v2.pt")
+    with pytest.warns(UserWarning, match="checkpoint config drift"):
+        SprintTD3Agent(TD3Config(lr=1e-3)).load_checkpoint(path)

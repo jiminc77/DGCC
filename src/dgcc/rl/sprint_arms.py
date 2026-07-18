@@ -128,10 +128,8 @@ class SprintTD3Agent(TD3Agent):
         self.critic_optimizer.step()
         with torch.no_grad():
             td_error = (q1 - y).abs()
-        return {
+        stats = {
             "critic_loss": float(q_loss.detach().cpu()),
-            "aux_loss": float(aux_loss.detach().cpu()),
-            "loss": float(loss.detach().cpu()),
             "critic_grad_norm": grad_norm,
             "target_mean": float(y.mean().cpu()),
             "td_target_clamp_hit_frac": self.last_clamp_hit_frac,
@@ -141,6 +139,13 @@ class SprintTD3Agent(TD3Agent):
             "td_error_mean": float(td_error.mean().cpu()),
             "td_error_p95": float(td_error.quantile(0.95).cpu()),
             "td_error_max": float(td_error.max().cpu()),
+        }
+        if self.aux_weight == 0.0:
+            return stats
+        return {
+            **stats,
+            "aux_loss": float(aux_loss.detach().cpu()),
+            "loss": float(loss.detach().cpu()),
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -169,6 +174,16 @@ class SprintTD3Agent(TD3Agent):
 
     def load_checkpoint(self, path: Path | str) -> None:
         payload = torch.load(Path(path), map_location=self.device, weights_only=False)
+        saved_config = payload.get("config")
+        if saved_config is not None and saved_config != self.config.to_dict():
+            import warnings
+
+            drift = {
+                key: (saved_config.get(key), self.config.to_dict().get(key))
+                for key in set(saved_config) | set(self.config.to_dict())
+                if saved_config.get(key) != self.config.to_dict().get(key)
+            }
+            warnings.warn(f"checkpoint config drift (saved, current): {drift}", stacklevel=2)
         sprint = payload.get("sprint_arm")
         if sprint is None:
             # Legacy BB payload: preserve its optimizer state and retain freshly

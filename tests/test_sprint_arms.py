@@ -27,6 +27,21 @@ def digest(agent: TD3Agent) -> str:
     for module in (agent.encoder, agent.critic, agent.actor, agent.encoder_target, agent.critic_target, agent.actor_target):
         for value in module.state_dict().values(): h.update(value.detach().cpu().numpy().tobytes())
     return h.hexdigest()
+def assert_nested_equal(left, right) -> None:
+    if isinstance(left, torch.Tensor):
+        assert torch.equal(left, right)
+    elif isinstance(left, dict):
+        assert left.keys() == right.keys()
+        for key in left:
+            assert_nested_equal(left[key], right[key])
+    elif isinstance(left, (list, tuple)):
+        assert len(left) == len(right)
+        for left_value, right_value in zip(left, right, strict=True):
+            assert_nested_equal(left_value, right_value)
+    else:
+        assert left == right
+
+
 
 
 def test_response_contract_and_dct_target() -> None:
@@ -56,17 +71,29 @@ def test_aux_isolates_actor_and_targets() -> None:
 
 
 def test_lambda_zero_matches_baseline_and_rng_init_is_preserved() -> None:
-    torch.manual_seed(7); base = TD3Agent(TD3Config(policy_noise=0.0))
-    torch.manual_seed(7); sprint = SprintTD3Agent(TD3Config(policy_noise=0.0), aux_weight=0.0)
+    config = TD3Config(policy_noise=0.0)
+    torch.manual_seed(7); base = TD3Agent(config)
+    torch.manual_seed(7); sprint = SprintTD3Agent(config, aux_weight=0.0)
     assert digest(base) == digest(sprint)
     b = batch()
     g1, g2 = torch.Generator().manual_seed(4), torch.Generator().manual_seed(4)
     baseline = base.critic_update(b, generator=g1)
     adapted = sprint.critic_update(b, generator=g2)
-    assert adapted["critic_loss"] == pytest.approx(baseline["critic_loss"], abs=1e-7)
-    for left, right in zip(base.encoder.parameters(), sprint.encoder.parameters(), strict=True): assert torch.allclose(left, right)
-    for left, right in zip(base.critic.parameters(), sprint.critic.parameters(), strict=True): assert torch.allclose(left, right)
-
+    assert adapted.keys() == baseline.keys()
+    for key in baseline:
+        assert adapted[key] == pytest.approx(baseline[key], abs=1e-7)
+    assert torch.equal(g1.get_state(), g2.get_state())
+    for left, right in zip(base.encoder.parameters(), sprint.encoder.parameters(), strict=True): assert torch.equal(left, right)
+    for left, right in zip(base.critic.parameters(), sprint.critic.parameters(), strict=True): assert torch.equal(left, right)
+    base_optimizer = base.critic_optimizer.state_dict()
+    sprint_optimizer = sprint.critic_optimizer.state_dict()
+    assert_nested_equal(base_optimizer, {
+        "state": {key: sprint_optimizer["state"][key] for key in base_optimizer["state"]},
+        "param_groups": sprint_optimizer["param_groups"][:-1],
+    })
+    torch.manual_seed(7); base = TD3Agent(config); base.critic_update(b, generator=torch.Generator().manual_seed(4)); base_next = torch.rand(1)
+    torch.manual_seed(7); sprint = SprintTD3Agent(config, aux_weight=0.0); sprint.critic_update(b, generator=torch.Generator().manual_seed(4)); sprint_next = torch.rand(1)
+    assert torch.equal(base_next, sprint_next)
 
 def test_bb_factory_is_baseline_and_future_arms_are_explicit() -> None:
     assert type(create_sprint_agent("bb")) is TD3Agent

@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import sys
+import subprocess
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -33,30 +34,52 @@ def read_manifest(path: Path) -> dict[str, str]:
 
 
 def validate_source_bundle(bundle: Path) -> dict[str, Any]:
-    """Validate the frozen-bundle manifest and metadata before importing it."""
+    """Authenticate a frozen BB bundle against the committed parity proof."""
     manifest_path = bundle / "MANIFEST.sha256"
     metadata_path = bundle / "bundle_metadata.json"
+    proof_path = ROOT / "outputs/metrics/sprint_bb_parity_proof.json"
     if not manifest_path.is_file() or not metadata_path.is_file():
         raise RuntimeError("source bundle requires MANIFEST.sha256 and bundle_metadata.json")
-    manifest = read_manifest(manifest_path)
     try:
+        proof = json.loads(proof_path.read_text(encoding="utf-8"))
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise RuntimeError("frozen bundle metadata is malformed") from error
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("source bundle proof or metadata is malformed") from error
+    if proof.get("verdict") != "PASS":
+        raise RuntimeError("source bundle parity proof verdict is not PASS")
+    source_commit = metadata.get("source_commit")
+    closure_blobs = proof.get("closure_blobs")
+    if not isinstance(source_commit, str) or not isinstance(closure_blobs, dict):
+        raise RuntimeError("source bundle proof or metadata lacks source commit")
+    expected_blobs = closure_blobs.get(source_commit)
+    if not isinstance(expected_blobs, dict):
+        raise RuntimeError("source bundle source_commit is not authenticated by parity proof")
     source_blobs = metadata.get("source_blobs")
-    if not isinstance(source_blobs, dict) or set(source_blobs) != set(manifest):
-        raise RuntimeError("frozen bundle metadata source_blobs disagrees with manifest")
-    expected_files = set(manifest) | {"MANIFEST.sha256", "bundle_metadata.json"}
+    if source_blobs != expected_blobs:
+        raise RuntimeError("source bundle metadata source_blobs disagrees with parity proof")
+    manifest = read_manifest(manifest_path)
+    if set(manifest) != set(expected_blobs):
+        raise RuntimeError("frozen bundle manifest disagrees with parity proof")
+    expected_files = set(expected_blobs) | {"MANIFEST.sha256", "bundle_metadata.json"}
     actual_files = {p.relative_to(bundle).as_posix() for p in bundle.rglob("*") if p.is_file()}
     if actual_files != expected_files:
-        raise RuntimeError("frozen bundle file set disagrees with manifest")
-    for relative, digest in manifest.items():
+        raise RuntimeError("frozen bundle file set disagrees with parity proof")
+    for relative, expected_blob in expected_blobs.items():
         source = bundle / relative
-        if not source.is_file() or sha256_file(source) != digest:
+        if not source.is_file():
+            raise RuntimeError(f"frozen bundle source is missing: {relative}")
+        blob = subprocess.run(
+            ["git", "hash-object", str(source)], check=True, capture_output=True, text=True
+        ).stdout.strip()
+        if blob != expected_blob:
+            raise RuntimeError(f"frozen bundle proof blob mismatch: {relative}")
+        if sha256_file(source) != manifest[relative]:
             raise RuntimeError(f"frozen bundle digest mismatch: {relative}")
-    if not metadata.get("source_commit"):
-        raise RuntimeError("frozen bundle metadata lacks source_commit")
-    return {"sha256": sha256_file(manifest_path), "source_commit": metadata["source_commit"]}
+    return {
+        "sha256": sha256_file(manifest_path),
+        "source_commit": source_commit,
+        "proof_sha256": sha256_file(proof_path),
+    }
 
 
 def load_module(path: Path, name: str) -> ModuleType:
