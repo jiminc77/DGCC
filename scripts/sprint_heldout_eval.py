@@ -8,6 +8,10 @@ REPO = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(REPO / "src")
 from dgcc.analysis.sprint_claims import (CANONICAL_SPLIT_PATH, CANONICAL_SPLIT_SHA256, CANONICAL_SUMMARY_KEYS, REPO_ROOT, SprintClaimError, acquire_claim, atomic_publish, canonicalize_episode_ids, consume_claim_and_load_split, json_file, probe_manifest_register, require_metric_lock, sha256_file, utc_now, validate_checkpoint_arm)
 EPISODE_INDEX_START = 97_001; WALL_GUARD_K = 5
 SPRINT_ACCESS_LOG = REPO / "outputs/metrics/t2_sprint_heldout_access.log"; PROBE_MANIFEST = REPO / "outputs/metrics/sprint_probe_manifest.json"
+DRIVER_ONLY_RESULT_KEYS = frozenset({
+    "nan_incidents_during_eval", "magnitude_incidents_during_eval",
+    "wall_guard_k", "record_raw", "record_probe",
+})
 
 def _config_sha(path: str) -> str: return sha256_file(REPO / path)
 def canonical_paths(run_tag: str, arm: str) -> tuple[Path, Path]:
@@ -74,11 +78,32 @@ def build_run(config: str, seed: int, run_tag: str, device: str):
     return run
 
 def canonical_result_payload(*, run_tag: str, arm: str, seed: int, manifest: dict[str, Any], selection_manifest: str, selection_sha: str, claim_sha: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Build the audit-facing canonical result after raw-only fields are removed."""
-    if set(result) - {"episodes"} != CANONICAL_SUMMARY_KEYS:
+    """Build the audit-facing canonical result after frozen driver fields are removed."""
+    summary = {key: value for key, value in result.items() if key not in DRIVER_ONLY_RESULT_KEYS | {"episodes"}}
+    if set(summary) != CANONICAL_SUMMARY_KEYS:
         raise SprintClaimError("evaluation result does not match canonical summary schema")
     canonicalize_episode_ids(result["episodes"], EPISODE_INDEX_START)
-    return {"generated_at": utc_now(), "run_tag": run_tag, "arm": arm, "seed": seed, "config_sha256": manifest["config_sha256"], "ckpt_sha256": manifest["ckpt_sha256"], "split_sha256": CANONICAL_SPLIT_SHA256, "claim_sha256": claim_sha, "selection_manifest": selection_manifest, "selection_manifest_sha256": selection_sha, "episode_namespace": EPISODE_INDEX_START, "selector_version": manifest["selector_version"], "val_rows": manifest["val_rows"], "summary": {key: result[key] for key in CANONICAL_SUMMARY_KEYS}, "episodes": result["episodes"]}
+    return {"generated_at": utc_now(), "run_tag": run_tag, "arm": arm, "seed": seed, "config_sha256": manifest["config_sha256"], "ckpt_sha256": manifest["ckpt_sha256"], "split_sha256": CANONICAL_SPLIT_SHA256, "claim_sha256": claim_sha, "selection_manifest": selection_manifest, "selection_manifest_sha256": selection_sha, "episode_namespace": EPISODE_INDEX_START, "selector_version": manifest["selector_version"], "val_rows": manifest["val_rows"], "summary": summary, "episodes": result["episodes"]}
+
+
+def preclaim_payload_self_check() -> None:
+    """Fail schema drift before acquiring the irreversible split authority."""
+    synthetic = {key: 0.0 for key in CANONICAL_SUMMARY_KEYS}
+    synthetic.update({"n_episodes": 0, "per_template_success": {}, "per_template_episodes": {}, "episodes": []})
+    synthetic.update({key: 0 for key in DRIVER_ONLY_RESULT_KEYS})
+    canonical_result_payload(
+        run_tag="schema-check", arm="bb", seed=0,
+        manifest={"config_sha256": "0", "ckpt_sha256": "0", "selector_version": "schema-check", "val_rows": []},
+        selection_manifest="schema-check", selection_sha="0", claim_sha="0", result=synthetic,
+    )
+def publish_or_quarantine(path: Path, *, result: dict[str, Any], payload: dict[str, Any]) -> None:
+    """Atomically publish or durably retain the complete rejected driver result."""
+    try:
+        atomic_publish(path, payload)
+    except Exception:
+        atomic_publish(path.with_name(f"{path.stem}_quarantine.json"), result)
+        raise
+
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__); p.add_argument("--run-tag", required=True); p.add_argument("--arm", required=True); p.add_argument("--selection-manifest", required=True); p.add_argument("--claim", required=True); p.add_argument("--out", required=True); p.add_argument("--lock"); p.add_argument("--config", default="configs/p1_t2.yaml"); p.add_argument("--seed", type=int, required=True); p.add_argument("--device", default="cuda"); args = p.parse_args()
@@ -91,6 +116,7 @@ def main() -> int:
         raise SprintClaimError("selection manifest must not be a symlink")
     if not selection_path.is_absolute():
         raise SprintClaimError("selection manifest path must be absolute")
+    preclaim_payload_self_check()
     capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(selection_path),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START,"n_goals":100})
     payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG); pairs = _pairs(payload); goals=[g for _,g in pairs for _ in range(2)]; labels=[s["goal_id"] for s,_ in pairs for _ in range(2)]
     run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"])); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
@@ -100,6 +126,11 @@ def main() -> int:
     claim_sha=sha256_file(expected_claim); probe_path=expected_out.with_suffix(".probe.h5"); write_probe_h5(probe_path,episodes,ckpt_sha=manifest["ckpt_sha256"],split_sha=CANONICAL_SPLIT_SHA256,claim_sha=claim_sha); probe_manifest_register(PROBE_MANIFEST,probe_path,{"production_goal":"G-EV","run_tag":args.run_tag})
     for ep in episodes:
         for key in ("x_initial","x_steps","x_terminal","probe_p","probe_u"): ep.pop(key,None)
-    atomic_publish(expected_out, canonical_result_payload(run_tag=args.run_tag, arm=args.arm, seed=args.seed, manifest=manifest, selection_manifest=str(Path(args.selection_manifest).resolve()), selection_sha=selection_sha, claim_sha=claim_sha, result=result))
+    try:
+        canonical = canonical_result_payload(run_tag=args.run_tag, arm=args.arm, seed=args.seed, manifest=manifest, selection_manifest=str(Path(args.selection_manifest).resolve()), selection_sha=selection_sha, claim_sha=claim_sha, result=result)
+    except Exception:
+        atomic_publish(expected_out.with_name(f"{expected_out.stem}_quarantine.json"), result)
+        raise
+    publish_or_quarantine(expected_out, result=result, payload=canonical)
     return 0
 if __name__ == "__main__": raise SystemExit(main())

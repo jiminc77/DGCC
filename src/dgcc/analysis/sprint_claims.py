@@ -16,13 +16,13 @@ PRIMITIVE_SCHEMA_VERSION = 1
 CANONICAL_SPLIT_SHA256 = "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754"
 # This is intentionally anchored at the installed source tree, never at CWD.
 REPO_ROOT = Path(__file__).resolve().parents[3]
+# Canonical summaries are derivable from the durable episode rows alone.
 CANONICAL_SUMMARY_KEYS = frozenset({
     "n_episodes", "success_rate", "mean_return", "mean_final_d",
     "mean_d_at_done", "mean_min_d", "mean_d_shape_at_done",
     "per_template_success", "per_template_episodes",
     "overestimation_gap_mean", "overestimation_gap_p95",
-    "nan_incidents_during_eval", "wall_guard_k", "record_raw",
-    "eval_wall_guard_rate", "record_probe",
+    "eval_wall_guard_rate",
 })
 CANONICAL_SPLIT_PATH = REPO_ROOT / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json"
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -334,12 +334,6 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
     if not isinstance(summary["n_episodes"], int) or isinstance(summary["n_episodes"], bool) or summary["n_episodes"] != 200:
         return False
     if not isinstance(summary["per_template_success"], dict) or not isinstance(summary["per_template_episodes"], dict):
-        return False
-    if not isinstance(summary["nan_incidents_during_eval"], int) or isinstance(summary["nan_incidents_during_eval"], bool) or summary["nan_incidents_during_eval"] < 0:
-        return False
-    if summary["wall_guard_k"] is not None and (not isinstance(summary["wall_guard_k"], int) or isinstance(summary["wall_guard_k"], bool) or summary["wall_guard_k"] < 0):
-        return False
-    if not all(isinstance(summary[key], bool) for key in ("record_raw", "record_probe")):
         return False
     namespace = body["episode_namespace"]
     if not isinstance(namespace, int) or isinstance(namespace, bool):

@@ -115,8 +115,12 @@ def producer_artifacts(canonical_sprint: Path) -> tuple[Path, Path, Path]:
         record_raw=True,
         record_probe=True,
     )
-    claims.canonicalize_episode_ids(result["episodes"], 97_001)
+    result["magnitude_incidents_during_eval"] = 0
     module = _sprint_eval_module()
+    assert set(result) - {"episodes"} == (
+        claims.CANONICAL_SUMMARY_KEYS | module.DRIVER_ONLY_RESULT_KEYS
+    )
+    claims.canonicalize_episode_ids(result["episodes"], 97_001)
     output = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
     raw = output.with_suffix(".raw.json.gz")
     with gzip.open(raw, "wt", encoding="utf-8") as handle:
@@ -202,6 +206,7 @@ def evaluation_summary(episodes: list[dict[str, object]]) -> dict[str, object]:
     return {
         **claims._summary_aggregates(episodes),
         "nan_incidents_during_eval": 0,
+        "magnitude_incidents_during_eval": 0,
         "wall_guard_k": 5,
         "record_raw": True,
         "record_probe": True,
@@ -382,7 +387,7 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
         "selection_manifest": "/synthetic/selection.json",
         "selection_manifest_sha256": "e" * 64,
         "episode_namespace": 97_001,
-        "summary": evaluation_summary([episode(index) for index in range(200)]),
+        "summary": claims._summary_aggregates([episode(index) for index in range(200)]),
         "episodes": [episode(index) for index in range(200)],
     }))
     assert claims.audit_claims(claim.parent) == []
@@ -418,3 +423,26 @@ def test_producer_payload_passes_audit_and_tampering_is_rejected(canonical_sprin
     result["summary"]["mean_final_d"] = 0.2
     output.write_text(json.dumps(result))
     assert len(claims.audit_claims(claim.parent)) == 1
+    result["summary"]["mean_final_d"] = 0.1
+    source = {"episodes": episodes, **evaluation_summary(episodes), "unexpected": True}
+    with pytest.raises(claims.SprintClaimError, match="canonical summary"):
+        module.canonical_result_payload(run_tag="synthetic", arm="bb", seed=7, manifest={"config_sha256": "d" * 64, "ckpt_sha256": "c" * 64, "selector_version": "test", "val_rows": []}, selection_manifest="/synthetic/selection.json", selection_sha="e" * 64, claim_sha=claim_sha, result=source)
+def test_preclaim_check_and_publish_quarantine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _sprint_eval_module()
+    monkeypatch.setattr(module, "canonical_result_payload", lambda **_: (_ for _ in ()).throw(claims.SprintClaimError("drift")))
+    with pytest.raises(claims.SprintClaimError, match="drift"):
+        module.preclaim_payload_self_check()
+
+    result = {"complete": "driver result"}
+    out = tmp_path / "result.json"
+    calls = 0
+    def fail_once(path: Path, body: dict[str, object]) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("publish failed")
+        path.write_text(json.dumps(body))
+    monkeypatch.setattr(module, "atomic_publish", fail_once)
+    with pytest.raises(OSError, match="publish failed"):
+        module.publish_or_quarantine(out, result=result, payload={"canonical": True})
+    assert json.loads((tmp_path / "result_quarantine.json").read_text()) == result

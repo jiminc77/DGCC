@@ -1,5 +1,12 @@
 {
  "files": {
+  "2487bdaa5a41eaf7ebca109dd85a68e04eb2647a53db865be6bcb2c7ff6aa07b": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_bb_sprint_heldout_sprint_t2_bb_s3.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_bb_s3",
+   "sha256": "2487bdaa5a41eaf7ebca109dd85a68e04eb2647a53db865be6bcb2c7ff6aa07b",
+   "size": 4114040
+  },
   "4e39f6d53261a20f1f558fc34b4beffa220ec8fe2a6d87cb0a38fe89b9c3f850": {
    "kind": "legacy_raw_no_probe",
    "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
