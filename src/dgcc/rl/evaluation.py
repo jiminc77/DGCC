@@ -38,6 +38,7 @@ def evaluate_episodes(
     q_min_fn: QMinFn | None = None,
     wall_guard_k: int | None = None,
     record_raw: bool = False,
+    record_probe: bool = False,
 ) -> dict[str, Any]:
     """Run ``n_episodes`` evaluation episodes in batches over the runner's env.
 
@@ -107,6 +108,8 @@ def evaluate_episodes(
         q_first = np.full(n_envs, np.nan, dtype=float)
         d_step_traces: list[list[float]] = [[] for _ in range(n_envs)]
         raw_traces: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
+        probe_p: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
+        probe_u: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
         discard_exposure = np.zeros(n_envs, dtype=int)
         guarded = np.zeros(n_envs, dtype=bool)
         step_index = 0
@@ -135,6 +138,9 @@ def evaluate_episodes(
                     raw_traces[int(slot)].append(
                         np.asarray(record["X_after"][int(slot)], dtype=float)
                     )
+                if record_probe:
+                    probe_p[int(slot)].append(np.asarray(p[int(slot)]).copy())
+                    probe_u[int(slot)].append(np.asarray(delta[int(slot)]).copy())
             returns += np.where(active, record["reward"], 0.0)
             discounted += np.where(active, (gamma**step_index) * record["reward"], 0.0)
             step_index += 1
@@ -196,6 +202,9 @@ def evaluate_episodes(
                 row["x_steps"] = [x.tolist() for x in raw_traces[slot][: runner.config.horizon]]
                 row["x_terminal"] = None if x_terminal[slot] is None else x_terminal[slot].tolist()
                 row["goal_index"] = episode_id % (len(goals) if goals is not None else n_envs)
+                if record_probe:
+                    row["probe_p"] = [v.tolist() for v in probe_p[slot]]
+                    row["probe_u"] = [v.tolist() for v in probe_u[slot]]
             episodes.append(row)
 
     return summarize_episodes(episodes) | {
@@ -203,6 +212,7 @@ def evaluate_episodes(
         "nan_incidents_during_eval": runner.nan_incidents - incidents_before,
         "wall_guard_k": wall_guard_k,
         "record_raw": bool(record_raw),
+        "record_probe": bool(record_probe),
         "eval_wall_guard_rate": (
             float(np.mean([ep["eval_wall_guard"] for ep in episodes])) if episodes else None
         ),

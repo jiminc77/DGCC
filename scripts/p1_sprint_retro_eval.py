@@ -33,10 +33,15 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 from dgcc.analysis.sprint_claims import (
+    CANONICAL_SPLIT_PATH,
+    CANONICAL_SPLIT_SHA256,
+    SprintClaimError,
     acquire_claim,
     atomic_publish,
+    audit_claims,
+    consume_claim_and_load_split,
     probe_manifest_register,
-    record_access,
+    sha256_file,
 )
 
 SPRINT_HELDOUT_EPISODE_INDEX_START = 97_001
@@ -84,7 +89,7 @@ def build_run(config_path: str, seed: int, run_tag: str, device: str):
     return run
 
 
-def eval_with_recovery(run, *, episode_index_start: int, record_raw: bool = False, max_rebuilds: int = 8):
+def eval_with_recovery(run, *, episode_index_start: int, record_raw: bool = False, record_probe: bool = False, max_rebuilds: int = 8):
     """Mirror p1_train.eval_and_checkpoint's NaN-recovery loop (scene rebuild + retry)."""
 
     from dgcc.tasks.episode import is_nonfinite_error
@@ -93,7 +98,7 @@ def eval_with_recovery(run, *, episode_index_start: int, record_raw: bool = Fals
     while True:
         try:
             return run.deterministic_eval(
-                episode_index_start=episode_index_start, record_raw=record_raw
+                episode_index_start=episode_index_start, record_raw=record_raw, record_probe=record_probe
             )
         except (FloatingPointError, ValueError, RuntimeError) as exc:
             if not is_nonfinite_error(exc):
@@ -107,11 +112,29 @@ def eval_with_recovery(run, *, episode_index_start: int, record_raw: bool = Fals
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--m4-tag", required=True, help="e.g. m4_t2_s0")
-    parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--run-tag", help="e.g. m4_t2_s0")
+    parser.add_argument("--selection-out")
+    parser.add_argument("--claim")
+    parser.add_argument("--out")
+    parser.add_argument("--human-disposition-receipt")
+    parser.add_argument("--audit-legacy", action="store_true")
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--config", default="configs/p1_t2.yaml")
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
+    args.m4_tag = args.run_tag
+    if args.audit_legacy:
+        print(json.dumps({"schema_version": 1, "legacy": audit_claims(Path("outputs/metrics"))}, indent=1))
+        return 0
+    if not args.run_tag or not args.selection_out or not args.claim or not args.out or args.seed is None:
+        raise SprintClaimError("--run-tag, --selection-out, --claim, and --out are required for evaluation")
+    if not args.human_disposition_receipt or not Path(args.human_disposition_receipt).is_file():
+        raise SprintClaimError("new canonical claim requires a human disposition receipt")
+    expected_selection = Path("outputs/metrics") / f"p1_sprint_retro_val_{args.run_tag}.json"
+    expected_claim = Path("outputs/metrics") / f"p1_sprint_heldout_claim_{args.run_tag}.json"
+    expected_out = Path("outputs/metrics") / f"p1_t2_sprint_heldout_{args.run_tag}.json"
+    if (Path(args.selection_out), Path(args.claim), Path(args.out)) != (expected_selection, expected_claim, expected_out):
+        raise SprintClaimError("selection, claim, and out paths must be canonical run-identity paths")
 
     models_dir = Path("outputs/models") / args.m4_tag
     ckpts = sorted(models_dir.glob("ckpt_*.pt"))
@@ -140,6 +163,10 @@ def main() -> int:
                 "eval_wall_guard_rate": result.get("eval_wall_guard_rate"),
                 "wall_guard_k": result.get("wall_guard_k"),
                 "wall_s": wall,
+                "val_rows": [
+                    [result["episodes"][i]["success"], result["episodes"][i + 1]["success"]]
+                    for i in range(0, 100, 2)
+                ],
             }
         )
         print(
@@ -151,43 +178,36 @@ def main() -> int:
     # ---- 2. re-selection (M4 rule) ----------------------------------------
     selected = max(rows, key=lambda r: (r["success_rate"], r["mean_return"], -r["transitions"]))
     retro_val = {
-        "generated_at": utc_now(),
-        "m4_tag": args.m4_tag,
+        "run_tag": args.m4_tag,
+        "arm": "BB",
         "seed": args.seed,
-        "protocol": {"wall_guard_k": WALL_GUARD_K, "val_goals": 50, "episodes_per_goal": 2},
-        "selection_rule": "max val success_rate; tie -> max mean_return; tie -> min transitions",
+        "task": "t2",
+        "config_sha256": sha256_file(Path(args.config)),
+        "ckpt_sha256": selected["ckpt_sha256"],
+        "val_rows": selected["val_rows"],
+        "selector_version": "sprint-retro-v1",
         "selected_ckpt": selected["ckpt"],
-        "selected_ckpt_sha256": selected["ckpt_sha256"],
-        "selected_transitions": selected["transitions"],
-        "rows": rows,
     }
-    out_val = Path("outputs/metrics") / f"p1_sprint_retro_val_{args.m4_tag}.json"
+    out_val = Path(args.selection_out)
     out_val.write_text(json.dumps(retro_val, indent=1) + "\n", encoding="utf-8")
     print(f"retro selection: {selected['ckpt']} (val {selected['success_rate']:.3f})")
 
-    # Claim and audit must precede the first sprint split materialization.
-    split_path = REPO / "src" / "dgcc" / "tasks" / "splits" / "t2_sprint_heldout_v1.json"
-    split_sha = sha256_file(split_path)
-    claim = Path("outputs/metrics") / f"p1_sprint_heldout_claim_{args.m4_tag}.json"
+    # Claim creation uses a source-anchored digest before the sole split consumer.
+    claim = Path(args.claim)
     acquire_claim(
         claim,
         {
             "run_tag": args.m4_tag,
             "arm": "BB",
             "ckpt_sha256": selected["ckpt_sha256"],
-            "split_sha256": split_sha,
+            "split_sha256": CANONICAL_SPLIT_SHA256,
             "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
         },
     )
-    record_access(
-        SPRINT_ACCESS_LOG,
-        "final_eval",
-        run_tag=args.m4_tag,
-        arm="BB",
-        split_sha256=split_sha,
-    )
-    pairs, loaded_split_sha = load_sprint_heldout()
-    assert loaded_split_sha == split_sha
+    payload = consume_claim_and_load_split(claim, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG)
+    from dgcc.tasks.t2 import build_t2_goal
+    pairs = [(spec, build_t2_goal(spec)) for spec in payload["specs"]]
+    split_sha = CANONICAL_SPLIT_SHA256
     goals = [g for _, g in pairs for _ in range(2)]
     labels = [s["goal_id"] for s, _ in pairs for _ in range(2)]
     print(f"sprint heldout claim acquired: {claim}")
@@ -198,7 +218,7 @@ def main() -> int:
     run.build_scene()
     start = time.perf_counter()
     result = eval_with_recovery(
-        run, episode_index_start=SPRINT_HELDOUT_EPISODE_INDEX_START, record_raw=True
+        run, episode_index_start=SPRINT_HELDOUT_EPISODE_INDEX_START, record_raw=True, record_probe=True
     )
     wall = time.perf_counter() - start
     episodes = result["episodes"]
@@ -248,7 +268,7 @@ def main() -> int:
         "summary": {k: v for k, v in result.items() if k != "episodes"},
         "episodes": episodes,
     }
-    out = Path("outputs/metrics") / f"p1_t2_sprint_heldout_{args.m4_tag}.json"
+    out = Path(args.out)
     atomic_publish(out, payload)
     print(
         f"sprint heldout published: {out} success={result['success_rate']:.3f} "

@@ -542,7 +542,7 @@ class TrainingRun:
     # ------------------------------------------------------------------
 
     def deterministic_eval(
-        self, *, episode_index_start: int, record_raw: bool = False
+        self, *, episode_index_start: int, record_raw: bool = False, record_probe: bool = False
     ) -> dict[str, Any]:
         assert self.runner is not None
 
@@ -615,6 +615,7 @@ class TrainingRun:
                 q_min_fn=self.agent.q_min_executed,
                 wall_guard_k=wall_guard_k,
                 record_raw=record_raw,
+                record_probe=record_probe,
             )
         else:
             result = evaluate_episodes(
@@ -629,6 +630,7 @@ class TrainingRun:
                 q_min_fn=self.agent.q_min_executed,
                 wall_guard_k=wall_guard_k,
                 record_raw=record_raw,
+                record_probe=record_probe,
             )
         result["magnitude_incidents_during_eval"] = (
             self.runner.magnitude_incidents - magnitude_before

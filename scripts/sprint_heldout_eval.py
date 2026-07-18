@@ -1,151 +1,78 @@
-"""One-shot sprint held-out evaluator (100 goals × 2 episodes)."""
+"""One-shot canonical sprint held-out evaluator (100 goals × 2 episodes)."""
 from __future__ import annotations
-
-import argparse
-import gzip
-import importlib.util
-import json
-import sys
-import time
+import argparse, gzip, hashlib, importlib.util, json, sys, time
 from pathlib import Path
 from typing import Any
-
 import numpy as np
+REPO = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(REPO / "src"))
+from dgcc.analysis.sprint_claims import (CANONICAL_SPLIT_PATH, CANONICAL_SPLIT_SHA256, SprintClaimError, acquire_claim, atomic_publish, consume_claim_and_load_split, probe_manifest_register, require_metric_lock, sha256_file, utc_now)
+EPISODE_INDEX_START = 97_001; WALL_GUARD_K = 5
+SPRINT_ACCESS_LOG = Path("outputs/metrics/t2_sprint_heldout_access.log"); PROBE_MANIFEST = Path("outputs/metrics/sprint_probe_manifest.json")
 
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
-from dgcc.analysis.sprint_claims import (  # noqa: E402
-    SprintClaimError,
-    acquire_claim,
-    atomic_publish,
-    probe_manifest_register,
-    record_access,
-    require_metric_lock,
-    sha256_file,
-    utc_now,
-)
+def _config_sha(path: str) -> str: return sha256_file(REPO / path)
+def canonical_paths(run_tag: str, arm: str) -> tuple[Path, Path]:
+    stem = f"p1_{arm.lower()}_sprint_heldout_{run_tag}"
+    return Path("outputs/metrics") / f"{stem}_claim.json", Path("outputs/metrics") / f"{stem}.json"
 
-EPISODE_INDEX_START = 97_001
-WALL_GUARD_K = 5
-SPRINT_ACCESS_LOG = Path("outputs/metrics/t2_sprint_heldout_access.log")
-PROBE_MANIFEST = Path("outputs/metrics/sprint_probe_manifest.json")
+def load_selection_manifest(path: Path, run_tag: str, arm: str, seed: int, config: str) -> dict[str, Any]:
+    try: value = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as exc: raise SprintClaimError("selection manifest is invalid") from exc
+    required = {"run_tag", "arm", "seed", "task", "config_sha256", "ckpt_sha256", "val_rows", "selector_version", "selected_ckpt"}
+    if not isinstance(value, dict) or set(value) != required: raise SprintClaimError("selection manifest schema is invalid")
+    if value["run_tag"] != run_tag or value["arm"] != arm or value["seed"] != seed or value["task"] != "t2" or value["config_sha256"] != _config_sha(config): raise SprintClaimError("selection manifest identity does not match invocation")
+    rows = value["val_rows"]
+    if not isinstance(rows, list) or len(rows) != 50 or any(not isinstance(row, list) or len(row) != 2 for row in rows): raise SprintClaimError("selection manifest val_rows must be exactly 50×2")
+    ckpt = Path(value["selected_ckpt"])
+    if not ckpt.is_file() or not isinstance(value["ckpt_sha256"], str) or sha256_file(ckpt) != value["ckpt_sha256"]: raise SprintClaimError("selection checkpoint sha256 does not match disk")
+    return value
 
-
-def load_selection_manifest(path: Path, run_tag: str) -> dict[str, Any]:
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    for key in ("selected_ckpt", "ckpt_sha256", "selection_rule"):
-        if not manifest.get(key):
-            raise SprintClaimError(f"selection manifest missing {key}: {path}")
-    if manifest.get("run_tag", manifest.get("m4_tag")) != run_tag:
-        raise SprintClaimError("selection manifest run tag does not match --run-tag")
-    ckpt = Path(manifest["selected_ckpt"])
-    if not ckpt.is_file() or sha256_file(ckpt) != manifest["ckpt_sha256"]:
-        raise SprintClaimError("selection checkpoint sha256 does not match disk")
-    # Sprint selection is explicitly the val-50 rule, never held-out selection.
-    if "val" not in str(manifest["selection_rule"]).lower():
-        raise SprintClaimError("selection manifest must attest a val-50 selection rule")
-    return manifest
-
-
-def validate_sprint_split_path(split_path: Path) -> None:
-    if "m4" in split_path.name.lower():
-        raise SprintClaimError("M4 held-out split is forbidden for sprint evaluation")
-    expected = REPO / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json"
-    if split_path.resolve() != expected.resolve() and split_path.name != "synthetic_sprint_split.json":
-        raise SprintClaimError("only t2_sprint_heldout_v1 split is permitted")
-
-
-def load_sprint_split(split_path: Path):
-    validate_sprint_split_path(split_path)
-    payload = json.loads(split_path.read_text(encoding="utf-8"))
-    if payload.get("n_goals") != 100 or len(payload.get("specs", [])) != 100:
-        raise SprintClaimError("sprint split must contain exactly 100 goals")
+def _pairs(payload: dict[str, Any]):
     from dgcc.tasks.t2 import build_t2_goal
     return [(spec, build_t2_goal(spec)) for spec in payload["specs"]]
 
-
 def write_probe_h5(path: Path, episodes: list[dict[str, Any]], *, ckpt_sha: str, split_sha: str, claim_sha: str) -> None:
     import h5py
+    required = ("x_initial", "x_terminal", "probe_p", "probe_u", "goal_label", "reseed_boundary", "eval_wall_guard")
+    for ep in episodes:
+        missing = [key for key in required if key not in ep or ep[key] is None]
+        if missing: raise SprintClaimError(f"probe episode missing raw fields: {', '.join(missing)}")
+        if not ep["probe_p"] or not ep["probe_u"] or len(ep["probe_p"]) != len(ep["probe_u"]): raise SprintClaimError("probe requires non-empty aligned per-step p/u")
+        if np.asarray(ep["x_initial"]).shape != np.asarray(ep["x_terminal"]).shape or np.asarray(ep["x_initial"]).ndim != 2: raise SprintClaimError("probe centerline shape is invalid")
     path.parent.mkdir(parents=True, exist_ok=True)
-    # One row per episode is retained even when a backend does not expose steps.
-    def values(key: str, default: Any) -> np.ndarray:
-        return np.asarray([episode.get(key, default) for episode in episodes])
     with h5py.File(path, "w") as h5:
-        h5.attrs["schema_version"] = 1
-        for key, default in (("x_before", []), ("x_after", []), ("goal", []), ("p", -1), ("u", []),
-                             ("episode_id", -1), ("step_index", 0)):
-            h5.create_dataset(key, data=values({"x_before": "x_initial", "x_after": "x_terminal"}.get(key, key), default))
-        h5.create_dataset("goal_id", data=np.asarray([str(e.get("goal_id", "")) for e in episodes], dtype=h5py.string_dtype()))
+        h5.attrs.update(schema_version=1, ckpt_sha256=ckpt_sha, split_sha256=split_sha, claim_sha256=claim_sha)
+        text = h5py.string_dtype()
+        h5.create_dataset("x_before", data=np.asarray([e["x_initial"] for e in episodes]))
+        h5.create_dataset("x_after", data=np.asarray([e["x_terminal"] for e in episodes]))
+        p_group = h5.create_group("p")
+        u_group = h5.create_group("u")
+        for index, episode in enumerate(episodes):
+            p_group.create_dataset(str(index), data=np.asarray(episode["probe_p"]))
+            u_group.create_dataset(str(index), data=np.asarray(episode["probe_u"]))
+        h5.create_dataset("goal_id", data=np.asarray([str(e["goal_label"]) for e in episodes], dtype=text))
         flags = h5.create_group("flags")
-        for key in ("truncated", "reseed", "guard"):
-            flags.create_dataset(key, data=values(key, False).astype(bool))
-        for key, value in (("ckpt_sha256", ckpt_sha), ("split_sha256", split_sha), ("claim_sha256", claim_sha)):
-            h5.attrs[key] = value
-
+        flags.create_dataset("reseed_boundary", data=np.asarray([e["reseed_boundary"] for e in episodes], dtype=bool))
+        flags.create_dataset("eval_wall_guard", data=np.asarray([e["eval_wall_guard"] for e in episodes], dtype=bool))
 
 def build_run(config: str, seed: int, run_tag: str, device: str):
-    spec = importlib.util.spec_from_file_location("p1_train", REPO / "scripts/p1_train.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["p1_train"] = module
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    run = module.TrainingRun(argparse.Namespace(config=config, seed=seed, run_tag=run_tag, total_override=None, device=device))
-    run.config.setdefault("eval", {})["wall_guard_k"] = WALL_GUARD_K
+    spec = importlib.util.spec_from_file_location("p1_train", REPO / "scripts/p1_train.py"); module = importlib.util.module_from_spec(spec); sys.modules["p1_train"] = module
+    assert spec.loader is not None; spec.loader.exec_module(module)
+    run = module.TrainingRun(argparse.Namespace(config=config, seed=seed, run_tag=run_tag, total_override=None, device=device)); run.config.setdefault("eval", {})["wall_guard_k"] = WALL_GUARD_K
     return run
 
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run-tag", required=True)
-    parser.add_argument("--arm", required=True)
-    parser.add_argument("--selection-manifest", required=True)
-    parser.add_argument("--claim", required=True)
-    parser.add_argument("--out", required=True)
-    parser.add_argument("--lock")
-    parser.add_argument("--split", default=str(REPO / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json"))
-    parser.add_argument("--config", default="configs/p1_t2.yaml")
-    parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--device", default="cuda")
-    args = parser.parse_args()
-    manifest = load_selection_manifest(Path(args.selection_manifest), args.run_tag)
-    split_path = Path(args.split)
-    validate_sprint_split_path(split_path)
-    # Everything above is provenance only. The claim precedes lock-protected split access.
-    require_metric_lock(Path(args.lock) if args.lock else None, args.arm)
-    split_sha = sha256_file(split_path)
-    claim = acquire_claim(Path(args.claim), {"run_tag": args.run_tag, "arm": args.arm,
-        "ckpt_sha256": manifest["ckpt_sha256"], "split_sha256": split_sha})
-    record_access(SPRINT_ACCESS_LOG, "final_eval", run_tag=args.run_tag, arm=args.arm, split_sha256=split_sha)
-    pairs = load_sprint_split(split_path)
-    goals = [goal for _, goal in pairs for _ in range(2)]
-    labels = [spec["goal_id"] for spec, _ in pairs for _ in range(2)]
-    assert len(pairs) == 100 and len(goals) == len(labels) == 200
-    run = build_run(args.config, args.seed, f"{args.run_tag}_sprint_heldout", args.device)
-    run.agent.load_checkpoint(Path(manifest["selected_ckpt"]))
-    run.val_goals, run.val_labels = goals, labels
-    run.build_scene()
-    started = time.perf_counter()
-    result = run.deterministic_eval(episode_index_start=EPISODE_INDEX_START, record_raw=True)
-    episodes = result["episodes"]
-    assert len(episodes) == 200, "sprint evaluation must produce exactly 100 goals × 2 rows"
-    raw_path = Path(args.out).with_suffix(".raw.json.gz")
-    with gzip.open(raw_path, "wt", encoding="utf-8") as handle:
-        json.dump({"run_tag": args.run_tag, "episodes": episodes}, handle)
-    claim_sha = sha256_file(Path(args.claim))
-    probe_path = Path(args.out).with_suffix(".probe.h5")
-    write_probe_h5(probe_path, episodes, ckpt_sha=manifest["ckpt_sha256"], split_sha=split_sha, claim_sha=claim_sha)
-    probe_manifest_register(PROBE_MANIFEST, probe_path, {"production_goal": "G-EV", "run_tag": args.run_tag})
-    for episode in episodes:
-        for key in ("x_initial", "x_steps", "x_terminal"):
-            episode.pop(key, None)
-    atomic_publish(Path(args.out), {"generated_at": utc_now(), "run_tag": args.run_tag, "arm": args.arm,
-        "ckpt_sha256": manifest["ckpt_sha256"], "split_sha256": split_sha, "claim_sha256": claim_sha,
-        "selection_manifest": str(args.selection_manifest), "selection_rule": manifest["selection_rule"],
-        "episode_index_start": EPISODE_INDEX_START, "wall_guard_k": WALL_GUARD_K,
-        "wall_s": time.perf_counter() - started, "raw_artifact": str(raw_path), "probe_artifact": str(probe_path),
-        "summary": {key: value for key, value in result.items() if key != "episodes"}, "episodes": episodes})
+    p = argparse.ArgumentParser(description=__doc__); p.add_argument("--run-tag", required=True); p.add_argument("--arm", required=True); p.add_argument("--selection-manifest", required=True); p.add_argument("--claim", required=True); p.add_argument("--out", required=True); p.add_argument("--lock"); p.add_argument("--config", default="configs/p1_t2.yaml"); p.add_argument("--seed", type=int, required=True); p.add_argument("--device", default="cuda"); args = p.parse_args()
+    expected_claim, expected_out = canonical_paths(args.run_tag, args.arm)
+    if Path(args.claim) != expected_claim or Path(args.out) != expected_out: raise SprintClaimError("claim and out paths must be canonical run-identity paths")
+    manifest = load_selection_manifest(Path(args.selection_manifest), args.run_tag, args.arm, args.seed, args.config); require_metric_lock(Path(args.lock) if args.lock else None, args.arm)
+    acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(args.selection_manifest)})
+    payload = consume_claim_and_load_split(expected_claim, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG); pairs = _pairs(payload); goals=[g for _,g in pairs for _ in range(2)]; labels=[s["goal_id"] for s,_ in pairs for _ in range(2)]
+    run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"])); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
+    if len(episodes)!=200: raise SprintClaimError("sprint evaluation must produce 200 episodes")
+    raw_path=expected_out.with_suffix(".raw.json.gz"); gzip.open(raw_path,"wt",encoding="utf-8").write(json.dumps({"run_tag":args.run_tag,"episodes":episodes}))
+    claim_sha=sha256_file(expected_claim); probe_path=expected_out.with_suffix(".probe.h5"); write_probe_h5(probe_path,episodes,ckpt_sha=manifest["ckpt_sha256"],split_sha=CANONICAL_SPLIT_SHA256,claim_sha=claim_sha); probe_manifest_register(PROBE_MANIFEST,probe_path,{"production_goal":"G-EV","run_tag":args.run_tag})
+    for ep in episodes:
+        for key in ("x_initial","x_steps","x_terminal","probe_p","probe_u"): ep.pop(key,None)
+    atomic_publish(expected_out,{"generated_at":utc_now(),"run_tag":args.run_tag,"arm":args.arm,"seed":args.seed,"config_sha256":manifest["config_sha256"],"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"claim_sha256":claim_sha,"selection_manifest":str(args.selection_manifest),"selector_version":manifest["selector_version"],"val_rows":manifest["val_rows"],"summary":{k:v for k,v in result.items() if k!="episodes"},"episodes":episodes})
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())

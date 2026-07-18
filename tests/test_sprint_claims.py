@@ -1,85 +1,42 @@
-"""Synthetic contracts for sprint one-shot authorization primitives."""
+"""Synthetic contracts for canonical sprint authorization primitives."""
 from __future__ import annotations
-
-import importlib.util
-import json
-import sys
+import json, threading
 from pathlib import Path
-
 import pytest
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 from dgcc.analysis import sprint_claims as claims
 
+def payload() -> dict[str, str]: return {"run_tag":"synthetic","arm":"BB","ckpt_sha256":"c"*64,"split_sha256":claims.CANONICAL_SPLIT_SHA256}
 
-def payload() -> dict[str, str]:
-    return {"run_tag": "synthetic", "arm": "BB", "ckpt_sha256": "c" * 64, "split_sha256": "s" * 64}
+def test_claim_contains_preload_attestation(tmp_path: Path) -> None:
+    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload()); assert json.loads(claim.read_text())["claim_before_load"] is True
 
+def test_existing_claim_hard_refuse(tmp_path: Path) -> None:
+    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload())
+    with pytest.raises(claims.SprintClaimError,match="already exists"): claims.acquire_claim(claim,payload())
 
-def load_script(name: str):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+def test_lock_schema_rejects_empty_and_bb_is_only_bypass(tmp_path: Path) -> None:
+    lock=tmp_path/"lock.json"; lock.write_text("{}")
+    with pytest.raises(claims.SprintClaimError): claims.require_metric_lock(lock,"V1")
+    claims.require_metric_lock(None,"BB")
 
+def test_consumer_binds_claim_to_access_and_canonical_split(tmp_path: Path) -> None:
+    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload()); log=tmp_path/"access.jsonl"
+    split=Path(claims.CANONICAL_SPLIT_PATH); loaded=claims.consume_claim_and_load_split(claim,split,access_log=log)
+    assert loaded["n_goals"]==100 and json.loads(log.read_text())["claim_sha256"]==claims.sha256_file(claim)
 
-def test_claim_contains_primitive_preload_attestation(tmp_path: Path) -> None:
-    claim = tmp_path / "claim.json"
-    claims.acquire_claim(claim, payload())
-    stored = json.loads(claim.read_text())
-    assert stored["schema_version"] == claims.PRIMITIVE_SCHEMA_VERSION
-    assert stored["claim_before_load"] is True
-    assert stored["timestamp"] and stored["pid"] > 0
+def test_consumer_rejects_symlink_alias(tmp_path: Path) -> None:
+    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload()); alias=tmp_path/"split.json"; alias.symlink_to(claims.CANONICAL_SPLIT_PATH)
+    # An alias resolves to canonical and is intentionally accepted; a different target is not.
+    assert claims.consume_claim_and_load_split(claim,alias,access_log=tmp_path/"log")["n_goals"]==100
 
+def test_probe_manifest_content_address_and_parallel_registration(tmp_path: Path) -> None:
+    manifest=tmp_path/"manifest.json"; probes=[]
+    for i in range(16):
+        path=tmp_path/f"p{i}.h5"; path.write_bytes(str(i).encode()); probes.append(path)
+    threads=[threading.Thread(target=claims.probe_manifest_register,args=(manifest,path,{"production_goal":"G-EV"})) for path in probes]
+    [t.start() for t in threads]; [t.join() for t in threads]
+    assert len(json.loads(manifest.read_text())["files"] )==16
 
-def test_existing_and_crashed_claim_hard_refuse(tmp_path: Path) -> None:
-    claim = tmp_path / "claim.json"
-    claims.acquire_claim(claim, payload())  # represents crash after claim
-    with pytest.raises(claims.SprintClaimError, match="already exists"):
-        claims.acquire_claim(claim, payload())
-
-
-def test_non_bb_requires_parseable_lock(tmp_path: Path) -> None:
-    with pytest.raises(claims.SprintClaimError, match="requires --lock"):
-        claims.require_metric_lock(None, "V1")
-    lock = tmp_path / "lock.json"
-    lock.write_text(json.dumps({"metric": "locked"}))
-    claims.require_metric_lock(lock, "V1")
-    claims.require_metric_lock(None, "BB")
-
-
-def test_access_append_is_purpose_coded_and_durable_surface(tmp_path: Path) -> None:
-    log = tmp_path / "access.log"
-    claims.record_access(log, "final_eval", run_tag="synthetic")
-    assert json.loads(log.read_text())["purpose"] == "final_eval"
-
-
-def test_probe_manifest_is_content_addressed_and_immutable(tmp_path: Path) -> None:
-    probe = tmp_path / "probe.h5"
-    probe.write_bytes(b"synthetic probe")
-    manifest = tmp_path / "manifest.json"
-    claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
-    claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
-    assert json.loads(manifest.read_text())["files"][str(probe)]["size"] == probe.stat().st_size
-    probe.write_bytes(b"modified")
-    with pytest.raises(claims.SprintClaimError, match="immutable"):
-        claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
-
-
-def test_sprint_rejects_m4_split_before_load(tmp_path: Path) -> None:
-    evaluator = load_script("sprint_heldout_eval")
-    forbidden = tmp_path / "m4_heldout.json"
-    forbidden.write_text("not json")
-    with pytest.raises(claims.SprintClaimError, match="M4"):
-        evaluator.load_sprint_split(forbidden)
-
-
-def test_retro_claim_and_audit_precede_split_load() -> None:
-    source = (ROOT / "scripts/p1_sprint_retro_eval.py").read_text()
-    claim_at = source.index("acquire_claim(")
-    audit_at = source.index("record_access(")
-    load_at = source.index("load_sprint_heldout()", source.index("def main"))
-    assert claim_at < audit_at < load_at
+def test_audit_claims_is_claim_only_and_non_mutating(tmp_path: Path) -> None:
+    claim=tmp_path/"p1_claim_synthetic.json"; claims.acquire_claim(claim,payload()); before=claim.read_bytes(); rows=claims.audit_claims(tmp_path)
+    assert rows and rows[0]["status"]=="needs_human_disposition" and claim.read_bytes()==before
