@@ -1,15 +1,22 @@
 """Synthetic contracts for canonical sprint authorization primitives."""
 from __future__ import annotations
 
+import gzip
 import hashlib
+import importlib.util
 import json
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
-import importlib.util
+import h5py
+import numpy as np
 import pytest
 
 from dgcc.analysis import sprint_claims as claims
+from dgcc.goals.dual_goal import DualGoal
+from dgcc.rl.evaluation import evaluate_episodes
+from dgcc.tasks.domain import P1_LENGTH_M
 
 
 @pytest.fixture
@@ -26,6 +33,155 @@ def canonical_sprint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     yield root
     claims._ISSUED_CAPABILITIES.clear()
 
+def _line(n: int = 32) -> np.ndarray:
+    t = np.linspace(0.0, P1_LENGTH_M, n)
+    return np.column_stack((t, np.zeros_like(t), np.zeros_like(t)))
+
+
+class _SprintProducerRunner:
+    """One-step, 200-slot runner for the producer serialization boundary."""
+
+    def __init__(self) -> None:
+        self.n_envs = 200
+        self.config = SimpleNamespace(horizon=2)
+        goal = DualGoal(shape_template=_line(), anchor=np.zeros(3))
+        self.goals = [goal for _ in range(self.n_envs)]
+        self.nan_incidents = 0
+        self.env = SimpleNamespace(
+            get_centerline_batch=lambda: np.stack([_line()] * self.n_envs)
+        )
+        self.done = np.zeros(self.n_envs, dtype=bool)
+        self.succeeded = np.zeros(self.n_envs, dtype=bool)
+        self.truncated = np.zeros(self.n_envs, dtype=bool)
+        self.t = np.zeros(self.n_envs, dtype=int)
+        self.d_current = np.full(self.n_envs, 0.1)
+        self.d_at_done = np.full(self.n_envs, 0.1)
+        self.init_shapes = ["straight"] * self.n_envs
+
+    def begin_episodes(self, **_: object) -> dict[str, object]:
+        return {
+            "init_shapes": self.init_shapes,
+            "d_initial": np.full(self.n_envs, 0.2),
+        }
+
+    def all_done(self) -> bool:
+        return bool(self.done.all())
+
+    def step(self, p: np.ndarray, delta: np.ndarray, lift: list[str], *, rng: np.random.Generator) -> dict[str, object]:
+        self.done[:] = True
+        self.succeeded[:] = True
+        self.t[:] = 1
+        batch = np.stack([_line()] * self.n_envs)
+        return {
+            "active": np.ones(self.n_envs, dtype=bool),
+            "d_after": self.d_current.copy(),
+            "X_after": batch,
+            "reward": np.ones(self.n_envs),
+        }
+
+
+def _zero_action(X: np.ndarray, G: np.ndarray, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    return np.zeros(len(X), dtype=int), np.zeros((len(X), 3)), ["low"] * len(X)
+
+
+def _sprint_eval_module():
+    spec = importlib.util.spec_from_file_location(
+        "sprint_heldout_eval", Path(__file__).parents[1] / "scripts/sprint_heldout_eval.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def producer_artifacts(canonical_sprint: Path) -> tuple[Path, Path, Path]:
+    """Exercise evaluator output through the raw, probe, and result producers."""
+    claim = claim_path()
+    claims.acquire_claim(claim, payload())
+    claim_sha = claims.sha256_file(claim)
+    runner = _SprintProducerRunner()
+    labels = [f"goal-{index // 2}" for index in range(200)]
+    result = evaluate_episodes(
+        runner,
+        n_episodes=200,
+        seed=7,
+        episode_index_start=97_001,
+        action_fn=_zero_action,
+        rng=np.random.default_rng(7),
+        goals=runner.goals,
+        goal_labels=labels,
+        wall_guard_k=5,
+        record_raw=True,
+        record_probe=True,
+    )
+    claims.canonicalize_episode_ids(result["episodes"], 97_001)
+    module = _sprint_eval_module()
+    output = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
+    raw = output.with_suffix(".raw.json.gz")
+    with gzip.open(raw, "wt", encoding="utf-8") as handle:
+        json.dump({"run_tag": "synthetic", "episodes": result["episodes"]}, handle)
+    probe = output.with_suffix(".probe.h5")
+    module.write_probe_h5(
+        probe, result["episodes"], ckpt_sha="c" * 64,
+        split_sha=claims.CANONICAL_SPLIT_SHA256, claim_sha=claim_sha,
+    )
+    claims.probe_manifest_register(
+        claim.parent / "sprint_probe_manifest.json", probe,
+        {"production_goal": "G-EV", "run_tag": "synthetic"},
+    )
+    for episode in result["episodes"]:
+        for key in ("x_initial", "x_steps", "x_terminal", "probe_p", "probe_u"):
+            episode.pop(key, None)
+    claims.atomic_publish(output, module.canonical_result_payload(
+        run_tag="synthetic", arm="bb", seed=7,
+        manifest={"config_sha256": "d" * 64, "ckpt_sha256": "c" * 64,
+                  "selector_version": "test", "val_rows": []},
+        selection_manifest="/synthetic/selection.json", selection_sha="e" * 64,
+        claim_sha=claim_sha, result=result,
+    ))
+    return raw, probe, output
+
+
+def test_e2e_producer_artifacts_have_canonical_episode_ids_and_pass_audit(
+    producer_artifacts: tuple[Path, Path, Path],
+) -> None:
+    raw, probe, output = producer_artifacts
+    with gzip.open(raw, "rt", encoding="utf-8") as handle:
+        raw_ids = [episode["episode_id"] for episode in json.load(handle)["episodes"]]
+    with h5py.File(probe, "r") as handle:
+        probe_ids = [int(handle[str(index)]["episode_id"][()]) for index in range(200)]
+    result_ids = [episode["episode_id"] for episode in json.loads(output.read_text())["episodes"]]
+    expected = list(range(97_001, 97_201))
+    assert raw_ids == probe_ids == result_ids == expected
+    assert claims.audit_claims(output.parent) == []
+
+
+_SUMMARY_MISMATCHES = {
+    "n_episodes": 199,
+    "success_rate": 0.0,
+    "mean_return": 2.0,
+    "mean_final_d": 0.2,
+    "mean_d_at_done": 0.2,
+    "mean_min_d": 0.2,
+    "mean_d_shape_at_done": 1.0,
+    "per_template_success": {"straight": 0.0},
+    "per_template_episodes": {"straight": 199},
+    "overestimation_gap_mean": 0.0,
+    "overestimation_gap_p95": 0.0,
+    "eval_wall_guard_rate": 1.0,
+}
+
+
+@pytest.mark.parametrize("field, value", _SUMMARY_MISMATCHES.items())
+def test_audit_rejects_each_tampered_summary_aggregate(
+    producer_artifacts: tuple[Path, Path, Path], field: str, value: object,
+) -> None:
+    _, _, output = producer_artifacts
+    body = json.loads(output.read_text())
+    body["summary"][field] = value
+    output.write_text(json.dumps(body))
+    assert len(claims.audit_claims(output.parent)) == 1
 
 def payload(*, generation: str | None = None) -> dict[str, object]:
     body: dict[str, object] = {
