@@ -1,0 +1,53 @@
+# sprint grid-start condition (GNG-1 ③ / sprint_spec §1): t1a@1024, 1e5 transitions.
+# Regime = M4 main-run regime (configs/p1_t2.yaml: n_envs 1024, warmup 10240) applied to t1a.
+# Purpose: sprint instrumentation with the registered T1 budget.
+task: t1a_straighten
+run:
+  total_transitions: 100000
+  seeds: [0]
+  n_envs: 1024
+  eval_every_transitions: 25000
+  checkpoint_every_transitions: 25000
+eval:
+  t1_episodes_per_task: 100
+  t2_val_goals: 50
+  t2_episodes_per_goal: 2
+  wall_guard_k: 5
+  record_raw_final: true
+td3:
+  gamma: 0.95
+  tau: 0.005
+  lr: 3.0e-4
+  batch_size: 256
+  replay_capacity: 500000
+  utd: 1
+  warmup_transitions: 10240
+  grad_clip: 10.0
+  policy_noise: 0.05
+  noise_clip: 0.1
+  exploration_u_sigma: 0.03
+  eps_p_start: 1.0
+  eps_p_end: 0.1
+  eps_p_fraction: 0.3
+reward:
+  alpha: 10.0
+  c_step: 0.1
+  r_succ: 5.0
+her: false
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 10000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
+# ralplan pending-approval sha 3d8f29c4
+sprint:
+  arm: v1
+  aux_weight: 1.0
+  eval:
+    wall_guard_k: 5
+    record_raw_final: true
