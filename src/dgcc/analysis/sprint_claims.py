@@ -4,6 +4,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -18,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CANONICAL_SPLIT_PATH = REPO_ROOT / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json"
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_ARMS = frozenset({"bb", "v1", "matched", "random"})
-_CLAIM_KEYS = frozenset({"schema_version", "claim_before_load", "timestamp", "pid", "run_tag", "arm", "ckpt_sha256", "split_sha256", "seed", "config_sha256", "selection_manifest", "selection_manifest_sha256", "episode_index_start", "episode_namespace", "disposition_receipt_sha256", "legacy_claim_sha256", "generation"})
+_CLAIM_KEYS = frozenset({"schema_version", "claim_before_load", "timestamp", "pid", "run_tag", "arm", "ckpt_sha256", "split_sha256", "seed", "config_sha256", "selection_manifest", "selection_manifest_sha256", "episode_index_start", "episode_namespace", "n_goals", "disposition_receipt_sha256", "legacy_claim_sha256", "generation"})
 # This registry is deliberately module-private.  Reflection in the same process is
 # out of scope; normal callers can only consume an authority we issued.
 _ISSUED_CAPABILITIES: dict[int, tuple["ClaimCapability", str]] = {}
@@ -104,6 +105,8 @@ def _validate_claim(value: Any) -> dict[str, Any]:
         if not _HEX64.fullmatch(str(value[key])): raise SprintClaimError("claim schema is invalid")
     reeval = "generation" in value or "legacy_claim_sha256" in value or "disposition_receipt_sha256" in value
     if reeval and (not isinstance(value.get("generation"), str) or not value["generation"] or not _HEX64.fullmatch(str(value.get("legacy_claim_sha256"))) or not _HEX64.fullmatch(str(value.get("disposition_receipt_sha256")))): raise SprintClaimError("claim schema is invalid")
+    if "n_goals" in value and (not isinstance(value["n_goals"], int) or isinstance(value["n_goals"], bool) or value["n_goals"] < 1):
+        raise SprintClaimError("claim schema is invalid")
     return dict(value)
 
 def acquire_claim(claim_path: Path, payload: Mapping[str, Any]) -> ClaimCapability:
@@ -204,6 +207,20 @@ def require_metric_lock(lock_path: Path | None, arm: str) -> None:
     hashes = value["bb_claim_sha256"]
     if not isinstance(hashes, list) or len(hashes) != 8 or len(set(hashes)) != 8 or any(not isinstance(x, str) or not _HEX64.fullmatch(x) for x in hashes): raise SprintClaimError("metric lock schema is invalid")
 
+def _is_finite_json(value: Any) -> bool:
+    if value is None or isinstance(value, (bool, str)):
+        return True
+    if isinstance(value, int) and not isinstance(value, bool):
+        return True
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, list):
+        return all(_is_finite_json(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _is_finite_json(item) for key, item in value.items())
+    return False
+
+
 def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: str) -> bool:
     required = {
         "generated_at", "run_tag", "arm", "seed", "config_sha256", "ckpt_sha256",
@@ -226,16 +243,39 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
         return False
     if not isinstance(body["episodes"], list) or len(body["episodes"]) != 200:
         return False
-    if not isinstance(body["summary"], dict) or not summary_required <= set(body["summary"]):
+    if not isinstance(body["summary"], dict) or not summary_required <= set(body["summary"]) or not _is_finite_json(body["summary"]):
         return False
-    if not all(isinstance(body["summary"][key], (int, float)) and not isinstance(body["summary"][key], bool) for key in ("success_rate", "mean_return", "mean_final_d", "mean_d_at_done", "mean_min_d")):
+    numeric_summary = ("success_rate", "mean_return", "mean_final_d", "mean_d_at_done", "mean_min_d")
+    if not all(isinstance(body["summary"][key], (int, float)) and not isinstance(body["summary"][key], bool) and math.isfinite(body["summary"][key]) for key in numeric_summary):
         return False
     if body["summary"]["n_episodes"] != 200 or not isinstance(body["summary"]["per_template_success"], dict) or not isinstance(body["summary"]["per_template_episodes"], dict):
         return False
+    namespace = claim["episode_namespace"]
+    episode_ids: set[int] = set()
+    goal_ids: set[str] = set()
+    numeric_episode = ("return", "discounted_return", "final_d", "d_at_done", "min_d", "d_initial", "d_shape_initial", "d_shape_at_done")
     for episode in body["episodes"]:
-        if not isinstance(episode, dict) or not episode_required <= set(episode):
+        if not isinstance(episode, dict) or not episode_required <= set(episode) or not _is_finite_json(episode):
             return False
-        if not isinstance(episode["goal_id"], str) or not episode["goal_id"] or not isinstance(episode["success"], bool) or not isinstance(episode["return"], (int, float)) or isinstance(episode["return"], bool):
+        episode_id = episode["episode_id"]
+        if not isinstance(episode_id, int) or isinstance(episode_id, bool) or not namespace <= episode_id < namespace + 200 or episode_id in episode_ids:
+            return False
+        if not isinstance(episode["goal_id"], str) or not episode["goal_id"] or not isinstance(episode["goal_label"], str) or not isinstance(episode["init_template"], str) or not isinstance(episode["success"], bool) or not isinstance(episode["steps"], int) or isinstance(episode["steps"], bool) or not isinstance(episode["discard_exposure"], int) or isinstance(episode["discard_exposure"], bool) or not isinstance(episode["d_at_done_fallback"], bool) or not isinstance(episode["eval_wall_guard"], bool) or not isinstance(episode["d_steps"], list):
+            return False
+        if not all(isinstance(episode[key], (int, float)) and not isinstance(episode[key], bool) and math.isfinite(episode[key]) for key in numeric_episode):
+            return False
+        if episode["q_first"] is not None and (not isinstance(episode["q_first"], (int, float)) or isinstance(episode["q_first"], bool) or not math.isfinite(episode["q_first"])):
+            return False
+        episode_ids.add(episode_id)
+        goal_ids.add(episode["goal_id"])
+    if len(goal_ids) < claim.get("n_goals", 100):
+        return False
+    successes = sum(episode["success"] for episode in body["episodes"]) / len(body["episodes"])
+    mean_return = sum(episode["return"] for episode in body["episodes"]) / len(body["episodes"])
+    if not math.isclose(body["summary"]["success_rate"], successes, rel_tol=0.0, abs_tol=1e-9) or not math.isclose(body["summary"]["mean_return"], mean_return, rel_tol=0.0, abs_tol=1e-9):
+        return False
+    if "generation" in claim:
+        if any(body.get(key) != claim[key] for key in ("generation", "disposition_receipt_sha256", "episode_namespace")):
             return False
     return all(isinstance(body[key], str) and body[key] for key in ("generated_at", "config_sha256", "ckpt_sha256", "selection_manifest", "selection_manifest_sha256"))
 

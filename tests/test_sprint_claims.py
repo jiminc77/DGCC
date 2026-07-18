@@ -197,9 +197,9 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
     result = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
     result.write_text(json.dumps({"run_tag": "synthetic", "arm": "bb", "claim_sha256": hashlib.sha256(before).hexdigest()}))
     assert len(claims.audit_claims(claim.parent)) == 1
-    def episode() -> dict[str, object]:
+    def episode(index: int) -> dict[str, object]:
         return {
-            "episode_id": 1, "goal_id": "goal-1", "goal_label": "goal-1",
+            "episode_id": 97_001 + index, "goal_id": f"goal-{index // 2}", "goal_label": f"goal-{index // 2}",
             "init_template": "straight", "success": True, "steps": 1,
             "return": 1.0, "discounted_return": 1.0, "final_d": 0.1,
             "d_at_done": 0.1, "d_at_done_fallback": False, "d_steps": [0.1],
@@ -219,7 +219,7 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
             "mean_final_d": 0.1, "mean_d_at_done": 0.1, "mean_min_d": 0.1,
             "per_template_success": {}, "per_template_episodes": {},
         },
-        "episodes": [episode() for _ in range(200)],
+        "episodes": [episode(index) for index in range(200)],
     }))
     assert claims.audit_claims(claim.parent) == []
     assert claim.read_bytes() == before
@@ -228,8 +228,13 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
     result.write_text(json.dumps(body))
     assert len(claims.audit_claims(claim.parent)) == 1
     body = json.loads(result.read_text())
-    body["episodes"] = [episode() for _ in range(200)]
+    body["episodes"] = [episode(index) for index in range(200)]
     body["seed"] = 8
+    result.write_text(json.dumps(body))
+    assert len(claims.audit_claims(claim.parent)) == 1
+    body = json.loads(result.read_text())
+    body["seed"] = 7
+    body["episodes"] = [episode(0) for _ in range(200)]
     result.write_text(json.dumps(body))
     assert len(claims.audit_claims(claim.parent)) == 1
     assert claim.read_bytes() == before

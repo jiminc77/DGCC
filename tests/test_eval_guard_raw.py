@@ -185,14 +185,19 @@ def test_record_raw_fields_present_and_off_by_default():
     assert all("x_initial" not in ep for ep in result2["episodes"])
     assert result2["record_raw"] is False
 # Frozen from the actual `evals[0]` row in outputs/metrics/p1_run_m4_t2_s0.json,
-# produced before record_probe existed.  Schema parity is the stable compatibility
-# contract; serialized bytes also include runtime-dependent values.
+# produced before record_probe existed.  sprint_spec.md §5 requires every eval
+# output's metadata to record guard values, so these keys are not probe additions.
 _P1_EVAL_ROW_KEYS = {
     "eval_episode_index_start", "magnitude_incidents_during_eval", "mean_d_at_done",
     "mean_d_shape_at_done", "mean_final_d", "mean_min_d", "mean_return",
     "n_episodes", "nan_incidents_during_eval", "overestimation_gap_mean",
     "overestimation_gap_p95", "per_template_episodes", "per_template_success",
     "success_rate", "transitions", "wall_s",
+}
+_SECTION_5_GUARD_METADATA_KEYS = {
+    "wall_guard_k",
+    "record_raw",
+    "eval_wall_guard_rate",
 }
 
 
@@ -202,12 +207,15 @@ def test_record_probe_default_off_preserves_p1_eval_row_schema() -> None:
         runner, n_episodes=2, seed=0, episode_index_start=1,
         action_fn=_random_action, rng=np.random.default_rng(0), goals=runner.goals,
     )
+    # Match the production save path: append runtime metadata, then omit episodes.
     eval_row = {
-        **{key: result[key] for key in _P1_EVAL_ROW_KEYS if key in result},
-        "eval_episode_index_start": 1, "magnitude_incidents_during_eval": 0,
+        **result,
+        "eval_episode_index_start": 1,
+        "magnitude_incidents_during_eval": 0,
         "nan_incidents_during_eval": result["nan_incidents_during_eval"],
-        "transitions": 0, "wall_s": 0.0,
+        "transitions": 0,
+        "wall_s": 0.0,
     }
-    assert set(eval_row) == _P1_EVAL_ROW_KEYS
-    assert "record_probe" not in result
+    eval_row.pop("episodes")
+    assert set(eval_row) == _P1_EVAL_ROW_KEYS | _SECTION_5_GUARD_METADATA_KEYS
     assert all("probe_p" not in episode for episode in result["episodes"])
