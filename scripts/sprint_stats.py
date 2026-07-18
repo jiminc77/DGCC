@@ -166,14 +166,19 @@ def holm_bonferroni(one_sided_p: Mapping[str, float], *, primary_passed: bool, a
     return out
 
 
-def tost_paired(seed_effects: Sequence[float], margin: float, *, alpha: float = ALPHA) -> dict[str, Any]:
+def tost_paired(seed_effects: Sequence[float], margin: float, *, holm_2_completed: bool = False, alpha: float = ALPHA) -> dict[str, Any]:
     values = _finite(seed_effects); n = len(values)
     if n < 2 or margin <= 0: raise ValueError("TOST requires n >= 2 and a positive margin")
     mean = float(values.mean()); se = values.std(ddof=1) / math.sqrt(n); q = t.ppf(1 - alpha, n - 1)
     ci = [mean - q * se, mean + q * se]; equivalent = ci[0] > -margin and ci[1] < margin
-    if n == 5: status, limitation = "provisional_unadjusted", "n=5 limitation: unadjusted TOST is provisional and cannot be confirmatory"
-    elif n == 8: status, limitation = "confirmatory_holm_2", "n=8: confirmatory TOST requires Holm(2) adjustment"
-    else: status, limitation = "unsupported_sample_size", "TOST status is defined only for n=5 provisional or n=8 confirmatory"
+    if n == 5:
+        status, limitation = "provisional_unadjusted", "n=5 limitation: unadjusted TOST is provisional and cannot be confirmatory"
+    elif n == 8 and not holm_2_completed:
+        status, limitation = "confirmatory_pending_holm_2", "n=8: confirmatory TOST is pending the two-control-family Holm adjustment"
+    elif n == 8:
+        status, limitation = "confirmatory_after_holm_2", "n=8: two-control-family Holm adjustment completed"
+    else:
+        status, limitation = "unsupported_sample_size", "TOST status is defined only for n=5 provisional or n=8 confirmatory"
     return {"n": n, "estimate": mean, "margin": margin, "ci90": ci, "equivalent": equivalent, "status": status, "limitation": limitation}
 
 
@@ -183,16 +188,19 @@ def primary_decision(seed_effects: Sequence[float], *, endpoint: str) -> dict[st
     return {"endpoint": endpoint, "primary": stat, "welch_seed_interval": welch_seed_interval(seed_effects), "iqm_seed_effect": iqm_seed_cluster_bootstrap(seed_effects), "iqm_not_standalone_decision": True, "state": "1_pass" if passed else "1_fail", "primary_passed": passed}
 
 
-def _canonical_paths(claim: Path) -> tuple[Path, Path]:
-    name = claim.name
-    if not name.startswith("p1_bb_sprint_heldout_") or not name.endswith("_claim.json"):
-        raise SprintClaimError("BB claim must use canonical p1_bb_sprint_heldout_<tag>_claim.json name")
-    stem = name[:-len("_claim.json")]
-    return claim.with_name(stem + ".json"), claim.with_name(stem + ".raw.json.gz")
+def _canonical_paths(claim: Path, claim_body: Mapping[str, Any]) -> tuple[Path, Path]:
+    expected_claim = sprint_claims.canonical_claim_path(
+        claim_body["run_tag"], claim_body["arm"], claim_body.get("generation")
+    )
+    if claim.absolute() != expected_claim.absolute():
+        raise SprintClaimError("BB claim must be at its canonical metrics path")
+    return (
+        sprint_claims.canonical_result_path(claim_body["run_tag"], claim_body["arm"], claim_body.get("generation")),
+        sprint_claims.canonical_raw_path(claim_body["run_tag"], claim_body["arm"], claim_body.get("generation")),
+    )
 
-
-def _zero_assert(claims: Sequence[Path]) -> None:
-    root = claims[0].parent
+def _zero_assert() -> None:
+    root = sprint_claims.canonical_metric_lock_path().parent
     for arm in ("v1", "matched", "random"):
         if any(root.glob(f"p1_{arm}_sprint_heldout_*.json")) or any(root.glob(f"p1_{arm}_sprint_heldout_*.raw.json.gz")):
             raise SprintClaimError("metric lock refused: non-BB canonical held-out artifact exists")
@@ -208,37 +216,32 @@ def _zero_assert(claims: Sequence[Path]) -> None:
 
 def _validated_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
     claim, digest = sprint_claims.json_file(claim_path, "BB claim")
-    claim = sprint_claims._validate_claim(claim)  # canonical claim validator, including schema/version/pre-load.
-    result_path, raw_path = _canonical_paths(claim_path)
-    if not result_path.is_file() or not raw_path.is_file(): raise SprintClaimError("canonical BB result and raw artifact are required")
+    claim = sprint_claims.validate_claim_payload(claim)
+    result_path, raw_path = _canonical_paths(claim_path, claim)
+    if not result_path.is_file() or not raw_path.is_file():
+        raise SprintClaimError("canonical BB result and raw artifact are required")
     result, _ = sprint_claims.json_file(result_path, "BB result")
-    if not isinstance(result, dict) or result.get("claim_sha256") != digest:
-        raise SprintClaimError("BB result is not linked to its claim digest")
-    if any(result.get(key) != claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")):
-        raise SprintClaimError("BB result identity does not match claim")
-    summary = result.get("summary")
-    if not isinstance(summary, dict): raise SprintClaimError("BB result summary is invalid")
-    success, episodes = summary.get("success_rate"), summary.get("n_episodes")
-    if isinstance(success, bool) or not isinstance(success, (int, float)) or not math.isfinite(success) or not 0 <= success <= 1:
-        raise SprintClaimError("BB success_rate must be finite and in [0,1]")
-    if isinstance(episodes, bool) or not isinstance(episodes, int) or episodes <= 0:
-        raise SprintClaimError("BB n_episodes must be a positive integer")
-    return claim, digest, summary
+    if not sprint_claims.is_canonical_result(result, claim=claim, claim_sha256=digest):
+        raise SprintClaimError("BB result failed canonical episode and summary audit")
+    return claim, digest, result["summary"]
 
 
 def publish_metric_lock(bb_claims: Sequence[Path], lock: Path) -> dict[str, Any]:
+    canonical_lock = sprint_claims.canonical_metric_lock_path()
+    if Path(lock).absolute() != canonical_lock.absolute():
+        raise SprintClaimError("metric lock path must be the canonical metrics lock path")
     paths = [Path(p) for p in bb_claims]
     if len(paths) != 8: raise SprintClaimError("exactly eight BB claim/result pairs are required")
-    _zero_assert(paths)
+    _zero_assert()
     rows = [_validated_bb_pair(path) for path in paths]
     if any(row[0]["arm"] != "bb" for row in rows): raise SprintClaimError("metric lock requires BB claim/result pairs only")
-    seeds = [row[0]["seed"] for row in rows]
-    if len(set(seeds)) != 8: raise SprintClaimError("BB claims must have eight unique seeds")
+    seeds = {row[0]["seed"] for row in rows}
+    if seeds != set(range(8)): raise SprintClaimError("BB claims must have seed set exactly {0,...,7}")
     total = sum(row[2]["n_episodes"] for row in rows)
     success = sum(row[2]["success_rate"] * row[2]["n_episodes"] for row in rows) / total
     endpoint = "return" if success <= .01 else "success_rate"
     body = {"schema_version": 1, "endpoint": endpoint, "aggregate": success, "created_at": datetime.now(timezone.utc).isoformat(), "bb_claim_sha256": [row[1] for row in rows], "primitive_version": str(PRIMITIVE_SCHEMA_VERSION)}
-    target = Path(lock); target.parent.mkdir(parents=True, exist_ok=True)
+    target = canonical_lock; target.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
     try: os.write(fd, (json.dumps(body, indent=1, sort_keys=True) + "\n").encode()); os.fsync(fd)
     finally: os.close(fd)
@@ -246,6 +249,38 @@ def publish_metric_lock(bb_claims: Sequence[Path], lock: Path) -> dict[str, Any]
     try: os.fsync(directory)
     finally: os.close(directory)
     return body
+def _seed_mapping(values: Mapping[int | str, Sequence[float]]) -> dict[int, Sequence[float]]:
+    normalized = {int(seed): rows for seed, rows in values.items()}
+    if set(normalized) != set(range(8)):
+        raise ValueError("sensitivity analysis requires seed set exactly {0,...,7}")
+    return normalized
+
+def bb_three_way_sensitivity(v1: Mapping[int | str, Sequence[float]], bb: Mapping[int | str, Sequence[float]], *, draws: int = B) -> dict[str, Any]:
+    """Report preregistered reuse/new/pooled seed-cluster BCa sensitivity."""
+    left, right = _seed_mapping(v1), _seed_mapping(bb)
+    effects = {seed: float(_finite(left[seed]).mean() - _finite(right[seed]).mean()) for seed in range(8)}
+    groups = {"reuse": (0, 1, 2), "new": (3, 4, 5, 6, 7), "pooled": tuple(range(8))}
+    report = {name: seed_cluster_bootstrap([effects[seed] for seed in seeds], draws=draws, rng_seed=RNG_SEED + min(seeds)) for name, seeds in groups.items()}
+    reuse_ci, new_ci = report["reuse"]["ci"], report["new"]["ci"]
+    report["batch_effect_flag"] = reuse_ci[1] < new_ci[0] or new_ci[1] < reuse_ci[0]
+    report["batch_effect_rule"] = "reuse/new two-sided BCa intervals do not overlap"
+    return report
+
+def guard_sensitivity(arms: Mapping[str, Mapping[int | str, Sequence[Mapping[str, Any]]]], *, draws: int = B) -> dict[str, Any]:
+    """Dual guard analyses, a common-support comparison, and activation-rate CIs."""
+    if set(arms) != {"v1", "bb"}: raise ValueError("guard sensitivity requires exactly v1 and bb arms")
+    normalized = {arm: _seed_mapping(rows) for arm, rows in arms.items()}
+    def rate(rows: Sequence[Mapping[str, Any]], exclude: bool) -> float:
+        usable = [row for row in rows if not (exclude and row["eval_wall_guard"])]
+        if not usable: raise ValueError("guard exclusion left a seed with no episodes")
+        return float(np.mean([bool(row["success"]) for row in usable]))
+    policies = {}
+    for name, exclude in (("guarded_as_failure", False), ("guarded_excluded_nonrandom_dropout", True)):
+        policies[name] = {"v1_minus_bb": seed_cluster_bootstrap([rate(normalized["v1"][seed], exclude) - rate(normalized["bb"][seed], exclude) for seed in range(8)], draws=draws), "dropout_limitation": "guarded episodes excluded; dropout is non-random" if exclude else None}
+    activation = {arm: seed_cluster_bootstrap([float(np.mean([bool(row["eval_wall_guard"]) for row in rows])) for rows in values.values()], draws=draws) for arm, values in normalized.items()}
+    difference = activation["v1"]["estimate"] - activation["bb"]["estimate"]
+    common = seed_cluster_bootstrap([rate(normalized["v1"][seed], True) - rate(normalized["bb"][seed], True) for seed in range(8)], draws=draws)
+    return {"policies": policies, "common_support": {"v1_minus_bb": common, "definition": "paired comparison restricted to unguarded episodes"}, "activation_rates": activation, "activation_rate_difference": difference, "activation_rate_confounding_flag": abs(difference) > .02, "activation_rate_confounding_rule": "absolute arm difference exceeds 2 percentage points"}
 
 
 def _load_json(path: Path) -> Any:
@@ -259,11 +294,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "lock": print(json.dumps(publish_metric_lock(args.bb_claims, Path(args.lock)), indent=1)); return 0
     metric = _load_json(Path(args.lock)); require_metric_lock(Path(args.lock), "v1")
-    decision = primary_decision(_load_json(Path(args.seed_effects)), endpoint=metric["endpoint"])
+    seed_input = _load_json(Path(args.seed_effects))
+    if isinstance(seed_input, dict) and {"effects", "v1", "bb"} <= set(seed_input):
+        decision = primary_decision(seed_input["effects"], endpoint=metric["endpoint"])
+        decision["bb_three_way_sensitivity"] = bb_three_way_sensitivity(seed_input["v1"], seed_input["bb"])
+        if "guard_episodes" in seed_input: decision["guard_sensitivity"] = guard_sensitivity(seed_input["guard_episodes"])
+    else: decision = primary_decision(seed_input, endpoint=metric["endpoint"])
     if metric["endpoint"] == "success_rate": benchmark = "+10%p benchmark applies to success_rate only"
     else: benchmark = f"Return benchmark: 0.5σ={SIGMA_GOAL / 2:.3f} (return units)"
     Path(args.json).write_text(json.dumps(decision, indent=1) + "\n")
-    Path(args.md).write_text(f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\n\n{benchmark}\n")
+    sensitivity = "\n\n## Sensitivity analysis\n\nIncluded in JSON judgment." if "bb_three_way_sensitivity" in decision else ""
+    Path(args.md).write_text(f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\n\n{benchmark}{sensitivity}\n")
     return 0
 
 if __name__ == "__main__": raise SystemExit(main())

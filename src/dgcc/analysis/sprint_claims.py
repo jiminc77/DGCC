@@ -101,6 +101,22 @@ def json_file(path: Path, what: str) -> tuple[Any, str]:
 def canonical_claim_path(run_tag: str, arm: str, generation: str | None = None) -> Path:
     suffix = "" if generation is None else f"_{generation}"
     return REPO_ROOT / "outputs/metrics" / f"p1_{_arm(arm)}_sprint_heldout_{run_tag}{suffix}_claim.json"
+def canonical_result_path(run_tag: str, arm: str, generation: str | None = None) -> Path:
+    """Canonical published-result path for a claimed held-out evaluation."""
+    suffix = "" if generation is None else f"_{generation}"
+    return REPO_ROOT / "outputs/metrics" / f"p1_{_arm(arm)}_sprint_heldout_{run_tag}{suffix}.json"
+
+def canonical_raw_path(run_tag: str, arm: str, generation: str | None = None) -> Path:
+    suffix = "" if generation is None else f"_{generation}"
+    return REPO_ROOT / "outputs/metrics" / f"p1_{_arm(arm)}_sprint_heldout_{run_tag}{suffix}.raw.json.gz"
+
+def canonical_metric_lock_path() -> Path:
+    """The sole durable BB metric-lock location."""
+    return REPO_ROOT / "outputs/metrics/sprint_metric.lock"
+
+def validate_claim_payload(value: Any) -> dict[str, Any]:
+    """Public trust-boundary wrapper for canonical claim validation."""
+    return _validate_claim(value)
 
 def _validate_claim(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) - _CLAIM_KEYS: raise SprintClaimError("claim schema is invalid")
@@ -354,6 +370,9 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
     if "generation" in claim and any(body.get(key) != claim[key] for key in ("generation", "disposition_receipt_sha256")):
         return False
     return all(isinstance(body[key], str) and body[key] for key in ("generated_at", "config_sha256", "ckpt_sha256", "selection_manifest", "selection_manifest_sha256"))
+def is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: str) -> bool:
+    """Public trust-boundary wrapper; audits every episode and recomputed summary."""
+    return _is_canonical_result(body, claim=claim, claim_sha256=claim_sha256)
 
 def audit_claims(directory: Path) -> list[dict[str, Any]]:
     rows = []

@@ -41,7 +41,8 @@ def test_holm_direct_bootstrap_and_small_seed_error() -> None:
 
 
 def test_tost_n8_and_iqm_ci() -> None:
-    assert stats.tost_paired([0.] * 8, .05)["status"] == "confirmatory_holm_2"
+    assert stats.tost_paired([0.] * 8, .05)["status"] == "confirmatory_pending_holm_2"
+    assert stats.tost_paired([0.] * 8, .05, holm_2_completed=True)["status"] == "confirmatory_after_holm_2"
     assert len(stats.iqm_seed_cluster_bootstrap(range(8), draws=200)["ci"]) == 2
 def test_seed_cluster_heterogeneity_is_not_fixed_stratum() -> None:
     # Fixed-stratum episode resampling would report zero width here; seeds are the uncertainty unit.
@@ -77,30 +78,38 @@ def test_rng_reproducible_and_no_percentile_branch() -> None:
     assert "np.percentile" not in Path(stats.__file__).read_text()
 
 
-def test_lock_schema_and_zero_assertion(tmp_path: Path) -> None:
+def _canonical_episodes() -> list[dict[str, object]]:
+    return [{"episode_id": 97_001 + index, "goal_id": f"goal-{index // 2}", "goal_label": f"goal-{index // 2}", "init_template": "straight", "success": False, "steps": 1, "return": 0., "discounted_return": 0., "final_d": .1, "d_at_done": .1, "d_at_done_fallback": False, "d_steps": [.1], "min_d": .1, "d_initial": .2, "d_shape_initial": .2, "d_shape_at_done": .1, "q_first": None, "eval_wall_guard": False, "discard_exposure": 0} for index in range(200)]
+
+def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sprint_claims, "REPO_ROOT", tmp_path)
+    metrics = tmp_path / "outputs/metrics"; metrics.mkdir(parents=True)
     paths = []
-    digest = "a" * 64
     for seed in range(8):
-        tag = f"seed{seed}"
-        path = tmp_path / f"p1_bb_sprint_heldout_{tag}_claim.json"
-        claim = {
-            "schema_version": 1, "claim_before_load": True, "timestamp": "now", "pid": 1,
-            "run_tag": tag, "arm": "bb", "ckpt_sha256": digest,
-            "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "seed": seed,
-            "config_sha256": digest, "selection_manifest": "/selection",
-            "selection_manifest_sha256": digest, "episode_namespace": 97001, "n_goals": 100,
-        }
-        path.write_text(json.dumps(claim))
-        claim_sha = sprint_claims.sha256_file(path)
-        (tmp_path / f"p1_bb_sprint_heldout_{tag}.json").write_text(json.dumps({
-            **{key: claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")},
-            "claim_sha256": claim_sha, "summary": {"success_rate": 0., "n_episodes": 200},
-        }))
-        (tmp_path / f"p1_bb_sprint_heldout_{tag}.raw.json.gz").write_bytes(b"raw")
+        tag, digest = f"seed{seed}", "a" * 64
+        path = sprint_claims.canonical_claim_path(tag, "bb")
+        claim = {"schema_version": 1, "claim_before_load": True, "timestamp": "now", "pid": 1, "run_tag": tag, "arm": "bb", "ckpt_sha256": digest, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "seed": seed, "config_sha256": digest, "selection_manifest": "/selection", "selection_manifest_sha256": digest, "episode_namespace": 97001, "n_goals": 100}
+        path.write_text(json.dumps(claim)); claim_sha = sprint_claims.sha256_file(path)
+        episodes = _canonical_episodes()
+        summary = {**sprint_claims._summary_aggregates(episodes), "nan_incidents_during_eval": 0, "wall_guard_k": 5, "record_raw": True, "record_probe": True}
+        result = {**{key: claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")}, "generated_at": "now", "claim_sha256": claim_sha, "episodes": episodes, "summary": summary}
+        sprint_claims.canonical_result_path(tag, "bb").write_text(json.dumps(result))
+        sprint_claims.canonical_raw_path(tag, "bb").write_bytes(b"raw")
         paths.append(path)
-    lock = tmp_path / "metric.lock"
-    body = stats.publish_metric_lock(paths, lock)
-    assert body["endpoint"] == "return"
+    lock = sprint_claims.canonical_metric_lock_path()
+    assert stats.publish_metric_lock(paths, lock)["endpoint"] == "return"
     sprint_claims.require_metric_lock(lock, "v1")
-    (tmp_path / "p1_v1_sprint_heldout_x.json").write_text("{}")
-    with pytest.raises(sprint_claims.SprintClaimError): stats.publish_metric_lock(paths, tmp_path / "another.lock")
+    with pytest.raises(sprint_claims.SprintClaimError): stats.publish_metric_lock(paths, tmp_path / "off-root.lock")
+
+def test_lock_rejects_summary_tamper_missing_episodes_and_wrong_seed_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sprint_claims, "REPO_ROOT", tmp_path)
+    metrics = tmp_path / "outputs/metrics"; metrics.mkdir(parents=True)
+    # Boundary checks occur before publication and never accept an off-root claim.
+    with pytest.raises(sprint_claims.SprintClaimError): stats.publish_metric_lock([tmp_path / "x"] * 8, sprint_claims.canonical_metric_lock_path())
+
+def test_sensitivity_boundaries() -> None:
+    v1 = {seed: [10.] for seed in range(8)}; bb = {seed: [0.] for seed in range(8)}
+    report = stats.bb_three_way_sensitivity(v1, bb, draws=200)
+    assert set(report) >= {"reuse", "new", "pooled", "batch_effect_flag"}
+    arms = {arm: {seed: [{"success": True, "eval_wall_guard": arm == "v1"}] for seed in range(8)} for arm in ("v1", "bb")}
+    with pytest.raises(ValueError, match="no episodes"): stats.guard_sensitivity(arms, draws=200)
