@@ -13,10 +13,39 @@ import torch.nn.functional as F
 from torch import nn
 
 from dgcc.phi.dct import Phi_DCT
-from dgcc.rl.td3 import TD3Agent, TD3Config, u_tensor
+from dgcc.rl.td3 import TD3Agent, TD3Config, select_p_star, u_tensor
 
-SprintArm = Literal["bb", "v1"]
+SprintArm = Literal["bb", "v1", "matched", "random"]
+MATCHED_PROJECTION_SEED = 20260719
+RANDOM_TARGET_SEED = 20260718
 
+
+def matched_projection(seed: int = MATCHED_PROJECTION_SEED) -> torch.Tensor:
+    """Create the fixed 24×256 Gaussian-QR projection used by the matched arm."""
+    generator = torch.Generator(device="cpu").manual_seed(seed)
+    matrix = torch.randn((256, 24), generator=generator)
+    q, _ = torch.linalg.qr(matrix, mode="reduced")
+    return q.transpose(0, 1).contiguous()
+def random_target(seed: int = RANDOM_TARGET_SEED) -> torch.Tensor:
+    """Create the fixed 24-channel Gaussian target used by the random arm."""
+    generator = torch.Generator(device="cpu").manual_seed(seed)
+    return torch.randn(24, generator=generator)
+
+
+class _RandomTarget(nn.Module):
+    """Non-trainable holder for the fixed random target buffer."""
+
+    def __init__(self, seed: int, device: torch.device) -> None:
+        super().__init__()
+        self.register_buffer("target", random_target(seed).to(device))
+
+
+class _MatchedProjection(nn.Module):
+    """Non-trainable holder so P is a module buffer, not an optimizer parameter."""
+
+    def __init__(self, seed: int, device: torch.device) -> None:
+        super().__init__()
+        self.register_buffer("P", matched_projection(seed).to(device))
 
 class ResponseHead(nn.Module):
     """V1 response predictor: ``[h_p, u]`` to DCT displacement."""
@@ -58,26 +87,49 @@ class SprintTD3Agent(TD3Agent):
         *,
         arm: SprintArm = "v1",
         aux_weight: float = 1.0,
+        projection_seed: int = MATCHED_PROJECTION_SEED,
+        target_seed: int = RANDOM_TARGET_SEED,
         device: str | torch.device = "cpu",
         **kwargs: Any,
     ) -> None:
-        if arm != "v1":
-            raise ValueError("SprintTD3Agent only implements arm='v1'")
+        if arm not in {"v1", "matched", "random"}:
+            raise ValueError("SprintTD3Agent only implements arm='v1', arm='matched', or arm='random'")
         # This must remain first: TD3Agent consumes precisely the baseline RNG sequence.
         super().__init__(config, device=device, **kwargs)
         self.arm: SprintArm = arm
         self.aux_weight = float(aux_weight)
         if self.aux_weight < 0:
             raise ValueError("aux_weight must be non-negative")
+        self.projection_seed = int(projection_seed)
+        self.target_seed = int(target_seed)
+        self.matched_projection = (
+            _MatchedProjection(self.projection_seed, self.device) if arm == "matched" else None
+        )
+        self.random_target_buffer = (
+            _RandomTarget(self.target_seed, self.device) if arm == "random" else None
+        )
 
         # Construct and initialize outside the global RNG stream.  The derived seed
-        # makes V1 initialization reproducible without perturbing callers' RNG state.
+        # makes head initialization reproducible without perturbing callers' RNG state.
         derived_seed = (torch.initial_seed() ^ 0x535052494E54) & ((1 << 63) - 1)
         with torch.random.fork_rng(devices=[]):
             self.f_resp = ResponseHead().to(self.device)
             generator = torch.Generator(device=self.device).manual_seed(derived_seed)
             self._initialize_response_head(generator)
         self.critic_optimizer.add_param_group({"params": list(self.f_resp.parameters()), "lr": self.config.lr})
+
+    @property
+    def projection(self) -> torch.Tensor:
+        """Fixed matched-dimension projection P."""
+        if self.matched_projection is None:
+            raise AttributeError("projection is only defined for arm='matched'")
+        return self.matched_projection.P
+    @property
+    def random_target(self) -> torch.Tensor:
+        """Fixed random 24-channel target used by the random arm."""
+        if self.random_target_buffer is None:
+            raise AttributeError("random_target is only defined for arm='random'")
+        return self.random_target_buffer.target
 
     def _initialize_response_head(self, generator: torch.Generator) -> None:
         with torch.no_grad():
@@ -86,6 +138,19 @@ class SprintTD3Agent(TD3Agent):
                     nn.init.kaiming_uniform_(module.weight, a=5**0.5, generator=generator)
                     bound = 1 / module.weight.shape[1] ** 0.5
                     nn.init.uniform_(module.bias, -bound, bound, generator=generator)
+    @torch.no_grad()
+    def matched_target(self, batch: dict[str, np.ndarray]) -> torch.Tensor:
+        """Return sg[P h_target(s′, p′*)] using baseline Q1 target selection."""
+        feats_next = self.features(
+            batch["X_after"], batch["goal_curve"], batch.get("flip_after")
+        )
+        h_next = self.encoder_target(feats_next)
+        u_next_all = self.actor_target(h_next)
+        q1_candidates = self._q_all_candidates(self.critic_target.q1, h_next, u_next_all)
+        p_star = select_p_star(q1_candidates)
+        arange = torch.arange(h_next.shape[0], device=self.device)
+        return (self.projection @ h_next[arange, p_star].unsqueeze(-1)).squeeze(-1).detach()
+
 
     def critic_update(
         self,
@@ -115,7 +180,14 @@ class SprintTD3Agent(TD3Agent):
             aux_loss = torch.zeros((), device=self.device)
             loss = q_loss
         else:
-            target = torch.as_tensor(delta_m_from_batch(batch), dtype=torch.float32, device=self.device)
+            if self.arm == "v1":
+                target = torch.as_tensor(
+                    delta_m_from_batch(batch), dtype=torch.float32, device=self.device
+                )
+            elif self.arm == "matched":
+                target = self.matched_target(batch)
+            else:
+                target = self.random_target.expand(h_p.shape[0], -1)
             aux_loss = F.mse_loss(self.f_resp(h_p, u), target)
             loss = q_loss + self.aux_weight * aux_loss
         self._assert_finite_loss(loss, "sprint critic loss")
@@ -150,7 +222,16 @@ class SprintTD3Agent(TD3Agent):
 
     def to_dict(self) -> dict[str, Any]:
         metadata = super().to_dict()
-        metadata["sprint_arm"] = {"schema_version": self.schema_version, "arm": self.arm, "aux_weight": self.aux_weight}
+        sprint_arm = {
+            "schema_version": self.schema_version,
+            "arm": self.arm,
+            "aux_weight": self.aux_weight,
+        }
+        if self.arm == "matched":
+            sprint_arm["projection_seed"] = self.projection_seed
+        if self.arm == "random":
+            sprint_arm["target_seed"] = self.target_seed
+        metadata["sprint_arm"] = sprint_arm
         return metadata
 
     def save_checkpoint(self, path: Path | str) -> Path:
@@ -166,7 +247,21 @@ class SprintTD3Agent(TD3Agent):
                 "encoder": self.encoder.state_dict(), "critic": self.critic.state_dict(), "actor": self.actor.state_dict(),
                 "encoder_target": self.encoder_target.state_dict(), "critic_target": self.critic_target.state_dict(), "actor_target": self.actor_target.state_dict(),
                 "critic_optimizer": self.critic_optimizer.state_dict(), "actor_optimizer": self.actor_optimizer.state_dict(),
-                "sprint_arm": {"schema_version": self.schema_version, "arm": self.arm, "aux_weight": self.aux_weight, "f_resp": self.f_resp.state_dict()},
+                "sprint_arm": {
+                    **{
+                        "schema_version": self.schema_version,
+                        "arm": self.arm,
+                        "aux_weight": self.aux_weight,
+                        "f_resp": self.f_resp.state_dict(),
+                    },
+                    **(
+                        {"projection_seed": self.projection_seed}
+                        if self.arm == "matched"
+                        else {"target_seed": self.target_seed}
+                        if self.arm == "random"
+                        else {}
+                    ),
+                },
             },
             target,
         )
@@ -197,6 +292,12 @@ class SprintTD3Agent(TD3Agent):
                 raise ValueError("incompatible sprint checkpoint")
             self.f_resp.load_state_dict(sprint["f_resp"])
             self.aux_weight = float(sprint.get("aux_weight", self.aux_weight))
+            if self.arm == "matched":
+                self.projection_seed = int(sprint.get("projection_seed", MATCHED_PROJECTION_SEED))
+                self.matched_projection = _MatchedProjection(self.projection_seed, self.device)
+            if self.arm == "random":
+                self.target_seed = int(sprint.get("target_seed", RANDOM_TARGET_SEED))
+                self.random_target_buffer = _RandomTarget(self.target_seed, self.device)
         self.update_count = int(payload["update_count"])
         self.encoder.load_state_dict(payload["encoder"]); self.critic.load_state_dict(payload["critic"]); self.actor.load_state_dict(payload["actor"])
         self.encoder_target.load_state_dict(payload["encoder_target"]); self.critic_target.load_state_dict(payload["critic_target"]); self.actor_target.load_state_dict(payload["actor_target"])
@@ -210,16 +311,33 @@ def create_sprint_agent(
     *,
     device: str | torch.device = "cpu",
     aux_weight: float = 1.0,
+    projection_seed: int = MATCHED_PROJECTION_SEED,
+    target_seed: int = RANDOM_TARGET_SEED,
     **kwargs: Any,
 ) -> TD3Agent:
     """Create a sprint arm; BB deliberately returns the unmodified baseline."""
     if arm == "bb":
         return TD3Agent(config, device=device, **kwargs)
-    if arm == "v1":
-        return SprintTD3Agent(config, arm="v1", aux_weight=aux_weight, device=device, **kwargs)
-    if arm in {"matched", "random"}:
-        raise NotImplementedError(f"sprint arm {arm!r} is not implemented yet")
+    if arm in {"v1", "matched", "random"}:
+        return SprintTD3Agent(
+            config,
+            arm=arm,
+            aux_weight=aux_weight,
+            projection_seed=projection_seed,
+            target_seed=target_seed,
+            device=device,
+            **kwargs,
+        )
     raise ValueError(f"unknown sprint arm {arm!r}")
 
 
-__all__ = ["ResponseHead", "SprintTD3Agent", "create_sprint_agent", "delta_m_from_batch"]
+__all__ = [
+    "MATCHED_PROJECTION_SEED",
+    "RANDOM_TARGET_SEED",
+    "ResponseHead",
+    "SprintTD3Agent",
+    "create_sprint_agent",
+    "delta_m_from_batch",
+    "matched_projection",
+    "random_target",
+]

@@ -7,8 +7,17 @@ import pytest
 import torch
 
 from dgcc.phi.dct import Phi_DCT
-from dgcc.rl.sprint_arms import ResponseHead, SprintTD3Agent, create_sprint_agent, delta_m_from_batch
-from dgcc.rl.td3 import TD3Agent, TD3Config
+from dgcc.rl.sprint_arms import (
+    MATCHED_PROJECTION_SEED,
+    RANDOM_TARGET_SEED,
+    ResponseHead,
+    SprintTD3Agent,
+    create_sprint_agent,
+    delta_m_from_batch,
+    matched_projection,
+    random_target,
+)
+from dgcc.rl.td3 import TD3Agent, TD3Config, select_p_star
 
 
 def curve(seed: int) -> np.ndarray:
@@ -95,6 +104,109 @@ def test_lambda_zero_matches_baseline_and_rng_init_is_preserved() -> None:
     torch.manual_seed(7); sprint = SprintTD3Agent(config, aux_weight=0.0); sprint.critic_update(b, generator=torch.Generator().manual_seed(4)); sprint_next = torch.rand(1)
     assert torch.equal(base_next, sprint_next)
 
-def test_bb_factory_is_baseline_and_future_arms_are_explicit() -> None:
+def test_bb_factory_is_baseline_and_sprint_arms_are_available() -> None:
     assert type(create_sprint_agent("bb")) is TD3Agent
-    with pytest.raises(NotImplementedError): create_sprint_agent("matched")
+    assert isinstance(create_sprint_agent("matched"), SprintTD3Agent)
+    assert isinstance(create_sprint_agent("random"), SprintTD3Agent)
+
+
+def test_matched_projection_is_reproducible_and_orthonormal() -> None:
+    first = matched_projection(MATCHED_PROJECTION_SEED)
+    second = matched_projection(MATCHED_PROJECTION_SEED)
+    assert torch.equal(first, second)
+    torch.testing.assert_close(first @ first.T, torch.eye(24), atol=1e-6, rtol=1e-6)
+
+
+def test_matched_target_is_stop_grad_and_uses_baseline_p_star() -> None:
+    agent = SprintTD3Agent(TD3Config(policy_noise=0.0), arm="matched")
+    b = batch()
+    target = agent.matched_target(b)
+    assert target.requires_grad is False
+    assert all(parameter.grad is None for parameter in agent.encoder_target.parameters())
+    assert agent.projection.requires_grad is False
+    with torch.no_grad():
+        h_next = agent.encoder_target(agent.features(b["X_after"], b["goal_curve"]))
+        u_all = agent.actor_target(h_next)
+        candidates = agent._q_all_candidates(agent.critic_target.q1, h_next, u_all)
+        p_star = select_p_star(candidates)
+        expected = agent.projection @ h_next[
+            torch.arange(h_next.shape[0]), p_star
+        ].unsqueeze(-1)
+    torch.testing.assert_close(target, expected.squeeze(-1))
+
+
+def test_matched_head_is_v1_isomorphic_and_aux_leaves_target_grads_empty() -> None:
+    v1 = SprintTD3Agent(TD3Config(policy_noise=0.0), arm="v1")
+    matched = SprintTD3Agent(TD3Config(policy_noise=0.0), arm="matched")
+    v1_shapes = [parameter.shape for parameter in v1.f_resp.parameters()]
+    matched_shapes = [parameter.shape for parameter in matched.f_resp.parameters()]
+    assert matched_shapes == v1_shapes
+    assert sum(parameter.numel() for parameter in matched.f_resp.parameters()) == sum(
+        parameter.numel() for parameter in v1.f_resp.parameters()
+    )
+    matched.critic_update(batch())
+    assert all(parameter.grad is None for parameter in matched.encoder_target.parameters())
+    assert matched.projection.grad is None
+
+
+def test_matched_uses_baseline_ema_tau() -> None:
+    agent = SprintTD3Agent(TD3Config(tau=0.005), arm="matched")
+    online = next(agent.encoder.parameters())
+    target = next(agent.encoder_target.parameters())
+    with torch.no_grad():
+        online.fill_(1.0)
+        target.zero_()
+    agent.soft_update_targets()
+    torch.testing.assert_close(target, torch.full_like(target, 0.005))
+    assert agent.config.tau == pytest.approx(0.005)
+
+
+def test_matched_checkpoint_records_seed_and_regenerates_projection(tmp_path) -> None:
+    source = SprintTD3Agent(arm="matched", projection_seed=MATCHED_PROJECTION_SEED)
+    path = source.save_checkpoint(tmp_path / "matched.pt")
+    payload = torch.load(path, weights_only=False)
+    assert payload["sprint_arm"]["projection_seed"] == MATCHED_PROJECTION_SEED
+    assert "P" not in payload["sprint_arm"]
+    restored = SprintTD3Agent(arm="matched", projection_seed=1)
+    restored.load_checkpoint(path)
+    assert restored.projection_seed == MATCHED_PROJECTION_SEED
+    assert torch.equal(restored.projection, source.projection)
+class TestRandomTarget:
+    def test_fixed_across_updates_and_regeneration(self) -> None:
+        agent = SprintTD3Agent(TD3Config(policy_noise=0.0), arm="random")
+        expected = agent.random_target.clone()
+        agent.critic_update(batch())
+        assert torch.equal(agent.random_target, expected)
+        assert torch.equal(SprintTD3Agent(arm="random").random_target, expected)
+
+    def test_registered_seed_is_reproducible(self) -> None:
+        assert torch.equal(random_target(RANDOM_TARGET_SEED), random_target(20260718))
+
+    def test_is_independent_of_run_seed(self) -> None:
+        torch.manual_seed(1)
+        first = SprintTD3Agent(arm="random").random_target.clone()
+        torch.manual_seed(999)
+        second = SprintTD3Agent(arm="random").random_target
+        assert torch.equal(first, second)
+
+    def test_head_is_v1_isomorphic(self) -> None:
+        v1 = SprintTD3Agent(arm="v1")
+        random = SprintTD3Agent(arm="random")
+        assert [parameter.shape for parameter in random.f_resp.parameters()] == [
+            parameter.shape for parameter in v1.f_resp.parameters()
+        ]
+        assert sum(parameter.numel() for parameter in random.f_resp.parameters()) == sum(
+            parameter.numel() for parameter in v1.f_resp.parameters()
+        )
+
+    def test_checkpoint_records_seed_and_regenerates_target(self, tmp_path) -> None:
+        source = SprintTD3Agent(arm="random", target_seed=RANDOM_TARGET_SEED)
+        path = source.save_checkpoint(tmp_path / "random.pt")
+        payload = torch.load(path, weights_only=False)
+        assert payload["sprint_arm"]["arm"] == "random"
+        assert payload["sprint_arm"]["target_seed"] == RANDOM_TARGET_SEED
+        assert "target" not in payload["sprint_arm"]
+        restored = SprintTD3Agent(arm="random", target_seed=1)
+        restored.load_checkpoint(path)
+        assert restored.target_seed == RANDOM_TARGET_SEED
+        assert torch.equal(restored.random_target, source.random_target)

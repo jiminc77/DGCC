@@ -107,10 +107,28 @@ def load_factory(bundle: Path | None = None) -> Any:
     return load_module(ROOT / "src/dgcc/rl/sprint_arms.py", "_sprint_arms").create_sprint_agent
 
 
-def create_seeded_agent(factory: Any, arm: str, config: Any, reward_constants: Any, seed: int, device: str, aux_weight: float) -> Any:
+def create_seeded_agent(
+    factory: Any,
+    arm: str,
+    config: Any,
+    reward_constants: Any,
+    seed: int,
+    device: str,
+    aux_weight: float,
+    projection_seed: int = 20260719,
+    target_seed: int = 20260718,
+) -> Any:
     """F-a construction seam: seed precedes the sole retained agent creation."""
     torch.manual_seed(seed)
-    return factory(arm, config, device=device, reward_constants=reward_constants, aux_weight=aux_weight)
+    return factory(
+        arm,
+        config,
+        device=device,
+        reward_constants=reward_constants,
+        aux_weight=aux_weight,
+        projection_seed=projection_seed,
+        target_seed=target_seed,
+    )
 
 
 def assert_bundle_modules(bundle: Path) -> dict[str, str]:
@@ -129,7 +147,7 @@ def assert_bundle_modules(bundle: Path) -> dict[str, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="P1 sprint training driver")
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--arm", choices=("bb", "v1"), required=True)
+    parser.add_argument("--arm", choices=("bb", "v1", "matched", "random"), required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--run-tag", type=str, default=None)
     parser.add_argument("--source-bundle", type=Path)
@@ -149,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
     if sprint_cfg.get("arm") and sprint_cfg["arm"] != args.arm:
         parser.error("config sprint.arm must match --arm")
     aux_weight = float(sprint_cfg.get("aux_weight", 1.0))
+    projection_seed = int(sprint_cfg.get("projection_seed", 20260719))
+    target_seed = int(sprint_cfg.get("target_seed", 20260718))
 
     class SprintTrainingRun(base.TrainingRun):
         def __init__(self, run_args: argparse.Namespace) -> None:
@@ -159,8 +179,15 @@ def main(argv: list[str] | None = None) -> int:
             # where its inherited evaluation path consumes them.
             self.config.setdefault("eval", {}).update(sprint_cfg.get("eval", {}))
             self.agent = create_seeded_agent(
-                factory, args.arm, self.agent_config, self.episode_config.reward,
-                self.seed, self.device, aux_weight,
+                factory,
+                args.arm,
+                self.agent_config,
+                self.episode_config.reward,
+                self.seed,
+                self.device,
+                aux_weight,
+                projection_seed,
+                target_seed,
             )
             self.initial_weights_sha256 = base.initial_weights_sha256(self.agent)
 
