@@ -8,6 +8,7 @@ unfinished slots are guarded.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -184,3 +185,17 @@ def test_record_raw_fields_present_and_off_by_default():
     )
     assert all("x_initial" not in ep for ep in result2["episodes"])
     assert result2["record_raw"] is False
+def test_record_probe_default_off_preserves_serialized_result_schema() -> None:
+    baseline_runner = DiscardStormRunner(succeed_env1_after=1)
+    baseline = evaluate_episodes(
+        baseline_runner, n_episodes=2, seed=0, episode_index_start=1,
+        action_fn=_random_action, rng=np.random.default_rng(0), goals=baseline_runner.goals,
+    )
+    explicit_runner = DiscardStormRunner(succeed_env1_after=1)
+    explicit = evaluate_episodes(
+        explicit_runner, n_episodes=2, seed=0, episode_index_start=1,
+        action_fn=_random_action, rng=np.random.default_rng(0), goals=explicit_runner.goals,
+        record_raw=False, record_probe=False,
+    )
+    assert json.dumps(baseline, sort_keys=True) == json.dumps(explicit, sort_keys=True)
+    assert all("probe_p" not in episode for episode in baseline["episodes"])

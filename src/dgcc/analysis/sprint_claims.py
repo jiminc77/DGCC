@@ -35,9 +35,13 @@ class ClaimCapability:
 def utc_now() -> str: return datetime.now(timezone.utc).isoformat()
 
 def sha256_file(path: Path) -> str:
+    path = Path(path)
+    if path.is_symlink():
+        raise SprintClaimError(f"symlinked path is not permitted: {path}")
     digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""): digest.update(chunk)
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
     return digest.hexdigest()
 
 def _fsync_dir(path: Path) -> None:
@@ -74,6 +78,16 @@ def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def _json_bytes(raw: bytes, what: str) -> Any:
     try: return json.loads(raw, object_pairs_hook=_reject_duplicates)
     except (UnicodeDecodeError, json.JSONDecodeError, SprintClaimError) as exc: raise SprintClaimError(f"{what} is invalid JSON") from exc
+def json_file(path: Path, what: str) -> tuple[Any, str]:
+    """Read untrusted JSON exactly once, rejecting aliases and duplicate keys."""
+    path = Path(path)
+    if path.is_symlink():
+        raise SprintClaimError(f"{what} must not be a symlink")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise SprintClaimError(f"{what} is unreadable") from exc
+    return _json_bytes(raw, what), hashlib.sha256(raw).hexdigest()
 
 def canonical_claim_path(run_tag: str, arm: str, generation: str | None = None) -> Path:
     suffix = "" if generation is None else f"_{generation}"
@@ -120,7 +134,10 @@ def consume_claim_and_load_split(capability: ClaimCapability, split_path: Path, 
     issued = _ISSUED_CAPABILITIES.pop(id(capability), None) if isinstance(capability, ClaimCapability) else None
     if issued is None or issued[0] is not capability: raise SprintClaimError("split consumption requires an unconsumed acquired claim capability")
     claim_path, issued_digest = capability._path, issued[1]
-    try: raw_claim = claim_path.read_bytes(); value = _validate_claim(_json_bytes(raw_claim, "claim"))
+    try:
+        if claim_path.is_symlink():
+            raise SprintClaimError("claim must not be a symlink")
+        raw_claim = claim_path.read_bytes(); value = _validate_claim(_json_bytes(raw_claim, "claim"))
     except (OSError, SprintClaimError) as exc: raise SprintClaimError("claim is unreadable or modified") from exc
     if hashlib.sha256(raw_claim).hexdigest() != issued_digest: raise SprintClaimError("claim was modified after capability issuance")
     requested, canonical = Path(split_path), CANONICAL_SPLIT_PATH
@@ -135,11 +152,11 @@ def consume_claim_and_load_split(capability: ClaimCapability, split_path: Path, 
     return payload
 
 def parse_disposition_receipt(path: Path, *, legacy_claim_sha256: str, run_tag: str) -> tuple[dict[str, Any], str]:
-    try: raw = Path(path).read_bytes(); receipt = _json_bytes(raw, "disposition receipt")
-    except (OSError, SprintClaimError) as exc: raise SprintClaimError("disposition receipt is invalid") from exc
+    try: receipt, digest = json_file(path, "disposition receipt")
+    except SprintClaimError as exc: raise SprintClaimError("disposition receipt is invalid") from exc
     required = {"schema_version", "legacy_claim_sha256", "run_tag", "decision", "decided_by", "decided_at"}
     if not isinstance(receipt, dict) or set(receipt) != required or receipt["schema_version"] != 1 or receipt["legacy_claim_sha256"] != legacy_claim_sha256 or receipt["run_tag"] != run_tag or receipt["decision"] not in {"allow_reevaluation", "keep_legacy"} or not isinstance(receipt["decided_by"], str) or not receipt["decided_by"] or not isinstance(receipt["decided_at"], str) or not receipt["decided_at"]: raise SprintClaimError("disposition receipt schema or identity is invalid")
-    return receipt, hashlib.sha256(raw).hexdigest()
+    return receipt, digest
 
 def atomic_publish(path: Path, payload: Mapping[str, Any]) -> None:
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True); fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -150,7 +167,10 @@ def atomic_publish(path: Path, payload: Mapping[str, Any]) -> None:
         if os.path.exists(tmp_name): os.unlink(tmp_name)
 
 def probe_manifest_register(manifest_path: Path, file_path: Path, meta: Mapping[str, Any]) -> dict[str, Any]:
-    manifest_path, canonical = Path(manifest_path), Path(file_path).resolve(strict=True)
+    manifest_path, source = Path(manifest_path), Path(file_path)
+    if source.is_symlink() or manifest_path.is_symlink():
+        raise SprintClaimError("probe and manifest paths must not be symlinks")
+    canonical = source.resolve(strict=True)
     if not canonical.is_file(): raise FileNotFoundError(canonical)
     entry = {"path": str(canonical), "sha256": sha256_file(canonical), "size": canonical.stat().st_size, **dict(meta)}
     if not entry.get("production_goal"): raise ValueError("probe metadata requires production_goal")
@@ -158,9 +178,10 @@ def probe_manifest_register(manifest_path: Path, file_path: Path, meta: Mapping[
     with lock_path.open("a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {"schema_version": PRIMITIVE_SCHEMA_VERSION, "files": {}}
+            manifest = json_file(manifest_path, "probe manifest")[0] if manifest_path.exists() else {"schema_version": PRIMITIVE_SCHEMA_VERSION, "files": {}}
             if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "files"} or not isinstance(manifest["files"], dict): raise SprintClaimError("probe manifest schema is invalid")
             for old_key, old in manifest["files"].items():
+                if not isinstance(old, dict): raise SprintClaimError("probe manifest schema is invalid")
                 if old.get("path") == str(canonical) and old_key != entry["sha256"]: raise SprintClaimError(f"probe manifest entry is immutable: {canonical}")
                 if old.get("path") == str(canonical) and old_key == entry["sha256"] and old != entry: raise SprintClaimError(f"probe manifest entry is immutable: {canonical}")
                 if old_key == entry["sha256"] and old.get("path") != str(canonical): raise SprintClaimError("probe aliases are forbidden")
@@ -171,28 +192,45 @@ def probe_manifest_register(manifest_path: Path, file_path: Path, meta: Mapping[
 def require_metric_lock(lock_path: Path | None, arm: str) -> None:
     if _arm(arm) == "bb": return
     if lock_path is None: raise SprintClaimError(f"arm {arm!r} requires --lock before split load")
-    try: value = _json_bytes(Path(lock_path).read_bytes(), "metric lock")
+    try: value, _ = json_file(Path(lock_path), "metric lock")
     except (OSError, SprintClaimError) as exc: raise SprintClaimError(f"metric lock is invalid: {lock_path}") from exc
     required = {"schema_version", "endpoint", "aggregate", "created_at", "bb_claim_sha256", "primitive_version"}
     if not isinstance(value, dict) or set(value) != required or value["schema_version"] != 1 or value["endpoint"] not in {"success_rate", "return"} or not isinstance(value["aggregate"], (int, float)) or isinstance(value["aggregate"], bool) or not value["created_at"] or not value["primitive_version"]: raise SprintClaimError("metric lock schema is invalid")
     hashes = value["bb_claim_sha256"]
     if not isinstance(hashes, list) or len(hashes) != 8 or len(set(hashes)) != 8 or any(not isinstance(x, str) or not _HEX64.fullmatch(x) for x in hashes): raise SprintClaimError("metric lock schema is invalid")
 
+def _is_canonical_result(body: Any, *, run_tag: str, arm: str, claim_sha256: str) -> bool:
+    required = {
+        "generated_at", "run_tag", "arm", "seed", "config_sha256", "ckpt_sha256",
+        "split_sha256", "claim_sha256", "selection_manifest",
+        "selection_manifest_sha256", "summary", "episodes",
+    }
+    if not isinstance(body, dict) or not required <= set(body):
+        return False
+    if body["run_tag"] != run_tag or body["arm"] != arm or body["claim_sha256"] != claim_sha256:
+        return False
+    if body["split_sha256"] != CANONICAL_SPLIT_SHA256 or not isinstance(body["episodes"], list) or len(body["episodes"]) != 200:
+        return False
+    if not isinstance(body["summary"], dict) or not isinstance(body["seed"], int):
+        return False
+    return all(isinstance(body[key], str) and body[key] for key in ("generated_at", "config_sha256", "ckpt_sha256", "selection_manifest", "selection_manifest_sha256"))
+
 def audit_claims(directory: Path) -> list[dict[str, Any]]:
     rows = []
     for claim in Path(directory).glob("*claim*.json"):
-        try: data = _validate_claim(_json_bytes(claim.read_bytes(), "claim"))
-        except (OSError, SprintClaimError) as exc:
+        try:
+            data, digest = json_file(claim, "claim")
+            data = _validate_claim(data)
+        except SprintClaimError as exc:
             rows.append({"schema_version": 1, "status": "malformed_claim", "claim": str(claim), "error": str(exc)}); continue
-        digest, tag, arm = sha256_file(claim), data["run_tag"], data["arm"]
+        tag, arm = data["run_tag"], data["arm"]
         candidates = [Path(directory) / f"p1_{arm}_sprint_heldout_{tag}.json", Path(directory) / f"p1_t2_sprint_heldout_{tag}.json"]
         valid = False
         for result in candidates:
             try:
-                if result.is_symlink(): continue
-                body = _json_bytes(result.read_bytes(), "result")
-                valid = isinstance(body, dict) and body.get("run_tag") == tag and body.get("arm") == arm and body.get("claim_sha256") == digest
-            except (OSError, SprintClaimError): pass
+                body, _ = json_file(result, "result")
+                valid = _is_canonical_result(body, run_tag=tag, arm=arm, claim_sha256=digest)
+            except SprintClaimError: pass
             if valid: break
         if not valid: rows.append({"schema_version": 1, "status": "needs_human_disposition", "claim": str(claim), "claim_sha256": digest, "run_tag": tag, "arm": arm, "re_evaluation_permitted": False})
     return rows

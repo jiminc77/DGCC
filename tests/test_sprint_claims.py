@@ -130,15 +130,16 @@ def test_reevaluation_claim_binds_receipt_and_is_single_use(canonical_sprint: Pa
         claims.parse_disposition_receipt(receipt, legacy_claim_sha256="f" * 64, run_tag="synthetic")
 
 
-def test_probe_manifest_reopens_h5_and_canonicalizes_alias(canonical_sprint: Path) -> None:
+def test_probe_manifest_rejects_symlink_alias(canonical_sprint: Path) -> None:
     manifest = canonical_sprint / "manifest.json"
     probe = canonical_sprint / "probe.h5"
     probe.write_bytes(b"first")
     alias = canonical_sprint / "probe-alias.h5"
     alias.symlink_to(probe)
     first = claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
-    same = claims.probe_manifest_register(manifest, alias, {"production_goal": "G-EV"})
-    assert len(first["files"]) == len(same["files"]) == 1
+    with pytest.raises(claims.SprintClaimError, match="symlink"):
+        claims.probe_manifest_register(manifest, alias, {"production_goal": "G-EV"})
+    assert len(first["files"]) == 1
     probe.write_bytes(b"reopened")
     with pytest.raises(claims.SprintClaimError, match="immutable"):
         claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
@@ -173,7 +174,7 @@ def test_metric_lock_has_strict_schema_and_bb_only_bypasses(canonical_sprint: Pa
         claims.require_metric_lock(None, "matched")
 
 
-def test_audit_claim_content_is_non_mutating_and_result_binding_suppresses_row(canonical_sprint: Path) -> None:
+def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path) -> None:
     claim = claim_path()
     claims.acquire_claim(claim, payload())
     before = claim.read_bytes()
@@ -181,5 +182,14 @@ def test_audit_claim_content_is_non_mutating_and_result_binding_suppresses_row(c
     assert rows == [{"schema_version": 1, "status": "needs_human_disposition", "claim": str(claim), "claim_sha256": hashlib.sha256(before).hexdigest(), "run_tag": "synthetic", "arm": "bb", "re_evaluation_permitted": False}]
     result = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
     result.write_text(json.dumps({"run_tag": "synthetic", "arm": "bb", "claim_sha256": hashlib.sha256(before).hexdigest()}))
+    assert len(claims.audit_claims(claim.parent)) == 1
+    result.write_text(json.dumps({
+        "generated_at": "2026-01-01T00:00:00Z", "run_tag": "synthetic", "arm": "bb",
+        "seed": 7, "config_sha256": "d" * 64, "ckpt_sha256": "c" * 64,
+        "split_sha256": claims.CANONICAL_SPLIT_SHA256,
+        "claim_sha256": hashlib.sha256(before).hexdigest(),
+        "selection_manifest": "/synthetic/selection.json",
+        "selection_manifest_sha256": "e" * 64, "summary": {}, "episodes": [{}] * 200,
+    }))
     assert claims.audit_claims(claim.parent) == []
     assert claim.read_bytes() == before

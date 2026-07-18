@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 REPO = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(REPO / "src"))
-from dgcc.analysis.sprint_claims import (CANONICAL_SPLIT_PATH, CANONICAL_SPLIT_SHA256, REPO_ROOT, SprintClaimError, acquire_claim, atomic_publish, consume_claim_and_load_split, probe_manifest_register, require_metric_lock, sha256_file, utc_now, validate_checkpoint_arm)
+from dgcc.analysis.sprint_claims import (CANONICAL_SPLIT_PATH, CANONICAL_SPLIT_SHA256, REPO_ROOT, SprintClaimError, acquire_claim, atomic_publish, consume_claim_and_load_split, json_file, probe_manifest_register, require_metric_lock, sha256_file, utc_now, validate_checkpoint_arm)
 EPISODE_INDEX_START = 97_001; WALL_GUARD_K = 5
 SPRINT_ACCESS_LOG = REPO / "outputs/metrics/t2_sprint_heldout_access.log"; PROBE_MANIFEST = REPO / "outputs/metrics/sprint_probe_manifest.json"
 
@@ -14,17 +14,17 @@ def canonical_paths(run_tag: str, arm: str) -> tuple[Path, Path]:
     stem = f"p1_{arm.lower()}_sprint_heldout_{run_tag}"
     return REPO_ROOT / "outputs/metrics" / f"{stem}_claim.json", REPO_ROOT / "outputs/metrics" / f"{stem}.json"
 
-def load_selection_manifest(path: Path, run_tag: str, arm: str, seed: int, config: str) -> dict[str, Any]:
-    try: value = json.loads(Path(path).read_text())
-    except (OSError, json.JSONDecodeError) as exc: raise SprintClaimError("selection manifest is invalid") from exc
+def load_selection_manifest(path: Path, run_tag: str, arm: str, seed: int, config: str) -> tuple[dict[str, Any], str]:
+    try: value, digest = json_file(path, "selection manifest")
+    except SprintClaimError as exc: raise SprintClaimError("selection manifest is invalid") from exc
     required = {"run_tag", "arm", "seed", "task", "config_sha256", "ckpt_sha256", "val_rows", "selector_version", "selected_ckpt"}
     if not isinstance(value, dict) or set(value) != required: raise SprintClaimError("selection manifest schema is invalid")
     if value["run_tag"] != run_tag or value["arm"] != arm or value["seed"] != seed or value["task"] != "t2" or value["config_sha256"] != _config_sha(config): raise SprintClaimError("selection manifest identity does not match invocation")
     rows = value["val_rows"]
     if not isinstance(rows, list) or len(rows) != 50 or any(not isinstance(row, list) or len(row) != 2 for row in rows): raise SprintClaimError("selection manifest val_rows must be exactly 50×2")
     ckpt = Path(value["selected_ckpt"])
-    if not ckpt.is_file() or not isinstance(value["ckpt_sha256"], str) or sha256_file(ckpt) != value["ckpt_sha256"]: raise SprintClaimError("selection checkpoint sha256 does not match disk")
-    return value
+    if ckpt.is_symlink() or not ckpt.is_file() or not isinstance(value["ckpt_sha256"], str) or sha256_file(ckpt) != value["ckpt_sha256"]: raise SprintClaimError("selection checkpoint sha256 does not match disk")
+    return value, digest
 
 def _pairs(payload: dict[str, Any]):
     from dgcc.tasks.t2 import build_t2_goal
@@ -38,12 +38,17 @@ def write_probe_h5(path: Path, episodes: list[dict[str, Any]], *, ckpt_sha: str,
     for ep in episodes:
         missing = [key for key in required if key not in ep or ep[key] is None]
         if missing: raise SprintClaimError(f"probe episode missing frozen-schema fields: {', '.join(missing)}")
-        p, u = np.asarray(ep["probe_p"], dtype=np.float64), np.asarray(ep["probe_u"], dtype=np.float64)
+        p_raw, u_raw = np.asarray(ep["probe_p"]), np.asarray(ep["probe_u"])
+        p, u = p_raw, np.asarray(ep["probe_u"], dtype=np.float64)
         before, after, goal = (np.asarray(ep[key], dtype=np.float64) for key in ("probe_x_before", "probe_x_after", "probe_goal_curve"))
         steps = np.asarray(ep["step_index"])
+        scalar_flags = ("truncated", "reseed_boundary", "eval_wall_guard")
+        if p_raw.dtype.kind not in "iu" or u_raw.dtype.kind != "f" or not isinstance(ep["episode_id"], (int, np.integer)) or not isinstance(ep["goal_id"], str) or not ep["goal_id"] or any(not isinstance(ep[key], (bool, np.bool_)) for key in scalar_flags):
+            raise SprintClaimError("probe frozen schema dtypes are invalid")
         if p.ndim != 1 or not len(p) or u.shape != (len(p), 3) or before.shape != (len(p), 32, 3) or after.shape != (len(p), 32, 3) or goal.shape != (32, 3) or steps.shape != (len(p),):
             raise SprintClaimError("probe frozen schema shapes are invalid")
-        if not all(np.all(np.isfinite(x)) for x in (p, u, before, after, goal)): raise SprintClaimError("probe values must be finite")
+        if steps.dtype.kind not in "iu" or not all(np.all(np.isfinite(x)) for x in (p, u, before, after, goal)):
+            raise SprintClaimError("probe values must be finite")
         validated.append((p, u, before, after, goal, steps))
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as h5:
@@ -72,10 +77,14 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__); p.add_argument("--run-tag", required=True); p.add_argument("--arm", required=True); p.add_argument("--selection-manifest", required=True); p.add_argument("--claim", required=True); p.add_argument("--out", required=True); p.add_argument("--lock"); p.add_argument("--config", default="configs/p1_t2.yaml"); p.add_argument("--seed", type=int, required=True); p.add_argument("--device", default="cuda"); args = p.parse_args()
     expected_claim, expected_out = canonical_paths(args.run_tag, args.arm)
     if Path(args.claim).is_symlink() or Path(args.out).is_symlink() or Path(args.claim).absolute() != expected_claim.absolute() or Path(args.out).absolute() != expected_out.absolute(): raise SprintClaimError("claim and out paths must be canonical non-symlink run-identity paths")
-    manifest = load_selection_manifest(Path(args.selection_manifest), args.run_tag, args.arm, args.seed, args.config); require_metric_lock(Path(args.lock) if args.lock else None, args.arm)
+    manifest, selection_sha = load_selection_manifest(Path(args.selection_manifest), args.run_tag, args.arm, args.seed, args.config); require_metric_lock(Path(args.lock) if args.lock else None, args.arm)
     validate_checkpoint_arm(Path(manifest["selected_ckpt"]), args.arm)
-    selection_sha = sha256_file(Path(args.selection_manifest))
-    capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(Path(args.selection_manifest).resolve()),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START})
+    selection_path = Path(args.selection_manifest)
+    if selection_path.is_symlink():
+        raise SprintClaimError("selection manifest must not be a symlink")
+    if not selection_path.is_absolute():
+        raise SprintClaimError("selection manifest path must be absolute")
+    capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(selection_path),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START})
     payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG); pairs = _pairs(payload); goals=[g for _,g in pairs for _ in range(2)]; labels=[s["goal_id"] for s,_ in pairs for _ in range(2)]
     run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"])); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
     if len(episodes)!=200: raise SprintClaimError("sprint evaluation must produce 200 episodes")

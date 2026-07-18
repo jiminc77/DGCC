@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import gzip
-import hashlib
 import json
 import os
 import sys
@@ -47,7 +46,7 @@ from dgcc.analysis.sprint_claims import (
 )
 
 SPRINT_HELDOUT_EPISODE_INDEX_START = 97_001
-SPRINT_ACCESS_LOG = Path("outputs/metrics/t2_sprint_heldout_access.log")
+SPRINT_ACCESS_LOG = REPO / "outputs/metrics/t2_sprint_heldout_access.log"
 WALL_GUARD_K = 5
 
 
@@ -55,12 +54,6 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 
@@ -122,7 +115,13 @@ def main() -> int:
         return 0
     if not args.run_tag or not args.selection_out or not args.claim or not args.out or args.seed is None:
         raise SprintClaimError("--run-tag, --selection-out, --claim, and --out are required for evaluation")
-    if not args.human_disposition_receipt or not Path(args.human_disposition_receipt).is_file():
+    config_path = Path(args.config)
+    config_path = config_path if config_path.is_absolute() else REPO / config_path
+    if config_path.is_symlink() or not config_path.is_file():
+        raise SprintClaimError("config must be a non-symlink file")
+    args.config = str(config_path)
+    receipt_path = Path(args.human_disposition_receipt)
+    if receipt_path.is_symlink() or not receipt_path.is_file():
         raise SprintClaimError("new canonical claim requires a human disposition receipt")
     expected_selection = REPO / "outputs/metrics" / f"p1_sprint_retro_val_{args.run_tag}.json"
     legacy_claim = REPO / "outputs/metrics" / f"p1_bb_sprint_heldout_{args.run_tag}_claim.json"
@@ -130,9 +129,8 @@ def main() -> int:
     expected_out = REPO / "outputs/metrics" / f"p1_t2_sprint_heldout_{args.run_tag}.json"
     if any(Path(v).is_symlink() for v in (args.selection_out, args.claim, args.out)) or tuple(Path(v).absolute() for v in (args.selection_out, args.claim, args.out)) != (expected_selection.absolute(), expected_claim.absolute(), expected_out.absolute()):
         raise SprintClaimError("selection, claim, and out paths must be canonical non-symlink run-identity paths")
-    if not legacy_claim.is_file(): raise SprintClaimError("disposition receipt must bind an existing legacy claim")
-    _, receipt_sha = parse_disposition_receipt(args.human_disposition_receipt, legacy_claim_sha256=sha256_file(legacy_claim), run_tag=args.run_tag)
-    receipt = json.loads(Path(args.human_disposition_receipt).read_text(encoding="utf-8"))
+    if legacy_claim.is_symlink() or not legacy_claim.is_file(): raise SprintClaimError("disposition receipt must bind an existing legacy claim")
+    receipt, receipt_sha = parse_disposition_receipt(receipt_path, legacy_claim_sha256=sha256_file(legacy_claim), run_tag=args.run_tag)
     if receipt["decision"] != "allow_reevaluation": raise SprintClaimError("disposition receipt does not allow re-evaluation")
 
     models_dir = REPO / "outputs/models" / args.m4_tag
@@ -227,10 +225,10 @@ def main() -> int:
     episodes = result["episodes"]
     assert len(episodes) == 200, len(episodes)
 
-    raw_path = Path("outputs/metrics") / f"p1_raw_sprint_heldout_{args.m4_tag}.json.gz"
+    raw_path = REPO / "outputs/metrics" / f"p1_raw_sprint_heldout_{args.m4_tag}.json.gz"
     with gzip.open(raw_path, "wt", encoding="utf-8") as handle:
         json.dump({"m4_tag": args.m4_tag, "episodes": episodes}, handle)
-    probe_path = Path("outputs/metrics") / f"p1_probe_sprint_heldout_{args.m4_tag}.h5"
+    probe_path = REPO / "outputs/metrics" / f"p1_probe_sprint_heldout_{args.m4_tag}.h5"
     import importlib.util
     probe_spec = importlib.util.spec_from_file_location(
         "sprint_heldout_eval", REPO / "scripts" / "sprint_heldout_eval.py"
@@ -246,7 +244,7 @@ def main() -> int:
         claim_sha=sha256_file(claim),
     )
     probe_manifest_register(
-        Path("outputs/metrics/sprint_probe_manifest.json"),
+        REPO / "outputs/metrics/sprint_probe_manifest.json",
         probe_path,
         {"production_goal": "G-EV", "run_tag": args.m4_tag},
     )
@@ -256,22 +254,26 @@ def main() -> int:
 
     payload = {
         "generated_at": utc_now(),
-        "m4_tag": args.m4_tag,
+        "run_tag": args.m4_tag,
+        "arm": "bb",
         "seed": args.seed,
-        "ckpt": selected["ckpt"],
+        "config_sha256": retro_val["config_sha256"],
         "ckpt_sha256": selected["ckpt_sha256"],
-        "split": "t2_sprint_heldout_v1",
         "split_sha256": split_sha,
         "claim_sha256": sha256_file(claim),
+        "selection_manifest": str(out_val),
         "selection_manifest_sha256": selection_sha,
+        "summary": {k: v for k, v in result.items() if k != "episodes"},
+        "episodes": episodes,
+        "m4_tag": args.m4_tag,
+        "ckpt": selected["ckpt"],
+        "split": "t2_sprint_heldout_v1",
         "disposition_receipt_sha256": receipt_sha,
         "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
         "protocol": {"wall_guard_k": WALL_GUARD_K, "record_raw": True},
         "wall_s": wall,
         "raw_artifact": str(raw_path),
         "probe_artifact": str(probe_path),
-        "summary": {k: v for k, v in result.items() if k != "episodes"},
-        "episodes": episodes,
     }
     out = Path(args.out)
     atomic_publish(out, payload)
