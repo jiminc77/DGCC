@@ -13,6 +13,12 @@ SPEC = importlib.util.spec_from_file_location("sprint_stats", Path(__file__).par
 stats = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(stats)
+EVAL_SPEC = importlib.util.spec_from_file_location(
+    "sprint_heldout_eval", Path(__file__).parents[1] / "scripts/sprint_heldout_eval.py"
+)
+sprint_heldout_eval = importlib.util.module_from_spec(EVAL_SPEC)
+assert EVAL_SPEC.loader is not None
+EVAL_SPEC.loader.exec_module(sprint_heldout_eval)
 
 
 def test_bca_bias_and_acceleration_match_hand_formula() -> None:
@@ -91,8 +97,21 @@ def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkey
         claim = {"schema_version": 1, "claim_before_load": True, "timestamp": "now", "pid": 1, "run_tag": tag, "arm": "bb", "ckpt_sha256": digest, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "seed": seed, "config_sha256": digest, "selection_manifest": "/selection", "selection_manifest_sha256": digest, "episode_namespace": 97001, "n_goals": 100}
         path.write_text(json.dumps(claim)); claim_sha = sprint_claims.sha256_file(path)
         episodes = _canonical_episodes()
-        summary = {**sprint_claims._summary_aggregates(episodes), "nan_incidents_during_eval": 0, "wall_guard_k": 5, "record_raw": True, "record_probe": True}
-        result = {**{key: claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")}, "generated_at": "now", "claim_sha256": claim_sha, "episodes": episodes, "summary": summary}
+        result = sprint_heldout_eval.canonical_result_payload(
+            run_tag=tag,
+            arm="bb",
+            seed=seed,
+            manifest={
+                "config_sha256": digest,
+                "ckpt_sha256": digest,
+                "selector_version": "test",
+                "val_rows": [],
+            },
+            selection_manifest=claim["selection_manifest"],
+            selection_sha=claim["selection_manifest_sha256"],
+            claim_sha=claim_sha,
+            result={"episodes": episodes, **sprint_claims._summary_aggregates(episodes)},
+        )
         sprint_claims.canonical_result_path(tag, "bb").write_text(json.dumps(result))
         sprint_claims.canonical_raw_path(tag, "bb").write_bytes(b"raw")
         paths.append(path)
