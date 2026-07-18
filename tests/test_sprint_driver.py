@@ -22,27 +22,38 @@ def load_driver():
     return module
 
 
-def test_t2_config_diff_is_only_sprint_block():
+@pytest.mark.parametrize(
+    ("arm", "sprint_block"),
+    [
+        ("v1", {"arm": "v1", "aux_weight": 1.0, "eval": {"wall_guard_k": 5, "record_raw_final": True}}),
+        ("matched", {"arm": "matched", "aux_weight": 1.0, "projection_seed": 20260719, "eval": {"wall_guard_k": 5, "record_raw_final": True}}),
+        ("random", {"arm": "random", "aux_weight": 1.0, "target_seed": 20260718, "eval": {"wall_guard_k": 5, "record_raw_final": True}}),
+    ],
+)
+def test_t2_config_diff_is_only_sprint_block(arm: str, sprint_block: dict) -> None:
     baseline = yaml.safe_load((ROOT / "configs/p1_t2.yaml").read_text())
-    sprint = yaml.safe_load((ROOT / "configs/sprint_t2_v1.yaml").read_text())
+    sprint = yaml.safe_load((ROOT / f"configs/sprint_t2_{arm}.yaml").read_text())
     assert {key: value for key, value in sprint.items() if key != "sprint"} == baseline
-    assert sprint["sprint"] == {
-        "arm": "v1", "aux_weight": 1.0,
-        "eval": {"wall_guard_k": 5, "record_raw_final": True},
-    }
+    assert sprint["sprint"] == sprint_block
 
 
-def test_t1a_config_preserves_smoke_regime_except_budget_and_sprint_block():
+@pytest.mark.parametrize(
+    ("arm", "sprint_block"),
+    [
+        ("v1", {"arm": "v1", "aux_weight": 1.0, "eval": {"wall_guard_k": 5, "record_raw_final": True}}),
+        ("matched", {"arm": "matched", "aux_weight": 1.0, "projection_seed": 20260719, "eval": {"wall_guard_k": 5, "record_raw_final": True}}),
+        ("random", {"arm": "random", "aux_weight": 1.0, "target_seed": 20260718, "eval": {"wall_guard_k": 5, "record_raw_final": True}}),
+    ],
+)
+def test_t1a_config_preserves_smoke_regime_except_budget_and_sprint_block(
+    arm: str, sprint_block: dict
+) -> None:
     baseline = yaml.safe_load((ROOT / "configs/p1_t1a_sprint_smoke.yaml").read_text())
-    sprint = yaml.safe_load((ROOT / "configs/sprint_t1a_v1.yaml").read_text())
+    sprint = yaml.safe_load((ROOT / f"configs/sprint_t1a_{arm}.yaml").read_text())
     assert set(sprint) == set(baseline) | {"sprint"}
     normalized = {**sprint, "run": {**sprint["run"], "total_transitions": baseline["run"]["total_transitions"]}}
     assert {key: value for key, value in normalized.items() if key != "sprint"} == baseline
-    assert sprint["sprint"] == {
-        "arm": "v1",
-        "aux_weight": 1.0,
-        "eval": {"wall_guard_k": 5, "record_raw_final": True},
-    }
+    assert sprint["sprint"] == sprint_block
 
 def test_arm_routing_and_fa_initial_hash_match_baseline():
     driver = load_driver()
