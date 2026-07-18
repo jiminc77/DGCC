@@ -113,3 +113,52 @@ def test_sensitivity_boundaries() -> None:
     assert set(report) >= {"reuse", "new", "pooled", "batch_effect_flag"}
     arms = {arm: {seed: [{"success": True, "eval_wall_guard": arm == "v1"}] for seed in range(8)} for arm in ("v1", "bb")}
     with pytest.raises(ValueError, match="no episodes"): stats.guard_sensitivity(arms, draws=200)
+
+
+def test_guard_sensitivity_uses_preregistered_guard_and_common_support_rules() -> None:
+    def row(goal_id: str, success: bool, guarded: bool = False) -> dict[str, object]:
+        return {"goal_id": goal_id, "success": success, "eval_wall_guard": guarded}
+
+    arms = {"v1": {}, "bb": {}}
+    for seed in range(8):
+        arms["v1"][seed] = [
+            row("common", True),
+            *[row("v1-guarded", True, True) for _ in range(10)],
+            row("bb-guarded", True),
+        ]
+        arms["bb"][seed] = [
+            row("common", False),
+            *[row("v1-guarded", True) for _ in range(10)],
+            row("bb-guarded", True, True),
+        ]
+
+    report = stats.guard_sensitivity(arms, draws=200)
+
+    assert report["policies"]["guarded_as_failure"]["v1_minus_bb"]["estimate"] == pytest.approx(-2 / 3)
+    assert report["policies"]["guarded_excluded_nonrandom_dropout"]["v1_minus_bb"]["estimate"] == pytest.approx(1 / 11)
+    assert report["common_support"]["v1_minus_bb"]["estimate"] == pytest.approx(1.)
+    assert report["guard_confounded"] is True
+    assert report["unconditional_claim_prohibited"] is True
+def test_judge_prohibits_unconditional_guard_confounded_claims(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    lock = tmp_path / "lock.json"
+    seed_effects = tmp_path / "effects.json"
+    output_json = tmp_path / "judge.json"
+    output_md = tmp_path / "judge.md"
+    lock.write_text(json.dumps({"endpoint": "success_rate"}))
+    seed_effects.write_text(json.dumps({
+        "effects": [0.] * 8,
+        "v1": {str(seed): [0.] for seed in range(8)},
+        "bb": {str(seed): [0.] for seed in range(8)},
+        "guard_episodes": {},
+    }))
+    monkeypatch.setattr(stats, "primary_decision", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(stats, "bb_three_way_sensitivity", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(stats, "guard_sensitivity", lambda *_args, **_kwargs: {"guard_confounded": True})
+    monkeypatch.setattr(stats, "require_metric_lock", lambda *_args, **_kwargs: None)
+
+    assert stats.main([
+        "judge", "--lock", str(lock), "--seed-effects", str(seed_effects),
+        "--json", str(output_json), "--md", str(output_md),
+    ]) == 0
+    assert json.loads(output_json.read_text())["unconditional_claim_prohibited"] is True
+    assert "do not make an unconditional claim" in output_md.read_text()

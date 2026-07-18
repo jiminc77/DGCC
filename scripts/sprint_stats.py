@@ -270,17 +270,75 @@ def guard_sensitivity(arms: Mapping[str, Mapping[int | str, Sequence[Mapping[str
     """Dual guard analyses, a common-support comparison, and activation-rate CIs."""
     if set(arms) != {"v1", "bb"}: raise ValueError("guard sensitivity requires exactly v1 and bb arms")
     normalized = {arm: _seed_mapping(rows) for arm, rows in arms.items()}
+
     def rate(rows: Sequence[Mapping[str, Any]], exclude: bool) -> float:
         usable = [row for row in rows if not (exclude and row["eval_wall_guard"])]
         if not usable: raise ValueError("guard exclusion left a seed with no episodes")
-        return float(np.mean([bool(row["success"]) for row in usable]))
+        return float(np.mean([
+            bool(row["success"]) and not bool(row["eval_wall_guard"])
+            for row in usable
+        ]))
+
+    def common_support_rate(rows: Sequence[Mapping[str, Any]]) -> dict[str, float]:
+        by_goal: dict[str, list[Mapping[str, Any]]] = {}
+        for row in rows:
+            by_goal.setdefault(str(row["goal_id"]), []).append(row)
+        return {
+            goal_id: rate(goal_rows, False)
+            for goal_id, goal_rows in by_goal.items()
+            if not any(bool(row["eval_wall_guard"]) for row in goal_rows)
+        }
+
     policies = {}
     for name, exclude in (("guarded_as_failure", False), ("guarded_excluded_nonrandom_dropout", True)):
-        policies[name] = {"v1_minus_bb": seed_cluster_bootstrap([rate(normalized["v1"][seed], exclude) - rate(normalized["bb"][seed], exclude) for seed in range(8)], draws=draws), "dropout_limitation": "guarded episodes excluded; dropout is non-random" if exclude else None}
-    activation = {arm: seed_cluster_bootstrap([float(np.mean([bool(row["eval_wall_guard"]) for row in rows])) for rows in values.values()], draws=draws) for arm, values in normalized.items()}
+        policies[name] = {
+            "v1_minus_bb": seed_cluster_bootstrap([
+                rate(normalized["v1"][seed], exclude) - rate(normalized["bb"][seed], exclude)
+                for seed in range(8)
+            ], draws=draws),
+            "dropout_limitation": "guarded episodes excluded; dropout is non-random" if exclude else None,
+        }
+    activation = {
+        arm: seed_cluster_bootstrap([
+            float(np.mean([bool(row["eval_wall_guard"]) for row in rows]))
+            for rows in values.values()
+        ], draws=draws)
+        for arm, values in normalized.items()
+    }
     difference = activation["v1"]["estimate"] - activation["bb"]["estimate"]
-    common = seed_cluster_bootstrap([rate(normalized["v1"][seed], True) - rate(normalized["bb"][seed], True) for seed in range(8)], draws=draws)
-    return {"policies": policies, "common_support": {"v1_minus_bb": common, "definition": "paired comparison restricted to unguarded episodes"}, "activation_rates": activation, "activation_rate_difference": difference, "activation_rate_confounding_flag": abs(difference) > .02, "activation_rate_confounding_rule": "absolute arm difference exceeds 2 percentage points"}
+    common_effects = []
+    for seed in range(8):
+        v1_common = common_support_rate(normalized["v1"][seed])
+        bb_common = common_support_rate(normalized["bb"][seed])
+        common_goals = sorted(set(v1_common) & set(bb_common))
+        if not common_goals:
+            raise ValueError("common-support restriction left a seed with no paired goals")
+        common_effects.append(float(np.mean([
+            v1_common[goal_id] - bb_common[goal_id] for goal_id in common_goals
+        ])))
+    common = seed_cluster_bootstrap(common_effects, draws=draws)
+    guarded_as_failure = policies["guarded_as_failure"]["v1_minus_bb"]
+    guarded_excluded = policies["guarded_excluded_nonrandom_dropout"]["v1_minus_bb"]
+    sign_flip = guarded_as_failure["estimate"] * guarded_excluded["estimate"] < 0
+    significance_flip = (
+        (guarded_as_failure["primary_lower"] > 0)
+        != (guarded_excluded["primary_lower"] > 0)
+    )
+    guard_confounded = sign_flip or significance_flip
+    return {
+        "policies": policies,
+        "common_support": {
+            "v1_minus_bb": common,
+            "definition": "paired seed effect over the intersection of goal_id values unguarded in both arms",
+        },
+        "activation_rates": activation,
+        "activation_rate_difference": difference,
+        "activation_rate_confounding_flag": abs(difference) > .02,
+        "activation_rate_confounding_rule": "absolute arm difference exceeds 2 percentage points",
+        "guard_confounded": guard_confounded,
+        "guard_confounding_rule": "guarded-as-failure and guarded-excluded analyses reverse sign or primary significance",
+        "unconditional_claim_prohibited": guard_confounded,
+    }
 
 
 def _load_json(path: Path) -> Any:
@@ -298,12 +356,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if isinstance(seed_input, dict) and {"effects", "v1", "bb"} <= set(seed_input):
         decision = primary_decision(seed_input["effects"], endpoint=metric["endpoint"])
         decision["bb_three_way_sensitivity"] = bb_three_way_sensitivity(seed_input["v1"], seed_input["bb"])
-        if "guard_episodes" in seed_input: decision["guard_sensitivity"] = guard_sensitivity(seed_input["guard_episodes"])
+        if "guard_episodes" in seed_input:
+            decision["guard_sensitivity"] = guard_sensitivity(seed_input["guard_episodes"])
+            if decision["guard_sensitivity"]["guard_confounded"]:
+                decision["unconditional_claim_prohibited"] = True
+                decision["claim_limitation"] = "Guard-confounded sensitivity: do not make an unconditional claim from this result."
     else: decision = primary_decision(seed_input, endpoint=metric["endpoint"])
     if metric["endpoint"] == "success_rate": benchmark = "+10%p benchmark applies to success_rate only"
     else: benchmark = f"Return benchmark: 0.5σ={SIGMA_GOAL / 2:.3f} (return units)"
     Path(args.json).write_text(json.dumps(decision, indent=1) + "\n")
     sensitivity = "\n\n## Sensitivity analysis\n\nIncluded in JSON judgment." if "bb_three_way_sensitivity" in decision else ""
+    if decision.get("unconditional_claim_prohibited"):
+        sensitivity += "\n\n**Guard-confounded sensitivity: do not make an unconditional claim from this result.**"
     Path(args.md).write_text(f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\n\n{benchmark}{sensitivity}\n")
     return 0
 
