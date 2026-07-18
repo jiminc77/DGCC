@@ -203,7 +203,7 @@ def main() -> int:
             "config_sha256": retro_val["config_sha256"], "generation": "reeval",
             "legacy_claim_sha256": legacy_claim_sha256,
             "selection_manifest": str(out_val.resolve()), "selection_manifest_sha256": selection_sha,
-            "disposition_receipt_sha256": receipt_sha,
+            "disposition_receipt_sha256": receipt_sha, "n_goals": 100,
         },
     )
     payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG)
@@ -264,6 +264,8 @@ def main() -> int:
         "claim_sha256": sha256_file(claim),
         "selection_manifest": str(out_val),
         "selection_manifest_sha256": selection_sha,
+        "generation": "reeval",
+        "episode_namespace": SPRINT_HELDOUT_EPISODE_INDEX_START,
         "summary": {k: v for k, v in result.items() if k != "episodes"},
         "episodes": episodes,
         "m4_tag": args.m4_tag,

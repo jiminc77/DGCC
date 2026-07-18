@@ -96,17 +96,15 @@ def canonical_claim_path(run_tag: str, arm: str, generation: str | None = None) 
 
 def _validate_claim(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) - _CLAIM_KEYS: raise SprintClaimError("claim schema is invalid")
-    required = {"schema_version", "claim_before_load", "timestamp", "pid", "run_tag", "arm", "ckpt_sha256", "split_sha256", "seed", "config_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace"}
+    required = {"schema_version", "claim_before_load", "timestamp", "pid", "run_tag", "arm", "ckpt_sha256", "split_sha256", "seed", "config_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace", "n_goals"}
     if not required <= set(value) or value["schema_version"] != PRIMITIVE_SCHEMA_VERSION or value["claim_before_load"] is not True: raise SprintClaimError("claim schema is invalid")
-    if not isinstance(value["run_tag"], str) or not value["run_tag"] or not isinstance(value["timestamp"], str) or not isinstance(value["pid"], int) or not isinstance(value["seed"], int) or value["episode_namespace"] != 97_001: raise SprintClaimError("claim schema is invalid")
+    if not isinstance(value["run_tag"], str) or not value["run_tag"] or not isinstance(value["timestamp"], str) or not isinstance(value["pid"], int) or not isinstance(value["seed"], int) or value["episode_namespace"] != 97_001 or value["n_goals"] != 100: raise SprintClaimError("claim schema is invalid")
     _arm(value["arm"])
     if not _HEX64.fullmatch(str(value["ckpt_sha256"])) or value["split_sha256"] != CANONICAL_SPLIT_SHA256 or not isinstance(value["selection_manifest"], str) or not value["selection_manifest"]: raise SprintClaimError("claim schema is invalid")
     for key in ("config_sha256", "selection_manifest_sha256"):
         if not _HEX64.fullmatch(str(value[key])): raise SprintClaimError("claim schema is invalid")
     reeval = "generation" in value or "legacy_claim_sha256" in value or "disposition_receipt_sha256" in value
     if reeval and (not isinstance(value.get("generation"), str) or not value["generation"] or not _HEX64.fullmatch(str(value.get("legacy_claim_sha256"))) or not _HEX64.fullmatch(str(value.get("disposition_receipt_sha256")))): raise SprintClaimError("claim schema is invalid")
-    if "n_goals" in value and (not isinstance(value["n_goals"], int) or isinstance(value["n_goals"], bool) or value["n_goals"] < 1):
-        raise SprintClaimError("claim schema is invalid")
     return dict(value)
 
 def acquire_claim(claim_path: Path, payload: Mapping[str, Any]) -> ClaimCapability:
@@ -225,7 +223,7 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
     required = {
         "generated_at", "run_tag", "arm", "seed", "config_sha256", "ckpt_sha256",
         "split_sha256", "claim_sha256", "selection_manifest",
-        "selection_manifest_sha256", "summary", "episodes",
+        "selection_manifest_sha256", "episode_namespace", "summary", "episodes",
     }
     episode_required = {
         "episode_id", "goal_id", "goal_label", "init_template", "success", "steps",
@@ -239,7 +237,7 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
     }
     if not isinstance(body, dict) or not required <= set(body):
         return False
-    if any(body[key] != claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256")) or body["claim_sha256"] != claim_sha256:
+    if any(body[key] != claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")) or body["claim_sha256"] != claim_sha256:
         return False
     if not isinstance(body["episodes"], list) or len(body["episodes"]) != 200:
         return False
@@ -250,9 +248,11 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
         return False
     if body["summary"]["n_episodes"] != 200 or not isinstance(body["summary"]["per_template_success"], dict) or not isinstance(body["summary"]["per_template_episodes"], dict):
         return False
-    namespace = claim["episode_namespace"]
+    namespace = body["episode_namespace"]
+    if not isinstance(namespace, int) or isinstance(namespace, bool):
+        return False
     episode_ids: set[int] = set()
-    goal_ids: set[str] = set()
+    goal_counts: dict[str, int] = {}
     numeric_episode = ("return", "discounted_return", "final_d", "d_at_done", "min_d", "d_initial", "d_shape_initial", "d_shape_at_done")
     for episode in body["episodes"]:
         if not isinstance(episode, dict) or not episode_required <= set(episode) or not _is_finite_json(episode):
@@ -264,19 +264,34 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
             return False
         if not all(isinstance(episode[key], (int, float)) and not isinstance(episode[key], bool) and math.isfinite(episode[key]) for key in numeric_episode):
             return False
+        if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in episode["d_steps"]):
+            return False
         if episode["q_first"] is not None and (not isinstance(episode["q_first"], (int, float)) or isinstance(episode["q_first"], bool) or not math.isfinite(episode["q_first"])):
             return False
         episode_ids.add(episode_id)
-        goal_ids.add(episode["goal_id"])
-    if len(goal_ids) < claim.get("n_goals", 100):
+        goal_counts[episode["goal_id"]] = goal_counts.get(episode["goal_id"], 0) + 1
+    if len(goal_counts) != claim["n_goals"] or any(count != 2 for count in goal_counts.values()):
         return False
-    successes = sum(episode["success"] for episode in body["episodes"]) / len(body["episodes"])
-    mean_return = sum(episode["return"] for episode in body["episodes"]) / len(body["episodes"])
-    if not math.isclose(body["summary"]["success_rate"], successes, rel_tol=0.0, abs_tol=1e-9) or not math.isclose(body["summary"]["mean_return"], mean_return, rel_tol=0.0, abs_tol=1e-9):
+    aggregates = {
+        "success_rate": sum(episode["success"] for episode in body["episodes"]) / 200,
+        "mean_return": sum(episode["return"] for episode in body["episodes"]) / 200,
+        "mean_final_d": sum(episode["final_d"] for episode in body["episodes"]) / 200,
+        "mean_d_at_done": sum(episode["d_at_done"] for episode in body["episodes"]) / 200,
+        "mean_min_d": sum(episode["min_d"] for episode in body["episodes"]) / 200,
+    }
+    if any(not math.isclose(body["summary"][key], value, rel_tol=0.0, abs_tol=1e-9) for key, value in aggregates.items()):
         return False
-    if "generation" in claim:
-        if any(body.get(key) != claim[key] for key in ("generation", "disposition_receipt_sha256", "episode_namespace")):
+    templates: dict[str, list[dict[str, Any]]] = {}
+    for episode in body["episodes"]:
+        templates.setdefault(episode["init_template"], []).append(episode)
+    if set(body["summary"]["per_template_success"]) != set(templates) or set(body["summary"]["per_template_episodes"]) != set(templates):
+        return False
+    for template, rows in templates.items():
+        rate, count = body["summary"]["per_template_success"][template], body["summary"]["per_template_episodes"][template]
+        if not isinstance(rate, (int, float)) or isinstance(rate, bool) or not math.isfinite(rate) or not isinstance(count, int) or isinstance(count, bool) or count != len(rows) or not math.isclose(rate, sum(row["success"] for row in rows) / len(rows), rel_tol=0.0, abs_tol=1e-9):
             return False
+    if "generation" in claim and any(body.get(key) != claim[key] for key in ("generation", "disposition_receipt_sha256")):
+        return False
     return all(isinstance(body[key], str) and body[key] for key in ("generated_at", "config_sha256", "ckpt_sha256", "selection_manifest", "selection_manifest_sha256"))
 
 def audit_claims(directory: Path) -> list[dict[str, Any]]:

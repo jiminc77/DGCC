@@ -73,6 +73,10 @@ def build_run(config: str, seed: int, run_tag: str, device: str):
     run = module.TrainingRun(argparse.Namespace(config=config, seed=seed, run_tag=run_tag, total_override=None, device=device)); run.config.setdefault("eval", {})["wall_guard_k"] = WALL_GUARD_K
     return run
 
+def canonical_result_payload(*, run_tag: str, arm: str, seed: int, manifest: dict[str, Any], selection_manifest: str, selection_sha: str, claim_sha: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Build the audit-facing canonical result after raw-only fields are removed."""
+    return {"generated_at": utc_now(), "run_tag": run_tag, "arm": arm, "seed": seed, "config_sha256": manifest["config_sha256"], "ckpt_sha256": manifest["ckpt_sha256"], "split_sha256": CANONICAL_SPLIT_SHA256, "claim_sha256": claim_sha, "selection_manifest": selection_manifest, "selection_manifest_sha256": selection_sha, "episode_namespace": EPISODE_INDEX_START, "selector_version": manifest["selector_version"], "val_rows": manifest["val_rows"], "summary": {k: v for k, v in result.items() if k != "episodes"}, "episodes": result["episodes"]}
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__); p.add_argument("--run-tag", required=True); p.add_argument("--arm", required=True); p.add_argument("--selection-manifest", required=True); p.add_argument("--claim", required=True); p.add_argument("--out", required=True); p.add_argument("--lock"); p.add_argument("--config", default="configs/p1_t2.yaml"); p.add_argument("--seed", type=int, required=True); p.add_argument("--device", default="cuda"); args = p.parse_args()
     expected_claim, expected_out = canonical_paths(args.run_tag, args.arm)
@@ -84,7 +88,7 @@ def main() -> int:
         raise SprintClaimError("selection manifest must not be a symlink")
     if not selection_path.is_absolute():
         raise SprintClaimError("selection manifest path must be absolute")
-    capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(selection_path),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START})
+    capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(selection_path),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START,"n_goals":100})
     payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG); pairs = _pairs(payload); goals=[g for _,g in pairs for _ in range(2)]; labels=[s["goal_id"] for s,_ in pairs for _ in range(2)]
     run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"])); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
     if len(episodes)!=200: raise SprintClaimError("sprint evaluation must produce 200 episodes")
@@ -92,6 +96,6 @@ def main() -> int:
     claim_sha=sha256_file(expected_claim); probe_path=expected_out.with_suffix(".probe.h5"); write_probe_h5(probe_path,episodes,ckpt_sha=manifest["ckpt_sha256"],split_sha=CANONICAL_SPLIT_SHA256,claim_sha=claim_sha); probe_manifest_register(PROBE_MANIFEST,probe_path,{"production_goal":"G-EV","run_tag":args.run_tag})
     for ep in episodes:
         for key in ("x_initial","x_steps","x_terminal","probe_p","probe_u"): ep.pop(key,None)
-    atomic_publish(expected_out,{"generated_at":utc_now(),"run_tag":args.run_tag,"arm":args.arm,"seed":args.seed,"config_sha256":manifest["config_sha256"],"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"claim_sha256":claim_sha,"selection_manifest":str(Path(args.selection_manifest).resolve()),"selection_manifest_sha256":selection_sha,"selector_version":manifest["selector_version"],"val_rows":manifest["val_rows"],"summary":{k:v for k,v in result.items() if k!="episodes"},"episodes":episodes})
+    atomic_publish(expected_out, canonical_result_payload(run_tag=args.run_tag, arm=args.arm, seed=args.seed, manifest=manifest, selection_manifest=str(Path(args.selection_manifest).resolve()), selection_sha=selection_sha, claim_sha=claim_sha, result=result))
     return 0
 if __name__ == "__main__": raise SystemExit(main())

@@ -6,6 +6,7 @@ import json
 import threading
 from pathlib import Path
 
+import importlib.util
 import pytest
 
 from dgcc.analysis import sprint_claims as claims
@@ -36,7 +37,7 @@ def payload(*, generation: str | None = None) -> dict[str, object]:
         "config_sha256": "d" * 64,
         "selection_manifest": "/synthetic/selection.json",
         "selection_manifest_sha256": "e" * 64,
-        "episode_namespace": 97_001,
+        "episode_namespace": 97_001, "n_goals": 100,
     }
     if generation is not None:
         body.update(generation=generation, legacy_claim_sha256="a" * 64, disposition_receipt_sha256="b" * 64)
@@ -214,10 +215,11 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
         "claim_sha256": hashlib.sha256(before).hexdigest(),
         "selection_manifest": "/synthetic/selection.json",
         "selection_manifest_sha256": "e" * 64,
+        "episode_namespace": 97_001,
         "summary": {
             "n_episodes": 200, "success_rate": 1.0, "mean_return": 1.0,
             "mean_final_d": 0.1, "mean_d_at_done": 0.1, "mean_min_d": 0.1,
-            "per_template_success": {}, "per_template_episodes": {},
+            "per_template_success": {"straight": 1.0}, "per_template_episodes": {"straight": 200},
         },
         "episodes": [episode(index) for index in range(200)],
     }))
@@ -238,3 +240,20 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
     result.write_text(json.dumps(body))
     assert len(claims.audit_claims(claim.parent)) == 1
     assert claim.read_bytes() == before
+def test_producer_payload_passes_audit_and_tampering_is_rejected(canonical_sprint: Path) -> None:
+    claim = claim_path()
+    claims.acquire_claim(claim, payload())
+    claim_sha = hashlib.sha256(claim.read_bytes()).hexdigest()
+    spec = importlib.util.spec_from_file_location("sprint_heldout_eval", Path(__file__).parents[1] / "scripts/sprint_heldout_eval.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    episodes = [{"episode_id": 97_001 + index, "goal_id": f"goal-{index // 2}", "goal_label": f"goal-{index // 2}", "init_template": "straight", "success": True, "steps": 1, "return": 1.0, "discounted_return": 1.0, "final_d": 0.1, "d_at_done": 0.1, "d_at_done_fallback": False, "d_steps": [0.1], "min_d": 0.1, "d_initial": 0.2, "d_shape_initial": 0.2, "d_shape_at_done": 0.1, "q_first": None, "eval_wall_guard": False, "discard_exposure": 0} for index in range(200)]
+    summary = {"n_episodes": 200, "success_rate": 1.0, "mean_return": 1.0, "mean_final_d": 0.1, "mean_d_at_done": 0.1, "mean_min_d": 0.1, "per_template_success": {"straight": 1.0}, "per_template_episodes": {"straight": 200}}
+    result = module.canonical_result_payload(run_tag="synthetic", arm="bb", seed=7, manifest={"config_sha256": "d" * 64, "ckpt_sha256": "c" * 64, "selector_version": "test", "val_rows": []}, selection_manifest="/synthetic/selection.json", selection_sha="e" * 64, claim_sha=claim_sha, result={"episodes": episodes, **summary})
+    output = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
+    output.write_text(json.dumps(result))
+    assert claims.audit_claims(claim.parent) == []
+    result["summary"]["mean_final_d"] = 0.2
+    output.write_text(json.dumps(result))
+    assert len(claims.audit_claims(claim.parent)) == 1
