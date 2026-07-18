@@ -32,6 +32,12 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+from dgcc.analysis.sprint_claims import (
+    acquire_claim,
+    atomic_publish,
+    probe_manifest_register,
+    record_access,
+)
 
 SPRINT_HELDOUT_EPISODE_INDEX_START = 97_001
 SPRINT_ACCESS_LOG = Path("outputs/metrics/t2_sprint_heldout_access.log")
@@ -56,13 +62,6 @@ def load_sprint_heldout():
     split_path = REPO / "src" / "dgcc" / "tasks" / "splits" / "t2_sprint_heldout_v1.json"
     payload = json.loads(split_path.read_text(encoding="utf-8"))
     assert payload["n_goals"] == 100 and payload["overlap_with_t2_v1"] == 0
-    # Access audit (sprint_spec §6: 허용 접촉 외 로드는 위반)
-    SPRINT_ACCESS_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(SPRINT_ACCESS_LOG, "a", encoding="utf-8") as log:
-        log.write(
-            f"{utc_now()} pid={os.getpid()} n_goals={payload['n_goals']} "
-            f"argv={' '.join(sys.argv[:4])}\n"
-        )
     pairs = [(spec, build_t2_goal(spec)) for spec in payload["specs"]]
     return pairs, sha256_file(split_path)
 
@@ -119,9 +118,6 @@ def main() -> int:
     ckpts = [c for c in ckpts if "crash" not in c.name]
     assert ckpts, f"no checkpoints under {models_dir}"
 
-    claim = Path("outputs/metrics") / f"p1_sprint_heldout_claim_{args.m4_tag}.json"
-    if claim.exists():
-        raise SystemExit(f"sprint heldout already claimed for {args.m4_tag}: {claim}")
 
     run = build_run(args.config, args.seed, f"{args.m4_tag}_sprint_retro", args.device)
     run.build_scene()
@@ -169,26 +165,31 @@ def main() -> int:
     out_val.write_text(json.dumps(retro_val, indent=1) + "\n", encoding="utf-8")
     print(f"retro selection: {selected['ckpt']} (val {selected['success_rate']:.3f})")
 
-    # ---- 3. one-shot sprint-heldout on the re-selected checkpoint ----------
-    pairs, split_sha = load_sprint_heldout()
+    # Claim and audit must precede the first sprint split materialization.
+    split_path = REPO / "src" / "dgcc" / "tasks" / "splits" / "t2_sprint_heldout_v1.json"
+    split_sha = sha256_file(split_path)
+    claim = Path("outputs/metrics") / f"p1_sprint_heldout_claim_{args.m4_tag}.json"
+    acquire_claim(
+        claim,
+        {
+            "run_tag": args.m4_tag,
+            "arm": "BB",
+            "ckpt_sha256": selected["ckpt_sha256"],
+            "split_sha256": split_sha,
+            "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
+        },
+    )
+    record_access(
+        SPRINT_ACCESS_LOG,
+        "final_eval",
+        run_tag=args.m4_tag,
+        arm="BB",
+        split_sha256=split_sha,
+    )
+    pairs, loaded_split_sha = load_sprint_heldout()
+    assert loaded_split_sha == split_sha
     goals = [g for _, g in pairs for _ in range(2)]
     labels = [s["goal_id"] for s, _ in pairs for _ in range(2)]
-
-    fd = os.open(claim, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(
-            {
-                "m4_tag": args.m4_tag,
-                "ckpt": selected["ckpt"],
-                "ckpt_sha256": selected["ckpt_sha256"],
-                "split_sha256": split_sha,
-                "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
-                "created_at": utc_now(),
-                "pid": os.getpid(),
-            },
-            handle,
-            indent=1,
-        )
     print(f"sprint heldout claim acquired: {claim}")
 
     run.agent.load_checkpoint(selected["ckpt"])
@@ -206,6 +207,26 @@ def main() -> int:
     raw_path = Path("outputs/metrics") / f"p1_raw_sprint_heldout_{args.m4_tag}.json.gz"
     with gzip.open(raw_path, "wt", encoding="utf-8") as handle:
         json.dump({"m4_tag": args.m4_tag, "episodes": episodes}, handle)
+    probe_path = Path("outputs/metrics") / f"p1_probe_sprint_heldout_{args.m4_tag}.h5"
+    import importlib.util
+    probe_spec = importlib.util.spec_from_file_location(
+        "sprint_heldout_eval", REPO / "scripts" / "sprint_heldout_eval.py"
+    )
+    probe_module = importlib.util.module_from_spec(probe_spec)
+    assert probe_spec.loader is not None
+    probe_spec.loader.exec_module(probe_module)
+    probe_module.write_probe_h5(
+        probe_path,
+        episodes,
+        ckpt_sha=selected["ckpt_sha256"],
+        split_sha=split_sha,
+        claim_sha=sha256_file(claim),
+    )
+    probe_manifest_register(
+        Path("outputs/metrics/sprint_probe_manifest.json"),
+        probe_path,
+        {"production_goal": "G-EV", "run_tag": args.m4_tag},
+    )
     for ep in episodes:
         for key in ("x_initial", "x_steps", "x_terminal"):
             ep.pop(key, None)
@@ -218,17 +239,17 @@ def main() -> int:
         "ckpt_sha256": selected["ckpt_sha256"],
         "split": "t2_sprint_heldout_v1",
         "split_sha256": split_sha,
+        "claim_sha256": sha256_file(claim),
         "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
         "protocol": {"wall_guard_k": WALL_GUARD_K, "record_raw": True},
         "wall_s": wall,
         "raw_artifact": str(raw_path),
+        "probe_artifact": str(probe_path),
         "summary": {k: v for k, v in result.items() if k != "episodes"},
         "episodes": episodes,
     }
     out = Path("outputs/metrics") / f"p1_t2_sprint_heldout_{args.m4_tag}.json"
-    tmp = out.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
-    os.replace(tmp, out)
+    atomic_publish(out, payload)
     print(
         f"sprint heldout published: {out} success={result['success_rate']:.3f} "
         f"return={result['mean_return']:.3f} guard_rate={result.get('eval_wall_guard_rate')}"
