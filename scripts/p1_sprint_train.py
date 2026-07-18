@@ -156,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.source_bundle and args.arm != "bb":
         parser.error("--source-bundle is only valid for arm=bb")
+    if args.source_bundle:
+        # Keep the frozen bundle byte-pristine: without this, importing bundle
+        # modules writes __pycache__ into the bundle tree and the exact-tree
+        # fail-closed validation refuses every subsequent launch.
+        sys.dont_write_bytecode = True
     bundle_info = validate_source_bundle(args.source_bundle) if args.source_bundle else None
     base = load_base_driver(args.source_bundle)
     factory = load_factory(args.source_bundle)
