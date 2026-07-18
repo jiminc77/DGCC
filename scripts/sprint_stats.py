@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Preregistered sprint statistics.
-
-This deliberately uses local NumPy/SciPy rather than rliable: rliable adds five
-packages and its resampling unit does not match this experiment's paired seed
-clusters.  The primary interval is BCa (never percentile bootstrap).
-"""
+"""Preregistered sprint statistics (paired seed clusters)."""
 from __future__ import annotations
 
 import argparse
@@ -14,18 +9,19 @@ import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 from scipy.stats import norm, t
 
+from dgcc.analysis import sprint_claims
 from dgcc.analysis.sprint_claims import PRIMITIVE_SCHEMA_VERSION, SprintClaimError, require_metric_lock
 
 B = 10_000
 RNG_SEED = 20260703
 ALPHA = 0.05
-SIGMA_GOAL = 1.8605  # eb439489: M4 held-out pooled per-goal return, ddof=1.
-RETURN_EQUIV_MARGIN = 0.465  # eb439489: 0.25 * sigma_goal.
+SIGMA_GOAL = 1.8605
+RETURN_EQUIV_MARGIN = 0.465
 SUCCESS_EQUIV_MARGIN = 0.05
 
 
@@ -37,92 +33,135 @@ def _finite(values: Sequence[float]) -> np.ndarray:
 
 
 def seed_differences(v1: Mapping[int, Sequence[float]], bb: Mapping[int, Sequence[float]]) -> np.ndarray:
-    """Paired seed effects; each sequence is its seed's goal×episode block."""
     if set(v1) != set(bb):
         raise ValueError("V1 and BB must have identical paired seed sets")
     return np.asarray([_finite(v1[s]).mean() - _finite(bb[s]).mean() for s in sorted(v1)], dtype=float)
 
 
-def _bca_quantiles(observed: float, bootstrap: np.ndarray, jackknife: np.ndarray, alpha: float) -> tuple[float, float, float]:
-    # half-count avoids +/- infinity when all bootstrap values fall on one side.
-    z0 = norm.ppf((np.count_nonzero(bootstrap < observed) + 0.5) / (len(bootstrap) + 1.0))
-    center = jackknife.mean()
-    delta = center - jackknife
+def _bca_adjusted_quantile(observed: float, bootstrap: np.ndarray, jackknife: np.ndarray, p: float) -> tuple[float, float, float]:
+    if len(jackknife) < 2:
+        raise ValueError("BCa requires at least two seed effects for jackknife acceleration")
+    # Preregistered definition: z0 = Phi^-1(#(theta* < theta_hat) / B).
+    # At k=0 or B this is infinite; clip only to the adjacent representable
+    # probability, not a half-count correction, so the formula remains exact off
+    # the unavoidable numerical boundary.
+    proportion = np.count_nonzero(bootstrap < observed) / len(bootstrap)
+    bounded = float(np.clip(proportion, np.nextafter(0.0, 1.0), np.nextafter(1.0, 0.0)))
+    z0 = float(norm.ppf(bounded))
+    delta = jackknife.mean() - jackknife
     denominator = 6.0 * np.sum(delta ** 2) ** 1.5
     acceleration = 0.0 if denominator == 0 else float(np.sum(delta ** 3) / denominator)
-    def adjusted(p: float) -> float:
-        z = norm.ppf(p)
-        return float(norm.cdf(z0 + (z0 + z) / (1.0 - acceleration * (z0 + z))))
-    return z0, acceleration, adjusted(alpha)
+    z = norm.ppf(p)
+    adjusted = float(norm.cdf(z0 + (z0 + z) / (1.0 - acceleration * (z0 + z))))
+    return z0, acceleration, adjusted
+
+
+def bca_lower_bound(observed: float, bootstrap: Sequence[float], jackknife: Sequence[float], *, alpha: float = ALPHA) -> dict[str, float]:
+    """The sole primary-decision API: one-sided 95% BCa lower bound."""
+    boot, jack = _finite(bootstrap), _finite(jackknife)
+    z0, acceleration, quantile = _bca_adjusted_quantile(float(observed), boot, jack, alpha)
+    return {"lower": float(np.quantile(boot, quantile)), "z0": z0, "acceleration": acceleration, "lower_quantile": quantile}
+
+
+def bca_two_sided_interval(observed: float, bootstrap: Sequence[float], jackknife: Sequence[float], *, alpha: float = ALPHA) -> dict[str, float]:
+    """Reporting-only two-sided BCa interval; never use this for primary gating."""
+    boot, jack = _finite(bootstrap), _finite(jackknife)
+    lower = bca_lower_bound(observed, boot, jack, alpha=alpha / 2)
+    _, _, upper_q = _bca_adjusted_quantile(float(observed), boot, jack, 1 - alpha / 2)
+    return {**lower, "upper": float(np.quantile(boot, upper_q)), "upper_quantile": upper_q}
 
 
 def bca_interval(observed: float, bootstrap: Sequence[float], jackknife: Sequence[float], *, alpha: float = ALPHA, two_sided: bool = False) -> dict[str, float]:
-    """BCa interval. One-sided output is the preregistered 95% lower bound."""
-    boot, jack = _finite(bootstrap), _finite(jackknife)
-    z0, acceleration, lower_q = _bca_quantiles(float(observed), boot, jack, alpha / 2 if two_sided else alpha)
-    lower = float(np.quantile(boot, lower_q))
-    output = {"lower": lower, "z0": z0, "acceleration": acceleration, "lower_quantile": lower_q}
-    if two_sided:
-        _, _, upper_q = _bca_quantiles(float(observed), boot, jack, 1 - alpha / 2)
-        output.update(upper=float(np.quantile(boot, upper_q)), upper_quantile=upper_q)
-    return output
+    """Compatibility wrapper; new decisions must call the explicit APIs."""
+    return bca_two_sided_interval(observed, bootstrap, jackknife, alpha=alpha) if two_sided else bca_lower_bound(observed, bootstrap, jackknife, alpha=alpha)
+
+
+def _seed_bootstrap(effects: np.ndarray, draws: int, rng_seed: int) -> np.ndarray:
+    rng = np.random.default_rng(rng_seed)
+    return effects[rng.integers(0, len(effects), size=(draws, len(effects)))].mean(axis=1)
 
 
 def seed_cluster_bootstrap(seed_effects: Sequence[float], *, draws: int = B, rng_seed: int = RNG_SEED, alpha: float = ALPHA) -> dict[str, Any]:
-    """Paired seed-cluster BCa: resample entire paired seed blocks together."""
     effects = _finite(seed_effects)
-    if np.all(effects == 0):
-        return {"estimate": 0.0, "ci": [0.0, 0.0], "lower": 0.0, "degenerate": True, "trigger_return_endpoint": True, "method": "BCa seed-cluster"}
-    rng = np.random.default_rng(rng_seed)
-    samples = effects[rng.integers(0, len(effects), size=(draws, len(effects)))].mean(axis=1)
+    if len(effects) < 2:
+        raise ValueError("seed-cluster BCa requires at least two seed effects; n=1 has no jackknife acceleration")
+    samples = _seed_bootstrap(effects, draws, rng_seed)
     jackknife = np.asarray([np.delete(effects, i).mean() for i in range(len(effects))])
-    result = bca_interval(float(effects.mean()), samples, jackknife, alpha=alpha, two_sided=True)
-    result.update(estimate=float(effects.mean()), ci=[result["lower"], result["upper"]], degenerate=False, trigger_return_endpoint=False, method="BCa seed-cluster")
-    return result
-
-
-def hierarchical_seed_cluster_bootstrap(v1: Mapping[int, Sequence[float]], bb: Mapping[int, Sequence[float]], *, draws: int = B, rng_seed: int = RNG_SEED, alpha: float = ALPHA) -> dict[str, Any]:
-    """Sensitivity path: resample seed blocks, then within-seed goal×episode blocks."""
-    if set(v1) != set(bb): raise ValueError("V1 and BB must have identical paired seed sets")
-    seeds = sorted(v1)
-    pairs = [( _finite(v1[s]), _finite(bb[s])) for s in seeds]
-    if any(len(x) != len(y) for x, y in pairs): raise ValueError("paired within-seed blocks must have equal length")
-    effects = np.array([x.mean() - y.mean() for x, y in pairs])
-    rng = np.random.default_rng(rng_seed)
-    values = np.empty(draws)
-    for draw in range(draws):
-        per_seed = []
-        for index in rng.integers(0, len(seeds), size=len(seeds)):
-            x, y = pairs[index]; chosen = rng.integers(0, len(x), size=len(x))
-            per_seed.append((x[chosen] - y[chosen]).mean())
-        values[draw] = np.mean(per_seed)
-    jack = np.array([np.delete(effects, i).mean() for i in range(len(effects))])
-    out = bca_interval(float(effects.mean()), values, jack, alpha=alpha, two_sided=True)
-    out.update(estimate=float(effects.mean()), ci=[out["lower"], out["upper"]], method="BCa hierarchical seed then within-seed goal×episode")
-    return out
-
-
-def welch_seed_interval(seed_effects: Sequence[float], *, alpha: float = ALPHA) -> list[float]:
-    values = _finite(seed_effects); n = len(values)
-    if n < 2: raise ValueError("Welch interval requires at least two seed effects")
-    se = values.std(ddof=1) / math.sqrt(n)
-    q = t.ppf(1 - alpha / 2, n - 1)
-    return [float(values.mean() - q * se), float(values.mean() + q * se)]
+    primary = bca_lower_bound(float(effects.mean()), samples, jackknife, alpha=alpha)
+    reporting = bca_two_sided_interval(float(effects.mean()), samples, jackknife, alpha=alpha)
+    return {"estimate": float(effects.mean()), "primary_lower": primary["lower"], "primary_bca": primary, "reporting_two_sided_bca": reporting, "ci": [reporting["lower"], reporting["upper"]], "degenerate": bool(np.all(effects == effects[0])), "method": "BCa seed-cluster"}
 
 
 def iqm(values: Sequence[float]) -> float:
-    a = np.sort(_finite(values)); return float(np.mean(a[math.floor(.25 * len(a)):math.ceil(.75 * len(a))]))
+    a = np.sort(_finite(values))
+    return float(np.mean(a[math.floor(.25 * len(a)):math.ceil(.75 * len(a))]))
+
+
+def hierarchical_seed_cluster_bootstrap(v1: Mapping[int, Sequence[float]], bb: Mapping[int, Sequence[float]], *, draws: int = B, rng_seed: int = RNG_SEED, alpha: float = ALPHA) -> dict[str, Any]:
+    """Sensitivity path: resample paired seeds then their within-seed blocks."""
+    if set(v1) != set(bb): raise ValueError("V1 and BB must have identical paired seed sets")
+    seeds = sorted(v1)
+    pairs = [(_finite(v1[seed]), _finite(bb[seed])) for seed in seeds]
+    if len(seeds) < 2 or any(len(left) != len(right) for left, right in pairs):
+        raise ValueError("hierarchical BCa requires two paired seeds with equal within-seed blocks")
+    effects = np.asarray([left.mean() - right.mean() for left, right in pairs])
+    rng = np.random.default_rng(rng_seed)
+    samples = np.empty(draws)
+    for draw, selected_seeds in enumerate(rng.integers(0, len(seeds), size=(draws, len(seeds)))):
+        samples[draw] = np.mean([
+            (pairs[index][0][chosen] - pairs[index][1][chosen]).mean()
+            for index in selected_seeds
+            for chosen in [rng.integers(0, len(pairs[index][0]), size=len(pairs[index][0]))]
+        ])
+    jack = np.asarray([np.delete(effects, index).mean() for index in range(len(effects))])
+    report = bca_two_sided_interval(float(effects.mean()), samples, jack, alpha=alpha)
+    return {"estimate": float(effects.mean()), "ci": [report["lower"], report["upper"]], "reporting_two_sided_bca": report, "method": "BCa hierarchical seed then within-seed goal×episode"}
+def iqm_seed_cluster_bootstrap(seed_effects: Sequence[float], *, draws: int = B, rng_seed: int = RNG_SEED, alpha: float = ALPHA) -> dict[str, Any]:
+    effects = _finite(seed_effects)
+    if len(effects) < 2:
+        raise ValueError("IQM seed-cluster BCa requires at least two seed effects")
+    rng = np.random.default_rng(rng_seed)
+    samples = np.asarray([iqm(effects[row]) for row in rng.integers(0, len(effects), size=(draws, len(effects)))])
+    observed = iqm(effects)
+    jack = np.asarray([iqm(np.delete(effects, i)) for i in range(len(effects))])
+    report = bca_two_sided_interval(observed, samples, jack, alpha=alpha)
+    return {"estimate": observed, "ci": [report["lower"], report["upper"]], "reporting_two_sided_bca": report, "method": "BCa seed-cluster IQM"}
+
+
+def welch_seed_interval(seed_effects: Sequence[float], *, alpha: float = ALPHA) -> list[float]:
+    values = _finite(seed_effects)
+    if len(values) < 2: raise ValueError("Welch interval requires at least two seed effects")
+    se = values.std(ddof=1) / math.sqrt(len(values)); q = t.ppf(1 - alpha / 2, len(values) - 1)
+    return [float(values.mean() - q * se), float(values.mean() + q * se)]
+
+
+def holm_secondary_decisions(seed_effects: Mapping[str, Sequence[float]], *, primary_passed: bool, draws: int = B, rng_seed: int = RNG_SEED, alpha: float = ALPHA) -> dict[str, Any]:
+    """Direct bootstrap one-sided p-values and Holm-adjusted one-sided BCa bounds."""
+    if set(seed_effects) != {"2", "3"}: raise ValueError("Holm family must be exactly {'2', '3'}")
+    if not primary_passed: return {name: {"status": "untested_primary_failed"} for name in seed_effects}
+    effects = {name: _finite(value) for name, value in seed_effects.items()}
+    if any(len(value) < 2 for value in effects.values()): raise ValueError("Holm BCa requires at least two seed effects per endpoint")
+    boots = {name: _seed_bootstrap(value, draws, rng_seed + int(name)) for name, value in effects.items()}
+    # H1: effect > 0; include equality to make the discrete bootstrap p conservative.
+    pvalues = {name: float(np.count_nonzero(value <= 0) / len(value)) for name, value in boots.items()}
+    ordered = sorted(pvalues, key=pvalues.get); rejected = True; out: dict[str, Any] = {}
+    for rank, name in enumerate(ordered):
+        threshold = alpha / (len(ordered) - rank)
+        jack = np.asarray([np.delete(effects[name], i).mean() for i in range(len(effects[name]))])
+        bound = bca_lower_bound(float(effects[name].mean()), boots[name], jack, alpha=threshold)
+        rejected = rejected and pvalues[name] <= threshold
+        out[name] = {"p_one_sided": pvalues[name], "holm_rank": rank + 1, "holm_alpha": threshold, "holm_lower": bound["lower"], "holm_bca": bound, "reject": rejected}
+    return out
 
 
 def holm_bonferroni(one_sided_p: Mapping[str, float], *, primary_passed: bool, alpha: float = ALPHA) -> dict[str, Any]:
+    # Legacy p-value-only reporting helper; decisions use holm_secondary_decisions.
     if set(one_sided_p) != {"2", "3"}: raise ValueError("Holm family must be exactly {'2', '3'}")
-    if not primary_passed:
-        return {key: {"status": "untested_primary_failed"} for key in one_sided_p}
+    if not primary_passed: return {key: {"status": "untested_primary_failed"} for key in one_sided_p}
     ordered = sorted(one_sided_p.items(), key=lambda row: row[1]); rejected = True; out = {}
-    m = len(ordered)
     for rank, (name, p) in enumerate(ordered):
         if not 0 <= p <= 1: raise ValueError("p-values must be in [0, 1]")
-        threshold = alpha / (m - rank); rejected = rejected and p <= threshold
+        threshold = alpha / (len(ordered) - rank); rejected = rejected and p <= threshold
         out[name] = {"p": p, "threshold": threshold, "reject": rejected}
     return out
 
@@ -131,77 +170,77 @@ def tost_paired(seed_effects: Sequence[float], margin: float, *, alpha: float = 
     values = _finite(seed_effects); n = len(values)
     if n < 2 or margin <= 0: raise ValueError("TOST requires n >= 2 and a positive margin")
     mean = float(values.mean()); se = values.std(ddof=1) / math.sqrt(n); q = t.ppf(1 - alpha, n - 1)
-    ci = [mean - q * se, mean + q * se]
-    equivalent = ci[0] > -margin and ci[1] < margin
-    return {"n": n, "estimate": mean, "margin": margin, "ci90": ci, "equivalent": equivalent, "status": "provisional_directional", "limitation": "n=5 limitation: recovery at or below the equivalence margin cannot be excluded"}
-
-
-def guard_sensitivity(guarded_failure: Sequence[float], excluded: Sequence[float], common_support: Sequence[float], v1_guard_rate: float, bb_guard_rate: float) -> dict[str, Any]:
-    a, b, c = _finite(guarded_failure), _finite(excluded), _finite(common_support)
-    return {"guarded_failure": seed_cluster_bootstrap(a), "excluded_nonrandom_dropout": seed_cluster_bootstrap(b), "common_support_auxiliary": seed_cluster_bootstrap(c), "guard_confounding": abs(v1_guard_rate - bb_guard_rate) > .02, "guard_rate_difference_percentage_points": 100 * (v1_guard_rate - bb_guard_rate)}
+    ci = [mean - q * se, mean + q * se]; equivalent = ci[0] > -margin and ci[1] < margin
+    if n == 5: status, limitation = "provisional_unadjusted", "n=5 limitation: unadjusted TOST is provisional and cannot be confirmatory"
+    elif n == 8: status, limitation = "confirmatory_holm_2", "n=8: confirmatory TOST requires Holm(2) adjustment"
+    else: status, limitation = "unsupported_sample_size", "TOST status is defined only for n=5 provisional or n=8 confirmatory"
+    return {"n": n, "estimate": mean, "margin": margin, "ci90": ci, "equivalent": equivalent, "status": status, "limitation": limitation}
 
 
 def primary_decision(seed_effects: Sequence[float], *, endpoint: str) -> dict[str, Any]:
     stat = seed_cluster_bootstrap(seed_effects)
-    passed = not stat["degenerate"] and stat["lower"] > 0
-    return {"endpoint": endpoint, "primary": stat, "welch_seed_interval": welch_seed_interval(seed_effects), "iqm_seed_effect": iqm(seed_effects), "iqm_not_standalone_decision": True, "state": "1_pass" if passed else "1_fail", "primary_passed": passed}
+    passed = stat["primary_lower"] > 0
+    return {"endpoint": endpoint, "primary": stat, "welch_seed_interval": welch_seed_interval(seed_effects), "iqm_seed_effect": iqm_seed_cluster_bootstrap(seed_effects), "iqm_not_standalone_decision": True, "state": "1_pass" if passed else "1_fail", "primary_passed": passed}
 
 
-def bb_three_way_sensitivity(reuse3: Sequence[float], new5: Sequence[float], *, draws: int = B) -> dict[str, Any]:
-    """Report BB reuse/new/pooled blocks; non-overlap marks a batch effect."""
-    reuse, new = _finite(reuse3), _finite(new5)
-    if len(reuse) != 3 or len(new) != 5:
-        raise ValueError("BB sensitivity requires reuse3 and new5 seed blocks")
-    old = seed_cluster_bootstrap(reuse, draws=draws)
-    fresh = seed_cluster_bootstrap(new, draws=draws)
-    pooled = seed_cluster_bootstrap(np.concatenate([reuse, new]), draws=draws)
-    nonoverlap = old["ci"][1] < fresh["ci"][0] or fresh["ci"][1] < old["ci"][0]
-    return {"reuse3": old, "new5": fresh, "pooled8": pooled, "batch_effect": nonoverlap}
+def _canonical_paths(claim: Path) -> tuple[Path, Path]:
+    name = claim.name
+    if not name.startswith("p1_bb_sprint_heldout_") or not name.endswith("_claim.json"):
+        raise SprintClaimError("BB claim must use canonical p1_bb_sprint_heldout_<tag>_claim.json name")
+    stem = name[:-len("_claim.json")]
+    return claim.with_name(stem + ".json"), claim.with_name(stem + ".raw.json.gz")
 
 
-def judgment_tree(primary: Mapping[str, Any], p_2: float, p_3: float) -> dict[str, Any]:
-    """Gatekeeper: ②/③ remain untested after a ① failure."""
-    passed = bool(primary.get("primary_passed"))
-    return {
-        "primary_state": "1_pass" if passed else "1_fail",
-        "secondary": holm_bonferroni({"2": p_2, "3": p_3}, primary_passed=passed),
-    }
-
-def _load_json(path: Path) -> Any:
-    with path.open(encoding="utf-8") as f: return json.load(f)
-
-def _claim_summary(path: Path) -> tuple[dict[str, Any], str]:
-    payload = _load_json(path)
-    if not isinstance(payload, dict): raise SprintClaimError("claim/result must be an object")
-    return payload, hashlib.sha256(path.read_bytes()).hexdigest()
-
-def _zero_assert(claims: list[Path]) -> None:
+def _zero_assert(claims: Sequence[Path]) -> None:
     root = claims[0].parent
-    forbidden = []
-    for pattern in ("*v1*result*", "*v1*claim*", "*v1*raw*", "*v1*purpose*", "*matched*", "*random*"):
-        forbidden.extend(root.glob(pattern))
-    if forbidden: raise SprintClaimError("metric lock refused: non-BB held-out artifact exists")
+    for arm in ("v1", "matched", "random"):
+        if any(root.glob(f"p1_{arm}_sprint_heldout_*.json")) or any(root.glob(f"p1_{arm}_sprint_heldout_*.raw.json.gz")):
+            raise SprintClaimError("metric lock refused: non-BB canonical held-out artifact exists")
+    log = root / "t2_sprint_heldout_access.log"
+    if log.exists():
+        for line in log.read_text(encoding="utf-8").splitlines():
+            try: row = json.loads(line)
+            except json.JSONDecodeError as exc: raise SprintClaimError("access log is not valid JSONL") from exc
+            if not isinstance(row, dict): raise SprintClaimError("access log is not valid JSONL")
+            if str(row.get("arm", "")).lower() != "bb" or not row.get("purpose"):
+                raise SprintClaimError("metric lock refused: non-BB or purpose-less held-out access record exists")
+
+
+def _validated_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
+    claim, digest = sprint_claims.json_file(claim_path, "BB claim")
+    claim = sprint_claims._validate_claim(claim)  # canonical claim validator, including schema/version/pre-load.
+    result_path, raw_path = _canonical_paths(claim_path)
+    if not result_path.is_file() or not raw_path.is_file(): raise SprintClaimError("canonical BB result and raw artifact are required")
+    result, _ = sprint_claims.json_file(result_path, "BB result")
+    if not isinstance(result, dict) or result.get("claim_sha256") != digest:
+        raise SprintClaimError("BB result is not linked to its claim digest")
+    if any(result.get(key) != claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")):
+        raise SprintClaimError("BB result identity does not match claim")
+    summary = result.get("summary")
+    if not isinstance(summary, dict): raise SprintClaimError("BB result summary is invalid")
+    success, episodes = summary.get("success_rate"), summary.get("n_episodes")
+    if isinstance(success, bool) or not isinstance(success, (int, float)) or not math.isfinite(success) or not 0 <= success <= 1:
+        raise SprintClaimError("BB success_rate must be finite and in [0,1]")
+    if isinstance(episodes, bool) or not isinstance(episodes, int) or episodes <= 0:
+        raise SprintClaimError("BB n_episodes must be a positive integer")
+    return claim, digest, summary
+
 
 def publish_metric_lock(bb_claims: Sequence[Path], lock: Path) -> dict[str, Any]:
-    """Fail closed and publish the exact G9a metric-lock schema using O_EXCL+fsync."""
     paths = [Path(p) for p in bb_claims]
-    if len(paths) != 8: raise SprintClaimError("exactly eight BB claims are required")
+    if len(paths) != 8: raise SprintClaimError("exactly eight BB claim/result pairs are required")
     _zero_assert(paths)
-    rows = [_claim_summary(p) for p in paths]
-    payloads = [x[0] for x in rows]
-    if any(str(x.get("arm", "")).lower() != "bb" for x in payloads): raise SprintClaimError("metric lock requires BB results/claims only")
-    seeds = [x.get("seed") for x in payloads]
+    rows = [_validated_bb_pair(path) for path in paths]
+    if any(row[0]["arm"] != "bb" for row in rows): raise SprintClaimError("metric lock requires BB claim/result pairs only")
+    seeds = [row[0]["seed"] for row in rows]
     if len(set(seeds)) != 8: raise SprintClaimError("BB claims must have eight unique seeds")
-    summaries = [x.get("summary", x) for x in payloads]
-    try:
-        success = sum(float(x["success_rate"]) * float(x["n_episodes"]) for x in summaries) / sum(float(x["n_episodes"]) for x in summaries)
-    except (KeyError, TypeError, ZeroDivisionError) as exc: raise SprintClaimError("BB results lack success-rate episode summaries") from exc
+    total = sum(row[2]["n_episodes"] for row in rows)
+    success = sum(row[2]["success_rate"] * row[2]["n_episodes"] for row in rows) / total
     endpoint = "return" if success <= .01 else "success_rate"
-    body = {"schema_version": 1, "endpoint": endpoint, "aggregate": success, "created_at": datetime.now(timezone.utc).isoformat(), "bb_claim_sha256": [x[1] for x in rows], "primitive_version": str(PRIMITIVE_SCHEMA_VERSION)}
+    body = {"schema_version": 1, "endpoint": endpoint, "aggregate": success, "created_at": datetime.now(timezone.utc).isoformat(), "bb_claim_sha256": [row[1] for row in rows], "primitive_version": str(PRIMITIVE_SCHEMA_VERSION)}
     target = Path(lock); target.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-    try:
-        os.write(fd, (json.dumps(body, indent=1, sort_keys=True) + "\n").encode()); os.fsync(fd)
+    try: os.write(fd, (json.dumps(body, indent=1, sort_keys=True) + "\n").encode()); os.fsync(fd)
     finally: os.close(fd)
     directory = os.open(target.parent, os.O_RDONLY)
     try: os.fsync(directory)
@@ -209,17 +248,22 @@ def publish_metric_lock(bb_claims: Sequence[Path], lock: Path) -> dict[str, Any]
     return body
 
 
+def _load_json(path: Path) -> Any:
+    with path.open(encoding="utf-8") as handle: return json.load(handle)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(description=__doc__); sub = parser.add_subparsers(dest="command", required=True)
     lock = sub.add_parser("lock"); lock.add_argument("--bb-claims", nargs=8, required=True); lock.add_argument("--lock", required=True)
     judge = sub.add_parser("judge"); judge.add_argument("--lock", required=True); judge.add_argument("--seed-effects", required=True); judge.add_argument("--json", required=True); judge.add_argument("--md", required=True)
     args = parser.parse_args(argv)
     if args.command == "lock": print(json.dumps(publish_metric_lock(args.bb_claims, Path(args.lock)), indent=1)); return 0
     metric = _load_json(Path(args.lock)); require_metric_lock(Path(args.lock), "v1")
-    effects = _load_json(Path(args.seed_effects)); decision = primary_decision(effects, endpoint=metric["endpoint"])
-    practical = 10.0; ci = decision["primary"]["ci"]
-    text = f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\n\nPreregistered practical threshold +10%p 대비 {decision['primary']['estimate'] * 100 - practical:.3f}%p [{ci[0] * 100:.3f}, {ci[1] * 100:.3f}].\n\n+10%p is a benchmark, not an AND gate. Return IQM benchmark is 0.5σ={SIGMA_GOAL / 2:.3f}.\n"
-    Path(args.json).write_text(json.dumps(decision, indent=1) + "\n"); Path(args.md).write_text(text); return 0
+    decision = primary_decision(_load_json(Path(args.seed_effects)), endpoint=metric["endpoint"])
+    if metric["endpoint"] == "success_rate": benchmark = "+10%p benchmark applies to success_rate only"
+    else: benchmark = f"Return benchmark: 0.5σ={SIGMA_GOAL / 2:.3f} (return units)"
+    Path(args.json).write_text(json.dumps(decision, indent=1) + "\n")
+    Path(args.md).write_text(f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\n\n{benchmark}\n")
+    return 0
 
 if __name__ == "__main__": raise SystemExit(main())
