@@ -48,7 +48,7 @@ per-family (held-out): u 최약 (0/6.7/23.3%), s·smooth_random 강세 (~0.24–
 | R_succ | 5.0 | **없음** | **5.0** |
 
 STEP_LOG 전수 대조 결과 조정 기록 0건 ("reward 상수 조정 없음" — M3 report 시점 명기, 이후 배치 불변 규약 유지).
-**본 sign-off 승인 시점부터 α=10.0, c_step=0.1, R_succ=5.0은 최종 잠금 — 이후 변경 불가 (P2+ 포함).**
+**잠금 확정 — verdict gate-m6-signoff-20260717 choice A (comment 5008514879, 2026-07-17T23:32:44Z, 검증 5/5): α=10.0, c_step=0.1, R_succ=5.0 최종 잠금. 이후 변경 불가 — sprint 전 arm (sprint_spec §0 승계) 및 P2+ 동일 적용.**
 불변 등급 재확인: ε_succ=0.05·L · settle 1e-3/10000 · grasp realism ±1node/5% · D=길이 정규화 correspondence L2+canonicalization (Chamfer 보고용만) · K=32 · M=8.
 
 ## 4. 하이퍼파라미터 최종표 + 예산 실사용량
@@ -97,4 +97,4 @@ TD3 (§7 시작값 그대로 — 조정 0건): γ=0.95 · τ=0.005 · lr=3e-4 ·
 | 보고서 사슬 | `p1_m3r_results.md` · `p1_t2_results.md` · `p1_m4_smoke_report.md` · forensics · `noise_floor_cl2.md` · `a2_spike2_report.md` |
 
 ---
-**상태: human_blocked — M6: P1 종료 승인 + reward 상수 잠금 확정 필요 (본 보고서).** #15는 GNG-2 전 close 금지 규칙에 따라 승인 후에도 별도 지시까지 open 유지.
+**상태: 승인 완료 — verdict gate-m6-signoff-20260717 choice A (comment 5008514879). P1 종료, reward 상수 최종 잠금 발효.** #15는 GNG-2 전 close 금지 규칙에 따라 open 유지 (sign-off는 수령·집행됨). P2는 별도 명세로 진행한다.
