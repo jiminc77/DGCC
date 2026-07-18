@@ -1,0 +1,9 @@
+{
+ "m4_tag": "m4_t2_s2",
+ "ckpt": "outputs/models/m4_t2_s2/ckpt_0125952.pt",
+ "ckpt_sha256": "63db0e6331298f960ec278466bab735710d1740558e79128bdf656021e8c3f8e",
+ "split_sha256": "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754",
+ "episode_index_start": 97001,
+ "created_at": "2026-07-18T05:27:21.538382+00:00",
+ "pid": 891185
+}

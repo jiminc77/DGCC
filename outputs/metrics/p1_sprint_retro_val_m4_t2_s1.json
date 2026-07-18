@@ -1,0 +1,136 @@
+{
+ "generated_at": "2026-07-18T03:32:26.702175+00:00",
+ "m4_tag": "m4_t2_s1",
+ "seed": 1,
+ "protocol": {
+  "wall_guard_k": 5,
+  "val_goals": 50,
+  "episodes_per_goal": 2
+ },
+ "selection_rule": "max val success_rate; tie -> max mean_return; tie -> min transitions",
+ "selected_ckpt": "outputs/models/m4_t2_s1/ckpt_0300032.pt",
+ "selected_ckpt_sha256": "636214c1c462cbd2669b881436617ecce90d3bc94df1952ca1927c7e8a1ff02d",
+ "selected_transitions": 300032,
+ "rows": [
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0025600.pt",
+   "ckpt_sha256": "71e0015c242dd2ba2dc6fe374590456fa48035627fc20555c59b39a16d0b343c",
+   "transitions": 25600,
+   "success_rate": 0.0,
+   "mean_return": -5.742964313398938,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 419.1478852999862
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0050176.pt",
+   "ckpt_sha256": "a6e87be0c32040ac98148ed9371a7887c88aaf928772ee5e0ccaf96742150258",
+   "transitions": 50176,
+   "success_rate": 0.0,
+   "mean_return": -2.6789612546446193,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 418.8673405579757
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0075776.pt",
+   "ckpt_sha256": "089b819f242a5a4763036c33fcbca97d49035682eb0731c3ba92809a07b30394",
+   "transitions": 75776,
+   "success_rate": 0.0,
+   "mean_return": -2.0139617967916124,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 798.3874369260157
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0100352.pt",
+   "ckpt_sha256": "4ad977818996d3d13af6c890b2916f011cf8955da72935c46d8be86e62d9f4ac",
+   "transitions": 100352,
+   "success_rate": 0.01,
+   "mean_return": -0.8740671824263196,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 457.13431795401266
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0125952.pt",
+   "ckpt_sha256": "bfa994f7f45ea0517311c777ad82734f58ec2ee5c9943f42d7748d5325f05e9a",
+   "transitions": 125952,
+   "success_rate": 0.0,
+   "mean_return": -0.6654796979383565,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 685.1054989319528
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0150528.pt",
+   "ckpt_sha256": "2ccc23da7f75c2390294f7a673719e843150ef5eded4c2d42f64ccdf48f7c711",
+   "transitions": 150528,
+   "success_rate": 0.03,
+   "mean_return": -0.5076549838042067,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 722.8851836239919
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0175104.pt",
+   "ckpt_sha256": "737e97f602dc8ef79debc1316e3ad92b07765a8b36a8dd63b36b5540b89e2f2c",
+   "transitions": 175104,
+   "success_rate": 0.03,
+   "mean_return": -0.9090222267202083,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 1067.710121985001
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0200704.pt",
+   "ckpt_sha256": "d5a539d26b26bc9811400a648df398ce33c16dae801556655fee232dd2d020ce",
+   "transitions": 200704,
+   "success_rate": 0.07,
+   "mean_return": -0.38247585329981604,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 420.0644874999998
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0225280.pt",
+   "ckpt_sha256": "bff2c8deaed0ab698d7653c5be3c25e3a2dd93a29e00a008fb9c1ed0dfb021b7",
+   "transitions": 225280,
+   "success_rate": 0.04,
+   "mean_return": -0.5659554284218847,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 420.170405959012
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0250880.pt",
+   "ckpt_sha256": "6cc0674109351e1907905907bf0c3708e7bea60c52124d178b552f8fd2f55a66",
+   "transitions": 250880,
+   "success_rate": 0.06,
+   "mean_return": -0.5853831044486669,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 993.0140794609906
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0275456.pt",
+   "ckpt_sha256": "1e2f665621147de8a472f7efcad3eac91dc7753ae54cb8c586f24217bbd873a1",
+   "transitions": 275456,
+   "success_rate": 0.1,
+   "mean_return": -0.0987785112893598,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 420.86962144699646
+  },
+  {
+   "ckpt": "outputs/models/m4_t2_s1/ckpt_0300032.pt",
+   "ckpt_sha256": "636214c1c462cbd2669b881436617ecce90d3bc94df1952ca1927c7e8a1ff02d",
+   "transitions": 300032,
+   "success_rate": 0.1,
+   "mean_return": 0.1453818767603166,
+   "eval_wall_guard_rate": 0.0,
+   "wall_guard_k": 5,
+   "wall_s": 1220.8845791220083
+  }
+ ]
+}

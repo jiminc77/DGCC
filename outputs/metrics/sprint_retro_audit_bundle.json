@@ -1,0 +1,67 @@
+{
+ "schema_version": 1,
+ "story": "G009",
+ "files": {
+  "outputs/metrics/p1_sprint_retro_val_m4_t2_s0.json": {
+   "sha256": "7e28a5cc7af3271a2b65061927d1415c9f38eda23ab3e707742433e194adc533",
+   "size": 4348
+  },
+  "outputs/metrics/p1_sprint_retro_val_m4_t2_s1.json": {
+   "sha256": "eb8ff52f171e910d53cae50d433b293c83d8fccca4f9e76dd35f7bda4c1ed6fa",
+   "size": 4347
+  },
+  "outputs/metrics/p1_sprint_retro_val_m4_t2_s2.json": {
+   "sha256": "3b0aa7613536568f2ab1fb39b6964dc5d832897989558fa6639f5f3f4352cc92",
+   "size": 4342
+  },
+  "outputs/metrics/p1_sprint_heldout_claim_m4_t2_s0.json": {
+   "sha256": "80736ee0db31abdfe83f5dca7d6fc7e2edbadf65c7d4031f7374796a34990430",
+   "size": 344
+  },
+  "outputs/metrics/p1_sprint_heldout_claim_m4_t2_s1.json": {
+   "sha256": "4d046cabdbdeb1d2ff2b60c98b1859e905d8d4bcbc1c346eef29f17f206ff85f",
+   "size": 344
+  },
+  "outputs/metrics/p1_sprint_heldout_claim_m4_t2_s2.json": {
+   "sha256": "cc37b6e641d7b63a4d838d6f6be16e12595d3edc8ddf0fcdc1901fc24450291d",
+   "size": 344
+  },
+  "outputs/metrics/p1_t2_sprint_heldout_m4_t2_s0.json": {
+   "sha256": "9d15ab25a060cc4fc92dbd8a73546f577f848f5968b7f65ad8f39e34a565a8c0",
+   "size": 174532
+  },
+  "outputs/metrics/p1_t2_sprint_heldout_m4_t2_s1.json": {
+   "sha256": "4112860da1333b8c7707ba9c63f6b64c4e273aae18aaef4cd08b3f62ad253dcf",
+   "size": 175528
+  },
+  "outputs/metrics/p1_t2_sprint_heldout_m4_t2_s2.json": {
+   "sha256": "76aafe195b740ae0fed33958fdb6de03712336feeb536f803ca4476495c086fb",
+   "size": 174497
+  },
+  "outputs/metrics/t2_sprint_heldout_access.log": {
+   "sha256": "d48aecc072e9fa9da4e40b449c8114ef085a0069d7fbe84fd809a625ac022f20",
+   "size": 354
+  }
+ },
+ "split_sha256": "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754",
+ "ckpt_digest_check": {
+  "s0": {
+   "claim": "ffe4fa1fb2b3da7b25cc2ed2d7f23eeaeb64742453e5b4abf02a3ffe0793af8e",
+   "disk": "ffe4fa1fb2b3da7b25cc2ed2d7f23eeaeb64742453e5b4abf02a3ffe0793af8e",
+   "match": true,
+   "split_match": true
+  },
+  "s1": {
+   "claim": "636214c1c462cbd2669b881436617ecce90d3bc94df1952ca1927c7e8a1ff02d",
+   "disk": "636214c1c462cbd2669b881436617ecce90d3bc94df1952ca1927c7e8a1ff02d",
+   "match": true,
+   "split_match": true
+  },
+  "s2": {
+   "claim": "63db0e6331298f960ec278466bab735710d1740558e79128bdf656021e8c3f8e",
+   "disk": "63db0e6331298f960ec278466bab735710d1740558e79128bdf656021e8c3f8e",
+   "match": true,
+   "split_match": true
+  }
+ }
+}

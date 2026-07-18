@@ -1,0 +1,3 @@
+2026-07-18T01:03:50.600672+00:00 pid=621600 n_goals=100 argv=scripts/p1_sprint_retro_eval.py --m4-tag m4_t2_s0 --seed
+2026-07-18T03:32:26.702665+00:00 pid=777405 n_goals=100 argv=scripts/p1_sprint_retro_eval.py --m4-tag m4_t2_s1 --seed
+2026-07-18T05:27:21.532513+00:00 pid=891185 n_goals=100 argv=scripts/p1_sprint_retro_eval.py --m4-tag m4_t2_s2 --seed
