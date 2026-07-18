@@ -130,7 +130,8 @@ def main() -> int:
     if any(Path(v).is_symlink() for v in (args.selection_out, args.claim, args.out)) or tuple(Path(v).absolute() for v in (args.selection_out, args.claim, args.out)) != (expected_selection.absolute(), expected_claim.absolute(), expected_out.absolute()):
         raise SprintClaimError("selection, claim, and out paths must be canonical non-symlink run-identity paths")
     if legacy_claim.is_symlink() or not legacy_claim.is_file(): raise SprintClaimError("disposition receipt must bind an existing legacy claim")
-    receipt, receipt_sha = parse_disposition_receipt(receipt_path, legacy_claim_sha256=sha256_file(legacy_claim), run_tag=args.run_tag)
+    legacy_claim_sha256 = sha256_file(legacy_claim)
+    receipt, receipt_sha = parse_disposition_receipt(receipt_path, legacy_claim_sha256=legacy_claim_sha256, run_tag=args.run_tag)
     if receipt["decision"] != "allow_reevaluation": raise SprintClaimError("disposition receipt does not allow re-evaluation")
 
     models_dir = REPO / "outputs/models" / args.m4_tag
@@ -200,7 +201,7 @@ def main() -> int:
             "split_sha256": CANONICAL_SPLIT_SHA256, "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
             "episode_namespace": SPRINT_HELDOUT_EPISODE_INDEX_START, "seed": args.seed,
             "config_sha256": retro_val["config_sha256"], "generation": "reeval",
-            "legacy_claim_sha256": sha256_file(legacy_claim),
+            "legacy_claim_sha256": legacy_claim_sha256,
             "selection_manifest": str(out_val.resolve()), "selection_manifest_sha256": selection_sha,
             "disposition_receipt_sha256": receipt_sha,
         },

@@ -143,6 +143,20 @@ def test_probe_manifest_rejects_symlink_alias(canonical_sprint: Path) -> None:
     probe.write_bytes(b"reopened")
     with pytest.raises(claims.SprintClaimError, match="immutable"):
         claims.probe_manifest_register(manifest, probe, {"production_goal": "G-EV"})
+    # A legacy relative spelling must not create a second registration for the
+    # same canonical file.
+    legacy_manifest = canonical_sprint / "legacy-manifest.json"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.chdir(canonical_sprint)
+    try:
+        legacy_manifest.write_text(json.dumps({
+            "schema_version": 1,
+            "files": {claims.sha256_file(probe): {"path": "probe.h5", "sha256": claims.sha256_file(probe), "size": probe.stat().st_size, "production_goal": "G-EV"}},
+        }))
+        with pytest.raises(claims.SprintClaimError, match="immutable"):
+            claims.probe_manifest_register(legacy_manifest, probe.resolve(), {"production_goal": "G-EV"})
+    finally:
+        monkeypatch.undo()
 
 
 def test_probe_manifest_content_address_and_parallel_registration(canonical_sprint: Path) -> None:
@@ -183,13 +197,39 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
     result = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
     result.write_text(json.dumps({"run_tag": "synthetic", "arm": "bb", "claim_sha256": hashlib.sha256(before).hexdigest()}))
     assert len(claims.audit_claims(claim.parent)) == 1
+    def episode() -> dict[str, object]:
+        return {
+            "episode_id": 1, "goal_id": "goal-1", "goal_label": "goal-1",
+            "init_template": "straight", "success": True, "steps": 1,
+            "return": 1.0, "discounted_return": 1.0, "final_d": 0.1,
+            "d_at_done": 0.1, "d_at_done_fallback": False, "d_steps": [0.1],
+            "min_d": 0.1, "d_initial": 0.2, "d_shape_initial": 0.2,
+            "d_shape_at_done": 0.1, "q_first": None, "eval_wall_guard": False,
+            "discard_exposure": 0,
+        }
     result.write_text(json.dumps({
         "generated_at": "2026-01-01T00:00:00Z", "run_tag": "synthetic", "arm": "bb",
         "seed": 7, "config_sha256": "d" * 64, "ckpt_sha256": "c" * 64,
         "split_sha256": claims.CANONICAL_SPLIT_SHA256,
         "claim_sha256": hashlib.sha256(before).hexdigest(),
         "selection_manifest": "/synthetic/selection.json",
-        "selection_manifest_sha256": "e" * 64, "summary": {}, "episodes": [{}] * 200,
+        "selection_manifest_sha256": "e" * 64,
+        "summary": {
+            "n_episodes": 200, "success_rate": 1.0, "mean_return": 1.0,
+            "mean_final_d": 0.1, "mean_d_at_done": 0.1, "mean_min_d": 0.1,
+            "per_template_success": {}, "per_template_episodes": {},
+        },
+        "episodes": [episode() for _ in range(200)],
     }))
     assert claims.audit_claims(claim.parent) == []
+    assert claim.read_bytes() == before
+    body = json.loads(result.read_text())
+    body["episodes"] = [{}] * 200
+    result.write_text(json.dumps(body))
+    assert len(claims.audit_claims(claim.parent)) == 1
+    body = json.loads(result.read_text())
+    body["episodes"] = [episode() for _ in range(200)]
+    body["seed"] = 8
+    result.write_text(json.dumps(body))
+    assert len(claims.audit_claims(claim.parent)) == 1
     assert claim.read_bytes() == before

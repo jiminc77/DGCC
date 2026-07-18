@@ -181,10 +181,15 @@ def probe_manifest_register(manifest_path: Path, file_path: Path, meta: Mapping[
             manifest = json_file(manifest_path, "probe manifest")[0] if manifest_path.exists() else {"schema_version": PRIMITIVE_SCHEMA_VERSION, "files": {}}
             if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "files"} or not isinstance(manifest["files"], dict): raise SprintClaimError("probe manifest schema is invalid")
             for old_key, old in manifest["files"].items():
-                if not isinstance(old, dict): raise SprintClaimError("probe manifest schema is invalid")
-                if old.get("path") == str(canonical) and old_key != entry["sha256"]: raise SprintClaimError(f"probe manifest entry is immutable: {canonical}")
-                if old.get("path") == str(canonical) and old_key == entry["sha256"] and old != entry: raise SprintClaimError(f"probe manifest entry is immutable: {canonical}")
-                if old_key == entry["sha256"] and old.get("path") != str(canonical): raise SprintClaimError("probe aliases are forbidden")
+                if not isinstance(old, dict) or not isinstance(old.get("path"), str):
+                    raise SprintClaimError("probe manifest schema is invalid")
+                try:
+                    old_canonical = Path(old["path"]).resolve(strict=True)
+                except OSError as exc:
+                    raise SprintClaimError("probe manifest schema is invalid") from exc
+                if old_canonical == canonical:
+                    raise SprintClaimError(f"probe manifest entry is immutable: {canonical}")
+                if old_key == entry["sha256"] and old_canonical != canonical: raise SprintClaimError("probe aliases are forbidden")
             if entry["sha256"] not in manifest["files"]: manifest["files"][entry["sha256"]] = entry; atomic_publish(manifest_path, manifest)
             return manifest
         finally: fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
@@ -199,20 +204,39 @@ def require_metric_lock(lock_path: Path | None, arm: str) -> None:
     hashes = value["bb_claim_sha256"]
     if not isinstance(hashes, list) or len(hashes) != 8 or len(set(hashes)) != 8 or any(not isinstance(x, str) or not _HEX64.fullmatch(x) for x in hashes): raise SprintClaimError("metric lock schema is invalid")
 
-def _is_canonical_result(body: Any, *, run_tag: str, arm: str, claim_sha256: str) -> bool:
+def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: str) -> bool:
     required = {
         "generated_at", "run_tag", "arm", "seed", "config_sha256", "ckpt_sha256",
         "split_sha256", "claim_sha256", "selection_manifest",
         "selection_manifest_sha256", "summary", "episodes",
     }
+    episode_required = {
+        "episode_id", "goal_id", "goal_label", "init_template", "success", "steps",
+        "return", "discounted_return", "final_d", "d_at_done", "d_at_done_fallback",
+        "d_steps", "min_d", "d_initial", "d_shape_initial", "d_shape_at_done",
+        "q_first", "eval_wall_guard", "discard_exposure",
+    }
+    summary_required = {
+        "n_episodes", "success_rate", "mean_return", "mean_final_d", "mean_d_at_done",
+        "mean_min_d", "per_template_success", "per_template_episodes",
+    }
     if not isinstance(body, dict) or not required <= set(body):
         return False
-    if body["run_tag"] != run_tag or body["arm"] != arm or body["claim_sha256"] != claim_sha256:
+    if any(body[key] != claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256")) or body["claim_sha256"] != claim_sha256:
         return False
-    if body["split_sha256"] != CANONICAL_SPLIT_SHA256 or not isinstance(body["episodes"], list) or len(body["episodes"]) != 200:
+    if not isinstance(body["episodes"], list) or len(body["episodes"]) != 200:
         return False
-    if not isinstance(body["summary"], dict) or not isinstance(body["seed"], int):
+    if not isinstance(body["summary"], dict) or not summary_required <= set(body["summary"]):
         return False
+    if not all(isinstance(body["summary"][key], (int, float)) and not isinstance(body["summary"][key], bool) for key in ("success_rate", "mean_return", "mean_final_d", "mean_d_at_done", "mean_min_d")):
+        return False
+    if body["summary"]["n_episodes"] != 200 or not isinstance(body["summary"]["per_template_success"], dict) or not isinstance(body["summary"]["per_template_episodes"], dict):
+        return False
+    for episode in body["episodes"]:
+        if not isinstance(episode, dict) or not episode_required <= set(episode):
+            return False
+        if not isinstance(episode["goal_id"], str) or not episode["goal_id"] or not isinstance(episode["success"], bool) or not isinstance(episode["return"], (int, float)) or isinstance(episode["return"], bool):
+            return False
     return all(isinstance(body[key], str) and body[key] for key in ("generated_at", "config_sha256", "ckpt_sha256", "selection_manifest", "selection_manifest_sha256"))
 
 def audit_claims(directory: Path) -> list[dict[str, Any]]:
@@ -229,7 +253,7 @@ def audit_claims(directory: Path) -> list[dict[str, Any]]:
         for result in candidates:
             try:
                 body, _ = json_file(result, "result")
-                valid = _is_canonical_result(body, run_tag=tag, arm=arm, claim_sha256=digest)
+                valid = _is_canonical_result(body, claim=data, claim_sha256=digest)
             except SprintClaimError: pass
             if valid: break
         if not valid: rows.append({"schema_version": 1, "status": "needs_human_disposition", "claim": str(claim), "claim_sha256": digest, "run_tag": tag, "arm": arm, "re_evaluation_permitted": False})
