@@ -110,6 +110,8 @@ def evaluate_episodes(
         raw_traces: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
         probe_p: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
         probe_u: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
+        probe_x_before: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
+        probe_x_after: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
         discard_exposure = np.zeros(n_envs, dtype=int)
         guarded = np.zeros(n_envs, dtype=bool)
         step_index = 0
@@ -141,6 +143,8 @@ def evaluate_episodes(
                 if record_probe:
                     probe_p[int(slot)].append(np.asarray(p[int(slot)]).copy())
                     probe_u[int(slot)].append(np.asarray(delta[int(slot)]).copy())
+                    probe_x_before[int(slot)].append(np.asarray(X[int(slot)]).copy())
+                    probe_x_after[int(slot)].append(np.asarray(record["X_after"][int(slot)]).copy())
             returns += np.where(active, record["reward"], 0.0)
             discounted += np.where(active, (gamma**step_index) * record["reward"], 0.0)
             step_index += 1
@@ -205,6 +209,11 @@ def evaluate_episodes(
                 if record_probe:
                     row["probe_p"] = [v.tolist() for v in probe_p[slot]]
                     row["probe_u"] = [v.tolist() for v in probe_u[slot]]
+                    row["probe_x_before"] = [v.tolist() for v in probe_x_before[slot]]
+                    row["probe_x_after"] = [v.tolist() for v in probe_x_after[slot]]
+                    row["probe_goal_curve"] = goal_curves[slot].tolist()
+                    row["goal_id"] = row["goal_label"]
+                    row["step_index"] = list(range(len(probe_p[slot])))
             episodes.append(row)
 
     return summarize_episodes(episodes) | {

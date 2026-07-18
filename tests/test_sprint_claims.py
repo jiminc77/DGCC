@@ -20,14 +20,16 @@ def test_lock_schema_rejects_empty_and_bb_is_only_bypass(tmp_path: Path) -> None
     claims.require_metric_lock(None,"BB")
 
 def test_consumer_binds_claim_to_access_and_canonical_split(tmp_path: Path) -> None:
-    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload()); log=tmp_path/"access.jsonl"
-    split=Path(claims.CANONICAL_SPLIT_PATH); loaded=claims.consume_claim_and_load_split(claim,split,access_log=log)
+    claim=tmp_path/"claim.json"; capability=claims.acquire_claim(claim,payload()); log=tmp_path/"access.jsonl"
+    split=Path(claims.CANONICAL_SPLIT_PATH); loaded=claims.consume_claim_and_load_split(capability,split,access_log=log)
     assert loaded["n_goals"]==100 and json.loads(log.read_text())["claim_sha256"]==claims.sha256_file(claim)
 
 def test_consumer_rejects_symlink_alias(tmp_path: Path) -> None:
-    claim=tmp_path/"claim.json"; claims.acquire_claim(claim,payload()); alias=tmp_path/"split.json"; alias.symlink_to(claims.CANONICAL_SPLIT_PATH)
+    claim=tmp_path/"claim.json"; capability=claims.acquire_claim(claim,payload()); alias=tmp_path/"split.json"; alias.symlink_to(claims.CANONICAL_SPLIT_PATH)
     # An alias resolves to canonical and is intentionally accepted; a different target is not.
-    assert claims.consume_claim_and_load_split(claim,alias,access_log=tmp_path/"log")["n_goals"]==100
+    assert claims.consume_claim_and_load_split(capability,alias,access_log=tmp_path/"log")["n_goals"]==100
+def test_consumer_rejects_forged_mapping() -> None:
+    with pytest.raises(claims.SprintClaimError): claims.consume_claim_and_load_split(payload(), claims.CANONICAL_SPLIT_PATH)
 
 def test_probe_manifest_content_address_and_parallel_registration(tmp_path: Path) -> None:
     manifest=tmp_path/"manifest.json"; probes=[]

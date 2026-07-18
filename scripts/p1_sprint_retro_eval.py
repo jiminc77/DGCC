@@ -42,6 +42,8 @@ from dgcc.analysis.sprint_claims import (
     consume_claim_and_load_split,
     probe_manifest_register,
     sha256_file,
+    parse_disposition_receipt,
+    validate_checkpoint_arm,
 )
 
 SPRINT_HELDOUT_EPISODE_INDEX_START = 97_001
@@ -61,14 +63,6 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_sprint_heldout():
-    from dgcc.tasks.t2 import build_t2_goal
-
-    split_path = REPO / "src" / "dgcc" / "tasks" / "splits" / "t2_sprint_heldout_v1.json"
-    payload = json.loads(split_path.read_text(encoding="utf-8"))
-    assert payload["n_goals"] == 100 and payload["overlap_with_t2_v1"] == 0
-    pairs = [(spec, build_t2_goal(spec)) for spec in payload["specs"]]
-    return pairs, sha256_file(split_path)
 
 
 def build_run(config_path: str, seed: int, run_tag: str, device: str):
@@ -130,11 +124,16 @@ def main() -> int:
         raise SprintClaimError("--run-tag, --selection-out, --claim, and --out are required for evaluation")
     if not args.human_disposition_receipt or not Path(args.human_disposition_receipt).is_file():
         raise SprintClaimError("new canonical claim requires a human disposition receipt")
-    expected_selection = Path("outputs/metrics") / f"p1_sprint_retro_val_{args.run_tag}.json"
-    expected_claim = Path("outputs/metrics") / f"p1_sprint_heldout_claim_{args.run_tag}.json"
-    expected_out = Path("outputs/metrics") / f"p1_t2_sprint_heldout_{args.run_tag}.json"
-    if (Path(args.selection_out), Path(args.claim), Path(args.out)) != (expected_selection, expected_claim, expected_out):
+    expected_selection = REPO / "outputs/metrics" / f"p1_sprint_retro_val_{args.run_tag}.json"
+    expected_claim = REPO / "outputs/metrics" / f"p1_sprint_heldout_claim_{args.run_tag}.json"
+    expected_out = REPO / "outputs/metrics" / f"p1_t2_sprint_heldout_{args.run_tag}.json"
+    if tuple(Path(v).resolve() for v in (args.selection_out, args.claim, args.out)) != (expected_selection, expected_claim, expected_out):
         raise SprintClaimError("selection, claim, and out paths must be canonical run-identity paths")
+    legacy_claim = expected_claim
+    if not legacy_claim.is_file(): raise SprintClaimError("disposition receipt must bind an existing legacy claim")
+    _, receipt_sha = parse_disposition_receipt(args.human_disposition_receipt, legacy_claim_sha256=sha256_file(legacy_claim), run_tag=args.run_tag)
+    receipt = json.loads(Path(args.human_disposition_receipt).read_text(encoding="utf-8"))
+    if receipt["decision"] != "allow_reevaluation": raise SprintClaimError("disposition receipt does not allow re-evaluation")
 
     models_dir = Path("outputs/models") / args.m4_tag
     ckpts = sorted(models_dir.glob("ckpt_*.pt"))
@@ -189,22 +188,23 @@ def main() -> int:
         "selected_ckpt": selected["ckpt"],
     }
     out_val = Path(args.selection_out)
-    out_val.write_text(json.dumps(retro_val, indent=1) + "\n", encoding="utf-8")
+    atomic_publish(out_val, retro_val)
+    selection_sha = sha256_file(out_val)
     print(f"retro selection: {selected['ckpt']} (val {selected['success_rate']:.3f})")
 
     # Claim creation uses a source-anchored digest before the sole split consumer.
     claim = Path(args.claim)
-    acquire_claim(
+    validate_checkpoint_arm(Path(selected["ckpt"]), "bb")
+    capability = acquire_claim(
         claim,
         {
-            "run_tag": args.m4_tag,
-            "arm": "BB",
-            "ckpt_sha256": selected["ckpt_sha256"],
-            "split_sha256": CANONICAL_SPLIT_SHA256,
-            "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
+            "run_tag": args.m4_tag, "arm": "bb", "ckpt_sha256": selected["ckpt_sha256"],
+            "split_sha256": CANONICAL_SPLIT_SHA256, "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
+            "selection_manifest": str(out_val.resolve()), "selection_manifest_sha256": selection_sha,
+            "disposition_receipt_sha256": receipt_sha,
         },
     )
-    payload = consume_claim_and_load_split(claim, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG)
+    payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG)
     from dgcc.tasks.t2 import build_t2_goal
     pairs = [(spec, build_t2_goal(spec)) for spec in payload["specs"]]
     split_sha = CANONICAL_SPLIT_SHA256
@@ -260,6 +260,8 @@ def main() -> int:
         "split": "t2_sprint_heldout_v1",
         "split_sha256": split_sha,
         "claim_sha256": sha256_file(claim),
+        "selection_manifest_sha256": selection_sha,
+        "disposition_receipt_sha256": receipt_sha,
         "episode_index_start": SPRINT_HELDOUT_EPISODE_INDEX_START,
         "protocol": {"wall_guard_k": WALL_GUARD_K, "record_raw": True},
         "wall_s": wall,
