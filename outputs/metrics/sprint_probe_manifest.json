@@ -1,0 +1,29 @@
+{
+ "files": {
+  "4e39f6d53261a20f1f558fc34b4beffa220ec8fe2a6d87cb0a38fe89b9c3f850": {
+   "kind": "legacy_raw_no_probe",
+   "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_raw_sprint_heldout_m4_t2_s0.json.gz",
+   "production_goal": "G009",
+   "sha256": "4e39f6d53261a20f1f558fc34b4beffa220ec8fe2a6d87cb0a38fe89b9c3f850",
+   "size": 1430797
+  },
+  "7fa21a937b3a9b14c4eb17182ba2255b10e3af42ac93b5770eff8676297fa520": {
+   "kind": "legacy_raw_no_probe",
+   "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_raw_sprint_heldout_m4_t2_s2.json.gz",
+   "production_goal": "G009",
+   "sha256": "7fa21a937b3a9b14c4eb17182ba2255b10e3af42ac93b5770eff8676297fa520",
+   "size": 1429391
+  },
+  "a5fdc68e02b7e14cf4991de47dca72c00204564e57f5f4c50164fec306a899a4": {
+   "kind": "legacy_raw_no_probe",
+   "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_raw_sprint_heldout_m4_t2_s1.json.gz",
+   "production_goal": "G009",
+   "sha256": "a5fdc68e02b7e14cf4991de47dca72c00204564e57f5f4c50164fec306a899a4",
+   "size": 1431612
+  }
+ },
+ "schema_version": 1
+}
