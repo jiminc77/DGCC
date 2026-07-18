@@ -1,0 +1,1850 @@
+{
+ "dedup_check_access": {
+  "overlap_counts": {
+   "m4_heldout_100": 0,
+   "t2_sprint_heldout_v1": 0,
+   "t2_v1_all_650": 0
+  },
+  "parameter_key": "family+params+anchor (float values rounded to 12 decimals)",
+  "purpose": "dedup_check",
+  "sources": [
+   "t2_v1_all_650",
+   "t2_sprint_heldout_v1",
+   "m4_heldout_100"
+  ]
+ },
+ "families": [
+  "s",
+  "u",
+  "l",
+  "zigzag",
+  "smooth_random"
+ ],
+ "family_distribution": {
+  "l": 22,
+  "s": 23,
+  "smooth_random": 18,
+  "u": 17,
+  "zigzag": 20
+ },
+ "generator_version": "t2-v1",
+ "goal_ids": [
+  "t2-0000",
+  "t2-0014",
+  "t2-0022",
+  "t2-0035",
+  "t2-0038",
+  "t2-0044",
+  "t2-0066",
+  "t2-0068",
+  "t2-0072",
+  "t2-0077",
+  "t2-0078",
+  "t2-0087",
+  "t2-0091",
+  "t2-0092",
+  "t2-0093",
+  "t2-0101",
+  "t2-0102",
+  "t2-0109",
+  "t2-0131",
+  "t2-0135",
+  "t2-0136",
+  "t2-0148",
+  "t2-0159",
+  "t2-0160",
+  "t2-0163",
+  "t2-0169",
+  "t2-0186",
+  "t2-0227",
+  "t2-0241",
+  "t2-0248",
+  "t2-0250",
+  "t2-0255",
+  "t2-0260",
+  "t2-0261",
+  "t2-0269",
+  "t2-0270",
+  "t2-0272",
+  "t2-0273",
+  "t2-0277",
+  "t2-0295",
+  "t2-0302",
+  "t2-0306",
+  "t2-0308",
+  "t2-0309",
+  "t2-0314",
+  "t2-0315",
+  "t2-0321",
+  "t2-0324",
+  "t2-0328",
+  "t2-0335",
+  "t2-0337",
+  "t2-0343",
+  "t2-0370",
+  "t2-0373",
+  "t2-0378",
+  "t2-0387",
+  "t2-0390",
+  "t2-0396",
+  "t2-0410",
+  "t2-0417",
+  "t2-0425",
+  "t2-0447",
+  "t2-0450",
+  "t2-0458",
+  "t2-0459",
+  "t2-0461",
+  "t2-0462",
+  "t2-0467",
+  "t2-0468",
+  "t2-0469",
+  "t2-0470",
+  "t2-0477",
+  "t2-0483",
+  "t2-0484",
+  "t2-0485",
+  "t2-0493",
+  "t2-0497",
+  "t2-0509",
+  "t2-0515",
+  "t2-0520",
+  "t2-0524",
+  "t2-0535",
+  "t2-0541",
+  "t2-0558",
+  "t2-0561",
+  "t2-0569",
+  "t2-0577",
+  "t2-0582",
+  "t2-0583",
+  "t2-0586",
+  "t2-0601",
+  "t2-0605",
+  "t2-0614",
+  "t2-0616",
+  "t2-0617",
+  "t2-0625",
+  "t2-0632",
+  "t2-0638",
+  "t2-0639",
+  "t2-0649"
+ ],
+ "master_seed": 20260722,
+ "n_goals": 100,
+ "ood_length_transform": {
+  "l_ood_m": [
+   0.75,
+   1.25
+  ],
+  "l_ood_over_l_train": [
+   0.75,
+   1.25
+  ],
+  "l_train_m": 1.0,
+  "ood_direction": "shorter_and_longer_than_fixed_training_length",
+  "rescale_mask": {
+   "absolute": "x0, y0, z0, and z DCT modes 1-7",
+   "scaled": "x/y DCT modes 1-7"
+  },
+  "training_length_boundary_m": [
+   1.0,
+   1.0
+  ]
+ },
+ "specs": [
+  {
+   "anchor": [
+    0.03773539890103897,
+    -0.026948122794540855,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0000",
+   "params": {
+    "amp1": 0.23470789395088126,
+    "amp2": 0.27108684274352113
+   },
+   "slot": 0
+  },
+  {
+   "anchor": [
+    0.04038893446443151,
+    0.11411489748250311,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0014",
+   "params": {
+    "a1": 0.053417141232491513,
+    "a2": 0.021990917687888623,
+    "a3": 0.011720970989555705,
+    "phi1": 4.387934568854185,
+    "phi2": 0.8927444649427719,
+    "phi3": 1.4296450523758777
+   },
+   "slot": 2
+  },
+  {
+   "anchor": [
+    -0.02092575756899956,
+    -0.13085520025481992,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0022",
+   "params": {
+    "corner_angle": 1.2566369968784128,
+    "leg_frac": 0.4699934948216807
+   },
+   "slot": 4
+  },
+  {
+   "anchor": [
+    -0.08088251458780886,
+    -0.10971427241249113,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0035",
+   "params": {
+    "amp1": 0.2171311514390704,
+    "amp2": 0.1377418963253102
+   },
+   "slot": 7
+  },
+  {
+   "anchor": [
+    -0.12357185893075977,
+    -0.05482015551139002,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0038",
+   "params": {
+    "amp1": 0.1036938559245471,
+    "amp2": 0.12389695690556991,
+    "n_periods": 2.0
+   },
+   "slot": 7
+  },
+  {
+   "anchor": [
+    0.05849224564018965,
+    -0.012742524134639804,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0044",
+   "params": {
+    "a1": 0.07261859607896037,
+    "a2": 0.03538220277492995,
+    "a3": 0.025801298322837687,
+    "phi1": 6.008831514442337,
+    "phi2": 0.66385296888971,
+    "phi3": 2.000147081803187
+   },
+   "slot": 8
+  },
+  {
+   "anchor": [
+    0.13209693884063742,
+    0.1223154217869323,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0066",
+   "params": {
+    "theta1": 1.5748260562211371,
+    "theta2": 2.174666536919296
+   },
+   "slot": 13
+  },
+  {
+   "anchor": [
+    -0.058752576526621816,
+    -0.109489684480537,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0068",
+   "params": {
+    "amp1": 0.09277943085794965,
+    "amp2": 0.06580096117836509,
+    "n_periods": 2.0
+   },
+   "slot": 13
+  },
+  {
+   "anchor": [
+    0.14283313598843064,
+    0.09411696932922001,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0072",
+   "params": {
+    "corner_angle": 1.3503227720824307,
+    "leg_frac": 0.5273292517402538
+   },
+   "slot": 14
+  },
+  {
+   "anchor": [
+    -0.1328298771297988,
+    -0.1397125770669993,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0077",
+   "params": {
+    "corner_angle": 1.149205371142668,
+    "leg_frac": 0.41759658550980894
+   },
+   "slot": 15
+  },
+  {
+   "anchor": [
+    -0.06153423321986516,
+    -0.14249957890085913,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0078",
+   "params": {
+    "amp1": 0.08779471222896237,
+    "amp2": 0.13813702507723624,
+    "n_periods": 3.0
+   },
+   "slot": 15
+  },
+  {
+   "anchor": [
+    -0.14309719479750257,
+    0.14179208074911023,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0087",
+   "params": {
+    "corner_angle": 1.5758314252365258,
+    "leg_frac": 0.41962429018890224
+   },
+   "slot": 17
+  },
+  {
+   "anchor": [
+    0.050045255882552736,
+    0.05620074293312596,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0091",
+   "params": {
+    "theta1": 2.3428749604845684,
+    "theta2": 1.7923760855499449
+   },
+   "slot": 18
+  },
+  {
+   "anchor": [
+    -0.04749718050250186,
+    0.04731602433789267,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0092",
+   "params": {
+    "corner_angle": 1.972043283653261,
+    "leg_frac": 0.4795356204190464
+   },
+   "slot": 18
+  },
+  {
+   "anchor": [
+    0.13347883269123426,
+    -0.13846663477758478,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0093",
+   "params": {
+    "amp1": 0.0969965014290412,
+    "amp2": 0.08460702860424085,
+    "n_periods": 2.0
+   },
+   "slot": 18
+  },
+  {
+   "anchor": [
+    0.06361635768674709,
+    -0.10667486200271661,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0101",
+   "params": {
+    "theta1": 1.9056491668558873,
+    "theta2": 2.3834425555044145
+   },
+   "slot": 20
+  },
+  {
+   "anchor": [
+    0.047129170668211234,
+    -0.06233519863078059,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0102",
+   "params": {
+    "corner_angle": 1.5974704608168249,
+    "leg_frac": 0.3407404218314638
+   },
+   "slot": 20
+  },
+  {
+   "anchor": [
+    0.09460077668118194,
+    0.039158439010684054,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0109",
+   "params": {
+    "a1": 0.06447646289084435,
+    "a2": 0.05546397751275433,
+    "a3": 0.018735230670579674,
+    "phi1": 4.8721522256498,
+    "phi2": 4.873712168488092,
+    "phi3": 3.852812129710818
+   },
+   "slot": 21
+  },
+  {
+   "anchor": [
+    0.018533186337393925,
+    0.03675674256069256,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0131",
+   "params": {
+    "theta1": 2.3817926103251796,
+    "theta2": 1.2490213424563612
+   },
+   "slot": 26
+  },
+  {
+   "anchor": [
+    0.0879949356935367,
+    -0.08083373028394686,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0135",
+   "params": {
+    "amp1": 0.1826020586099491,
+    "amp2": 0.22678184052962327
+   },
+   "slot": 27
+  },
+  {
+   "anchor": [
+    0.04831663873198369,
+    0.12391279608168362,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0136",
+   "params": {
+    "theta1": 1.4922585917592577,
+    "theta2": 1.5302986423549432
+   },
+   "slot": 27
+  },
+  {
+   "anchor": [
+    -0.09779805077366321,
+    -0.07495742242720596,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0148",
+   "params": {
+    "amp1": 0.12040283578696082,
+    "amp2": 0.10469532594403244,
+    "n_periods": 3.0
+   },
+   "slot": 29
+  },
+  {
+   "anchor": [
+    0.03515013887732871,
+    -0.04974608840558814,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0159",
+   "params": {
+    "a1": 0.10827638060281342,
+    "a2": 0.056251809393397724,
+    "a3": 0.013942198834718303,
+    "phi1": 1.8593579311883313,
+    "phi2": 0.8604644190014078,
+    "phi3": 0.2976276317120405
+   },
+   "slot": 31
+  },
+  {
+   "anchor": [
+    -0.05563738521815778,
+    -0.11573256423152745,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0160",
+   "params": {
+    "amp1": 0.27601833281163124,
+    "amp2": 0.19507024435918574
+   },
+   "slot": 32
+  },
+  {
+   "anchor": [
+    0.06195665872549233,
+    -0.048250944196361445,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0163",
+   "params": {
+    "amp1": 0.07036512327653839,
+    "amp2": 0.11055419185233338,
+    "n_periods": 3.0
+   },
+   "slot": 32
+  },
+  {
+   "anchor": [
+    -0.09858750320546854,
+    0.12524478285492938,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0169",
+   "params": {
+    "a1": 0.04544017975456955,
+    "a2": 0.016667886038663978,
+    "a3": 0.014436760599740008,
+    "phi1": 1.7094440835476035,
+    "phi2": 5.940776044504647,
+    "phi3": 4.045949341296809
+   },
+   "slot": 33
+  },
+  {
+   "anchor": [
+    0.08811952052704058,
+    0.07064474341547078,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0186",
+   "params": {
+    "theta1": 2.2751759634364737,
+    "theta2": 1.8195445219131694
+   },
+   "slot": 37
+  },
+  {
+   "anchor": [
+    0.030719723905474394,
+    -0.14295316623526771,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0227",
+   "params": {
+    "corner_angle": 1.3388621945819064,
+    "leg_frac": 0.4515722348557421
+   },
+   "slot": 45
+  },
+  {
+   "anchor": [
+    -0.11219999133388578,
+    -0.016527722714063497,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0241",
+   "params": {
+    "theta1": 2.2146919668663863,
+    "theta2": 1.3719107146372
+   },
+   "slot": 48
+  },
+  {
+   "anchor": [
+    -0.03861461131591702,
+    0.14287579615812554,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0248",
+   "params": {
+    "amp1": 0.08535519335555322,
+    "amp2": 0.13593368069382017,
+    "n_periods": 2.0
+   },
+   "slot": 49
+  },
+  {
+   "anchor": [
+    -0.005797753313801668,
+    -0.05942658860158109,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0250",
+   "params": {
+    "amp1": 0.1388599630088499,
+    "amp2": 0.180727190706356
+   },
+   "slot": 50
+  },
+  {
+   "anchor": [
+    0.12473439346454104,
+    0.020414581717586533,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0255",
+   "params": {
+    "amp1": 0.21712670545738666,
+    "amp2": 0.13924937802912463
+   },
+   "slot": 51
+  },
+  {
+   "anchor": [
+    0.0513775769843611,
+    0.14402671910768097,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0260",
+   "params": {
+    "amp1": 0.24627188744843373,
+    "amp2": 0.14594682778970375
+   },
+   "slot": 52
+  },
+  {
+   "anchor": [
+    -0.003462754188948536,
+    -0.12179492622721678,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0261",
+   "params": {
+    "theta1": 1.704319170368104,
+    "theta2": 1.8080916803968734
+   },
+   "slot": 52
+  },
+  {
+   "anchor": [
+    -0.13392422697425505,
+    -0.08624785961761566,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0269",
+   "params": {
+    "a1": 0.10814943425082539,
+    "a2": 0.016964620620073215,
+    "a3": 0.02396487055291088,
+    "phi1": 4.863119815830063,
+    "phi2": 0.28746549066427085,
+    "phi3": 5.907297530527922
+   },
+   "slot": 53
+  },
+  {
+   "anchor": [
+    0.026312494130454306,
+    -0.14266801286586597,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0270",
+   "params": {
+    "amp1": 0.24789193481485827,
+    "amp2": 0.14242156647396595
+   },
+   "slot": 54
+  },
+  {
+   "anchor": [
+    -0.10300028870087624,
+    -0.11372557413855776,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0272",
+   "params": {
+    "corner_angle": 1.661128324850182,
+    "leg_frac": 0.6904541848457475
+   },
+   "slot": 54
+  },
+  {
+   "anchor": [
+    -0.02869820279851211,
+    -0.11853324650224917,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0273",
+   "params": {
+    "amp1": 0.060760801988622104,
+    "amp2": 0.07006555792327632,
+    "n_periods": 3.0
+   },
+   "slot": 54
+  },
+  {
+   "anchor": [
+    0.03887879406746289,
+    0.012177861001163193,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0277",
+   "params": {
+    "corner_angle": 1.1397812486089864,
+    "leg_frac": 0.692949444023026
+   },
+   "slot": 55
+  },
+  {
+   "anchor": [
+    0.09338652140157283,
+    -0.12102911281084922,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0295",
+   "params": {
+    "amp1": 0.16251997690862743,
+    "amp2": 0.15199786762043904
+   },
+   "slot": 59
+  },
+  {
+   "anchor": [
+    0.11271261014629588,
+    -0.04789642067687895,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0302",
+   "params": {
+    "corner_angle": 1.0313639926395572,
+    "leg_frac": 0.4808492478542822
+   },
+   "slot": 60
+  },
+  {
+   "anchor": [
+    -0.017447668958514212,
+    0.09395285702577325,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0306",
+   "params": {
+    "theta1": 1.8616769699836355,
+    "theta2": 1.6214783807413204
+   },
+   "slot": 61
+  },
+  {
+   "anchor": [
+    0.11442229171036425,
+    0.0690561425536187,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0308",
+   "params": {
+    "amp1": 0.10378927537552948,
+    "amp2": 0.11781294828799348,
+    "n_periods": 3.0
+   },
+   "slot": 61
+  },
+  {
+   "anchor": [
+    0.12782091703511225,
+    0.09625002242453884,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0309",
+   "params": {
+    "a1": 0.04704073069438916,
+    "a2": 0.050200533432566766,
+    "a3": 0.02847276517841285,
+    "phi1": 0.23024432652597593,
+    "phi2": 5.8791587608391955,
+    "phi3": 4.671779260834828
+   },
+   "slot": 61
+  },
+  {
+   "anchor": [
+    -0.056388648648012366,
+    -0.08318695454341977,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0314",
+   "params": {
+    "a1": 0.062292684483231435,
+    "a2": 0.026343126272595708,
+    "a3": 0.024517121494543895,
+    "phi1": 3.530753410421383,
+    "phi2": 4.220912070467985,
+    "phi3": 0.1493575229706701
+   },
+   "slot": 62
+  },
+  {
+   "anchor": [
+    0.12016998670685916,
+    0.11512599301461648,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0315",
+   "params": {
+    "amp1": 0.22858616935996562,
+    "amp2": 0.12751212229798858
+   },
+   "slot": 63
+  },
+  {
+   "anchor": [
+    0.14951060455870832,
+    -0.13751581236517676,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0321",
+   "params": {
+    "theta1": 1.9603103275199634,
+    "theta2": 2.2870693631591887
+   },
+   "slot": 64
+  },
+  {
+   "anchor": [
+    0.11738470023804068,
+    0.0615236502438489,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0324",
+   "params": {
+    "a1": 0.030160865796569358,
+    "a2": 0.029207467652776348,
+    "a3": 0.016565683895268822,
+    "phi1": 1.764932057691157,
+    "phi2": 4.009484111965773,
+    "phi3": 1.222636476832547
+   },
+   "slot": 64
+  },
+  {
+   "anchor": [
+    0.046746899742653725,
+    0.10525014766238186,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0328",
+   "params": {
+    "amp1": 0.06572439146321368,
+    "amp2": 0.06313216935087143,
+    "n_periods": 2.0
+   },
+   "slot": 65
+  },
+  {
+   "anchor": [
+    0.07727982964689376,
+    0.11145621563788041,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0335",
+   "params": {
+    "amp1": 0.23817569372029387,
+    "amp2": 0.14518074913977286
+   },
+   "slot": 67
+  },
+  {
+   "anchor": [
+    -0.02444823938615137,
+    -0.03280695468009953,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0337",
+   "params": {
+    "corner_angle": 2.034895339124481,
+    "leg_frac": 0.6079621070906756
+   },
+   "slot": 67
+  },
+  {
+   "anchor": [
+    -0.11996955460958106,
+    -0.012425762863788437,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0343",
+   "params": {
+    "amp1": 0.13148229805158224,
+    "amp2": 0.09952370664966428,
+    "n_periods": 2.0
+   },
+   "slot": 68
+  },
+  {
+   "anchor": [
+    -0.11475904518362755,
+    0.06460060949834961,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0370",
+   "params": {
+    "amp1": 0.1976337081212925,
+    "amp2": 0.1685611922962261
+   },
+   "slot": 74
+  },
+  {
+   "anchor": [
+    0.1259165559775737,
+    0.14820775076604256,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0373",
+   "params": {
+    "amp1": 0.12055320777592934,
+    "amp2": 0.12305370216485714,
+    "n_periods": 3.0
+   },
+   "slot": 74
+  },
+  {
+   "anchor": [
+    0.013546694364802797,
+    0.12502374353629778,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0378",
+   "params": {
+    "amp1": 0.08705552686554985,
+    "amp2": 0.12767678122738438,
+    "n_periods": 2.0
+   },
+   "slot": 75
+  },
+  {
+   "anchor": [
+    -0.1342008767704744,
+    -0.10471355146270159,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0387",
+   "params": {
+    "corner_angle": 1.9500130017007393,
+    "leg_frac": 0.503829054652151
+   },
+   "slot": 77
+  },
+  {
+   "anchor": [
+    -0.10260769177595999,
+    0.11647515090832192,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0390",
+   "params": {
+    "amp1": 0.17942495395201857,
+    "amp2": 0.21890872224143154
+   },
+   "slot": 78
+  },
+  {
+   "anchor": [
+    0.13620650051963898,
+    0.10126091736232043,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0396",
+   "params": {
+    "theta1": 2.0416923548487613,
+    "theta2": 1.8913607147411828
+   },
+   "slot": 79
+  },
+  {
+   "anchor": [
+    -0.005104502214979878,
+    -0.0002593483783905337,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0410",
+   "params": {
+    "amp1": 0.18354646628227433,
+    "amp2": 0.27441706641575914
+   },
+   "slot": 82
+  },
+  {
+   "anchor": [
+    -0.009532774051075193,
+    0.03329196173770016,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0417",
+   "params": {
+    "corner_angle": 1.051672947588248,
+    "leg_frac": 0.4242435656292293
+   },
+   "slot": 83
+  },
+  {
+   "anchor": [
+    0.05587211998129202,
+    -0.01504044124496104,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0425",
+   "params": {
+    "amp1": 0.1429468620884765,
+    "amp2": 0.176852724004252
+   },
+   "slot": 85
+  },
+  {
+   "anchor": [
+    0.00024364014899264097,
+    -0.09676409751216761,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0447",
+   "params": {
+    "corner_angle": 1.4657866915160558,
+    "leg_frac": 0.5905787522089984
+   },
+   "slot": 89
+  },
+  {
+   "anchor": [
+    0.045044754798790554,
+    -0.03019773016260187,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0450",
+   "params": {
+    "amp1": 0.25120306818172167,
+    "amp2": 0.25279505126163004
+   },
+   "slot": 90
+  },
+  {
+   "anchor": [
+    0.0673253955744518,
+    0.1270684349101279,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0458",
+   "params": {
+    "amp1": 0.06071141672293771,
+    "amp2": 0.060054212506936946,
+    "n_periods": 2.0
+   },
+   "slot": 91
+  },
+  {
+   "anchor": [
+    -0.011190135320791383,
+    -0.11929136042777894,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0459",
+   "params": {
+    "a1": 0.03786686134508299,
+    "a2": 0.022967356651188583,
+    "a3": 0.0399883646236316,
+    "phi1": 5.337306681107698,
+    "phi2": 5.329195112216415,
+    "phi3": 1.1939674587777456
+   },
+   "slot": 91
+  },
+  {
+   "anchor": [
+    -0.09908520014183651,
+    -0.005823275338009609,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0461",
+   "params": {
+    "theta1": 1.6110901712899188,
+    "theta2": 1.7054227220723135
+   },
+   "slot": 92
+  },
+  {
+   "anchor": [
+    -0.12828346934530876,
+    0.07710963442935678,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0462",
+   "params": {
+    "corner_angle": 1.4173251029110947,
+    "leg_frac": 0.3481662171789878
+   },
+   "slot": 92
+  },
+  {
+   "anchor": [
+    -0.13537589990444793,
+    0.016633017844454756,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0467",
+   "params": {
+    "corner_angle": 2.0968821861487528,
+    "leg_frac": 0.4998106614643998
+   },
+   "slot": 93
+  },
+  {
+   "anchor": [
+    -0.08844148022747778,
+    -0.12496280815199823,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0468",
+   "params": {
+    "amp1": 0.05649797893436473,
+    "amp2": 0.12057681801073715,
+    "n_periods": 3.0
+   },
+   "slot": 93
+  },
+  {
+   "anchor": [
+    -0.018918520923908416,
+    -0.1456309798916252,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0469",
+   "params": {
+    "a1": 0.07667415016782975,
+    "a2": 0.022101298868905276,
+    "a3": 0.01342411551683112,
+    "phi1": 2.8440340519834595,
+    "phi2": 2.631540957849469,
+    "phi3": 1.4482106113814726
+   },
+   "slot": 93
+  },
+  {
+   "anchor": [
+    0.07565108774226839,
+    -0.14544403253528773,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0470",
+   "params": {
+    "amp1": 0.1894751409905227,
+    "amp2": 0.20935788508578587
+   },
+   "slot": 94
+  },
+  {
+   "anchor": [
+    0.011232220666258286,
+    -0.12026148543486319,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0477",
+   "params": {
+    "corner_angle": 0.9646956370416604,
+    "leg_frac": 0.5434364660876962
+   },
+   "slot": 95
+  },
+  {
+   "anchor": [
+    -0.05213461103486891,
+    -0.11140453776067347,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0483",
+   "params": {
+    "amp1": 0.0904771059706153,
+    "amp2": 0.10799124102220826,
+    "n_periods": 2.0
+   },
+   "slot": 96
+  },
+  {
+   "anchor": [
+    -0.015729102158303282,
+    -0.026315223002682187,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0484",
+   "params": {
+    "a1": 0.030398949759425205,
+    "a2": 0.057122058326960934,
+    "a3": 0.02226993916100795,
+    "phi1": 0.7871141167939505,
+    "phi2": 2.550066189717013,
+    "phi3": 0.09620166457488942
+   },
+   "slot": 96
+  },
+  {
+   "anchor": [
+    -0.12356857047745451,
+    0.09182184699537738,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0485",
+   "params": {
+    "amp1": 0.2299280707850771,
+    "amp2": 0.24151660492115687
+   },
+   "slot": 97
+  },
+  {
+   "anchor": [
+    -0.09428529735608557,
+    0.022556964364765897,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0493",
+   "params": {
+    "amp1": 0.13131274151205602,
+    "amp2": 0.10696845934795866,
+    "n_periods": 2.0
+   },
+   "slot": 98
+  },
+  {
+   "anchor": [
+    -0.007326451181365712,
+    -0.015591463035655034,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0497",
+   "params": {
+    "corner_angle": 1.3634329941292913,
+    "leg_frac": 0.5978331401314818
+   },
+   "slot": 99
+  },
+  {
+   "anchor": [
+    -0.08825947869143641,
+    0.06375072414902627,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0509",
+   "params": {
+    "a1": 0.10057240355682487,
+    "a2": 0.02558813882516002,
+    "a3": 0.025526171068680423,
+    "phi1": 1.7824980150997092,
+    "phi2": 1.8970561778187496,
+    "phi3": 3.349680787351854
+   },
+   "slot": 101
+  },
+  {
+   "anchor": [
+    -0.019045267485135797,
+    -0.08837561034590014,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0515",
+   "params": {
+    "amp1": 0.21096987604834144,
+    "amp2": 0.2764355441091737
+   },
+   "slot": 103
+  },
+  {
+   "anchor": [
+    0.07898734594810472,
+    0.07879039847310476,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "s",
+   "goal_id": "t2-0520",
+   "params": {
+    "amp1": 0.18877478918840157,
+    "amp2": 0.1721591781339829
+   },
+   "slot": 104
+  },
+  {
+   "anchor": [
+    -0.10467144766302658,
+    0.046380900552125764,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0524",
+   "params": {
+    "a1": 0.05955856348966506,
+    "a2": 0.04771719103947538,
+    "a3": 0.025071706873887305,
+    "phi1": 1.3794714085615474,
+    "phi2": 5.52269835896867,
+    "phi3": 2.3655746475562505
+   },
+   "slot": 104
+  },
+  {
+   "anchor": [
+    -0.03744464664104914,
+    0.016681388894299792,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0535",
+   "params": {
+    "amp1": 0.11591723575988307,
+    "amp2": 0.278897292189627
+   },
+   "slot": 107
+  },
+  {
+   "anchor": [
+    0.07166739331444719,
+    -0.05043348054774252,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0541",
+   "params": {
+    "theta1": 1.8976961926210567,
+    "theta2": 1.5512052327985058
+   },
+   "slot": 108
+  },
+  {
+   "anchor": [
+    0.12842690184241137,
+    -0.11065776625538798,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "zigzag",
+   "goal_id": "t2-0558",
+   "params": {
+    "amp1": 0.08260923573287428,
+    "amp2": 0.12275736160992992,
+    "n_periods": 3.0
+   },
+   "slot": 111
+  },
+  {
+   "anchor": [
+    0.12711323911147668,
+    -0.11046118232733981,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0561",
+   "params": {
+    "theta1": 1.2708138830054303,
+    "theta2": 1.8309382390908895
+   },
+   "slot": 112
+  },
+  {
+   "anchor": [
+    0.12478302455370957,
+    0.10538013726912063,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0569",
+   "params": {
+    "a1": 0.11521978962089703,
+    "a2": 0.0447358232013563,
+    "a3": 0.012431232948376676,
+    "phi1": 5.3835739289971505,
+    "phi2": 6.057332862450879,
+    "phi3": 6.025835568936464
+   },
+   "slot": 113
+  },
+  {
+   "anchor": [
+    -0.0455518548532973,
+    0.04566484801645043,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0577",
+   "params": {
+    "corner_angle": 2.131049056241259,
+    "leg_frac": 0.46874025581474965
+   },
+   "slot": 115
+  },
+  {
+   "anchor": [
+    0.04689604658478583,
+    -0.052004951269317645,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0582",
+   "params": {
+    "corner_angle": 1.5583631665401751,
+    "leg_frac": 0.5566507567052217
+   },
+   "slot": 116
+  },
+  {
+   "anchor": [
+    -0.012465381377681661,
+    -0.09477569042477627,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0583",
+   "params": {
+    "amp1": 0.08156615409869383,
+    "amp2": 0.10249147088269013,
+    "n_periods": 3.0
+   },
+   "slot": 116
+  },
+  {
+   "anchor": [
+    0.05226385843068887,
+    -0.05165236590898606,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "u",
+   "goal_id": "t2-0586",
+   "params": {
+    "theta1": 2.1099066295017384,
+    "theta2": 1.13751923582267
+   },
+   "slot": 117
+  },
+  {
+   "anchor": [
+    -0.009217125177820695,
+    0.029975595039041958,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0601",
+   "params": {
+    "theta1": 1.6676422212342077,
+    "theta2": 2.032770607321458
+   },
+   "slot": 120
+  },
+  {
+   "anchor": [
+    -0.12272186757081777,
+    0.1181992475424988,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0605",
+   "params": {
+    "amp1": 0.26313051737769344,
+    "amp2": 0.2061316706161067
+   },
+   "slot": 121
+  },
+  {
+   "anchor": [
+    0.0010950525479662132,
+    -0.03639622808846431,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0614",
+   "params": {
+    "a1": 0.10457292594952697,
+    "a2": 0.044820261790371727,
+    "a3": 0.020106828275799668,
+    "phi1": 0.019746714938031533,
+    "phi2": 5.846673564039842,
+    "phi3": 0.3153848875806503
+   },
+   "slot": 122
+  },
+  {
+   "anchor": [
+    0.05546364225463907,
+    0.08576021227224576,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "u",
+   "goal_id": "t2-0616",
+   "params": {
+    "theta1": 2.2661722480403617,
+    "theta2": 2.426527772829539
+   },
+   "slot": 123
+  },
+  {
+   "anchor": [
+    0.026317406597003434,
+    -0.0029089541062794766,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "l",
+   "goal_id": "t2-0617",
+   "params": {
+    "corner_angle": 0.9618729440973122,
+    "leg_frac": 0.4393044501014922
+   },
+   "slot": 123
+  },
+  {
+   "anchor": [
+    -0.01319510034723509,
+    -0.05772239731669895,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "s",
+   "goal_id": "t2-0625",
+   "params": {
+    "amp1": 0.22025139024988014,
+    "amp2": 0.1281787760736714
+   },
+   "slot": 125
+  },
+  {
+   "anchor": [
+    0.09849360478170138,
+    -0.08141502600217297,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "l",
+   "goal_id": "t2-0632",
+   "params": {
+    "corner_angle": 1.6427548559574519,
+    "leg_frac": 0.35468294015822477
+   },
+   "slot": 126
+  },
+  {
+   "anchor": [
+    0.1167415595835101,
+    0.1373783701759986,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": false,
+   "family": "zigzag",
+   "goal_id": "t2-0638",
+   "params": {
+    "amp1": 0.13703017487208882,
+    "amp2": 0.11862315009550875,
+    "n_periods": 3.0
+   },
+   "slot": 127
+  },
+  {
+   "anchor": [
+    -0.10812484208731563,
+    -0.11027133522440162,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0639",
+   "params": {
+    "a1": 0.041690644734367885,
+    "a2": 0.04244906487965256,
+    "a3": 0.027407172415203653,
+    "phi1": 0.9611680176708364,
+    "phi2": 0.8680966825564451,
+    "phi3": 0.2928775689767389
+   },
+   "slot": 127
+  },
+  {
+   "anchor": [
+    0.1361430332687293,
+    -0.14293403613136105,
+    0.005
+   ],
+   "anchor_mode": "centroid",
+   "asymmetric": true,
+   "family": "smooth_random",
+   "goal_id": "t2-0649",
+   "params": {
+    "a1": 0.09762212002087137,
+    "a2": 0.04743113505064843,
+    "a3": 0.02376629853087851,
+    "phi1": 5.289029968381576,
+    "phi2": 0.839543717529664,
+    "phi3": 1.0482877200780698
+   },
+   "slot": 129
+  }
+ ],
+ "version": "t2-patch-eval-v1"
+}
