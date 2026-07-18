@@ -16,6 +16,14 @@ PRIMITIVE_SCHEMA_VERSION = 1
 CANONICAL_SPLIT_SHA256 = "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754"
 # This is intentionally anchored at the installed source tree, never at CWD.
 REPO_ROOT = Path(__file__).resolve().parents[3]
+CANONICAL_SUMMARY_KEYS = frozenset({
+    "n_episodes", "success_rate", "mean_return", "mean_final_d",
+    "mean_d_at_done", "mean_min_d", "mean_d_shape_at_done",
+    "per_template_success", "per_template_episodes",
+    "overestimation_gap_mean", "overestimation_gap_p95",
+    "nan_incidents_during_eval", "wall_guard_k", "record_raw",
+    "eval_wall_guard_rate", "record_probe",
+})
 CANONICAL_SPLIT_PATH = REPO_ROOT / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json"
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_ARMS = frozenset({"bb", "v1", "matched", "random"})
@@ -219,6 +227,64 @@ def _is_finite_json(value: Any) -> bool:
     return False
 
 
+def canonicalize_episode_ids(
+    episodes: list[dict[str, Any]], episode_namespace: int
+) -> list[dict[str, Any]]:
+    """Assign producer-owned, contiguous episode identities in output order."""
+    if isinstance(episode_namespace, bool) or not isinstance(episode_namespace, int):
+        raise SprintClaimError("episode namespace must be an integer")
+    for ordinal, episode in enumerate(episodes):
+        if not isinstance(episode, dict):
+            raise SprintClaimError("evaluation episodes must be objects")
+        episode["episode_id"] = episode_namespace + ordinal
+    return episodes
+
+
+def _summary_aggregates(episodes: list[dict[str, Any]]) -> dict[str, Any]:
+    count = len(episodes)
+    mean = lambda key: sum(episode[key] for episode in episodes) / count
+    gaps = sorted(
+        episode["q_first"] - episode["discounted_return"]
+        for episode in episodes if episode["q_first"] is not None
+    )
+    if gaps:
+        position = (len(gaps) - 1) * 0.95
+        lower, upper = math.floor(position), math.ceil(position)
+        gap_p95 = gaps[lower] + (gaps[upper] - gaps[lower]) * (position - lower)
+    else:
+        gap_p95 = None
+    templates: dict[str, list[dict[str, Any]]] = {}
+    for episode in episodes:
+        templates.setdefault(episode["init_template"], []).append(episode)
+    return {
+        "n_episodes": count,
+        "success_rate": mean("success"),
+        "mean_return": mean("return"),
+        "mean_final_d": mean("final_d"),
+        "mean_d_at_done": mean("d_at_done"),
+        "mean_min_d": mean("min_d"),
+        "mean_d_shape_at_done": mean("d_shape_at_done"),
+        "per_template_success": {key: sum(row["success"] for row in rows) / len(rows) for key, rows in templates.items()},
+        "per_template_episodes": {key: len(rows) for key, rows in templates.items()},
+        "overestimation_gap_mean": sum(gaps) / len(gaps) if gaps else None,
+        "overestimation_gap_p95": gap_p95,
+        "eval_wall_guard_rate": mean("eval_wall_guard"),
+    }
+
+
+def _summary_matches_episodes(summary: Mapping[str, Any], episodes: list[dict[str, Any]]) -> bool:
+    for key, expected in _summary_aggregates(episodes).items():
+        actual = summary[key]
+        if expected is None:
+            if actual is not None:
+                return False
+        elif isinstance(expected, dict):
+            if actual != expected:
+                return False
+        elif not math.isclose(actual, expected, rel_tol=0.0, abs_tol=1e-9):
+            return False
+    return True
+
 def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: str) -> bool:
     required = {
         "generated_at", "run_tag", "arm", "seed", "config_sha256", "ckpt_sha256",
@@ -231,22 +297,33 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
         "d_steps", "min_d", "d_initial", "d_shape_initial", "d_shape_at_done",
         "q_first", "eval_wall_guard", "discard_exposure",
     }
-    summary_required = {
-        "n_episodes", "success_rate", "mean_return", "mean_final_d", "mean_d_at_done",
-        "mean_min_d", "per_template_success", "per_template_episodes",
-    }
     if not isinstance(body, dict) or not required <= set(body):
         return False
     if any(body[key] != claim[key] for key in ("run_tag", "arm", "seed", "config_sha256", "ckpt_sha256", "split_sha256", "selection_manifest", "selection_manifest_sha256", "episode_namespace")) or body["claim_sha256"] != claim_sha256:
         return False
     if not isinstance(body["episodes"], list) or len(body["episodes"]) != 200:
         return False
-    if not isinstance(body["summary"], dict) or not summary_required <= set(body["summary"]) or not _is_finite_json(body["summary"]):
+    if not isinstance(body["summary"], dict) or set(body["summary"]) != CANONICAL_SUMMARY_KEYS or not _is_finite_json(body["summary"]):
         return False
-    numeric_summary = ("success_rate", "mean_return", "mean_final_d", "mean_d_at_done", "mean_min_d")
-    if not all(isinstance(body["summary"][key], (int, float)) and not isinstance(body["summary"][key], bool) and math.isfinite(body["summary"][key]) for key in numeric_summary):
+    summary = body["summary"]
+    numeric_summary = (
+        "success_rate", "mean_return", "mean_final_d", "mean_d_at_done",
+        "mean_min_d", "mean_d_shape_at_done", "eval_wall_guard_rate",
+    )
+    nullable_numeric_summary = ("overestimation_gap_mean", "overestimation_gap_p95")
+    if not all(isinstance(summary[key], (int, float)) and not isinstance(summary[key], bool) and math.isfinite(summary[key]) for key in numeric_summary):
         return False
-    if body["summary"]["n_episodes"] != 200 or not isinstance(body["summary"]["per_template_success"], dict) or not isinstance(body["summary"]["per_template_episodes"], dict):
+    if not all(summary[key] is None or (isinstance(summary[key], (int, float)) and not isinstance(summary[key], bool) and math.isfinite(summary[key])) for key in nullable_numeric_summary):
+        return False
+    if not isinstance(summary["n_episodes"], int) or isinstance(summary["n_episodes"], bool) or summary["n_episodes"] != 200:
+        return False
+    if not isinstance(summary["per_template_success"], dict) or not isinstance(summary["per_template_episodes"], dict):
+        return False
+    if not isinstance(summary["nan_incidents_during_eval"], int) or isinstance(summary["nan_incidents_during_eval"], bool) or summary["nan_incidents_during_eval"] < 0:
+        return False
+    if summary["wall_guard_k"] is not None and (not isinstance(summary["wall_guard_k"], int) or isinstance(summary["wall_guard_k"], bool) or summary["wall_guard_k"] < 0):
+        return False
+    if not all(isinstance(summary[key], bool) for key in ("record_raw", "record_probe")):
         return False
     namespace = body["episode_namespace"]
     if not isinstance(namespace, int) or isinstance(namespace, bool):
@@ -272,24 +349,8 @@ def _is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: s
         goal_counts[episode["goal_id"]] = goal_counts.get(episode["goal_id"], 0) + 1
     if len(goal_counts) != claim["n_goals"] or any(count != 2 for count in goal_counts.values()):
         return False
-    aggregates = {
-        "success_rate": sum(episode["success"] for episode in body["episodes"]) / 200,
-        "mean_return": sum(episode["return"] for episode in body["episodes"]) / 200,
-        "mean_final_d": sum(episode["final_d"] for episode in body["episodes"]) / 200,
-        "mean_d_at_done": sum(episode["d_at_done"] for episode in body["episodes"]) / 200,
-        "mean_min_d": sum(episode["min_d"] for episode in body["episodes"]) / 200,
-    }
-    if any(not math.isclose(body["summary"][key], value, rel_tol=0.0, abs_tol=1e-9) for key, value in aggregates.items()):
+    if not _summary_matches_episodes(summary, body["episodes"]):
         return False
-    templates: dict[str, list[dict[str, Any]]] = {}
-    for episode in body["episodes"]:
-        templates.setdefault(episode["init_template"], []).append(episode)
-    if set(body["summary"]["per_template_success"]) != set(templates) or set(body["summary"]["per_template_episodes"]) != set(templates):
-        return False
-    for template, rows in templates.items():
-        rate, count = body["summary"]["per_template_success"][template], body["summary"]["per_template_episodes"][template]
-        if not isinstance(rate, (int, float)) or isinstance(rate, bool) or not math.isfinite(rate) or not isinstance(count, int) or isinstance(count, bool) or count != len(rows) or not math.isclose(rate, sum(row["success"] for row in rows) / len(rows), rel_tol=0.0, abs_tol=1e-9):
-            return False
     if "generation" in claim and any(body.get(key) != claim[key] for key in ("generation", "disposition_receipt_sha256")):
         return False
     return all(isinstance(body[key], str) and body[key] for key in ("generated_at", "config_sha256", "ckpt_sha256", "selection_manifest", "selection_manifest_sha256"))

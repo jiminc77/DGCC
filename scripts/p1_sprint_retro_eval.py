@@ -34,10 +34,12 @@ sys.path.insert(0, str(REPO / "src"))
 from dgcc.analysis.sprint_claims import (
     CANONICAL_SPLIT_PATH,
     CANONICAL_SPLIT_SHA256,
+    CANONICAL_SUMMARY_KEYS,
     SprintClaimError,
     acquire_claim,
     atomic_publish,
     audit_claims,
+    canonicalize_episode_ids,
     consume_claim_and_load_split,
     probe_manifest_register,
     sha256_file,
@@ -225,6 +227,7 @@ def main() -> int:
     wall = time.perf_counter() - start
     episodes = result["episodes"]
     assert len(episodes) == 200, len(episodes)
+    canonicalize_episode_ids(episodes, SPRINT_HELDOUT_EPISODE_INDEX_START)
 
     raw_path = REPO / "outputs/metrics" / f"p1_raw_sprint_heldout_{args.m4_tag}.json.gz"
     with gzip.open(raw_path, "wt", encoding="utf-8") as handle:
@@ -266,7 +269,7 @@ def main() -> int:
         "selection_manifest_sha256": selection_sha,
         "generation": "reeval",
         "episode_namespace": SPRINT_HELDOUT_EPISODE_INDEX_START,
-        "summary": {k: v for k, v in result.items() if k != "episodes"},
+        "summary": {key: result[key] for key in CANONICAL_SUMMARY_KEYS},
         "episodes": episodes,
         "m4_tag": args.m4_tag,
         "ckpt": selected["ckpt"],

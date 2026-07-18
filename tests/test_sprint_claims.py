@@ -42,6 +42,16 @@ def payload(*, generation: str | None = None) -> dict[str, object]:
     if generation is not None:
         body.update(generation=generation, legacy_claim_sha256="a" * 64, disposition_receipt_sha256="b" * 64)
     return body
+def evaluation_summary(episodes: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        **claims._summary_aggregates(episodes),
+        "nan_incidents_during_eval": 0,
+        "wall_guard_k": 5,
+        "record_raw": True,
+        "record_probe": True,
+    }
+
+
 
 
 def claim_path(*, generation: str | None = None) -> Path:
@@ -216,11 +226,7 @@ def test_audit_requires_complete_canonical_result_schema(canonical_sprint: Path)
         "selection_manifest": "/synthetic/selection.json",
         "selection_manifest_sha256": "e" * 64,
         "episode_namespace": 97_001,
-        "summary": {
-            "n_episodes": 200, "success_rate": 1.0, "mean_return": 1.0,
-            "mean_final_d": 0.1, "mean_d_at_done": 0.1, "mean_min_d": 0.1,
-            "per_template_success": {"straight": 1.0}, "per_template_episodes": {"straight": 200},
-        },
+        "summary": evaluation_summary([episode(index) for index in range(200)]),
         "episodes": [episode(index) for index in range(200)],
     }))
     assert claims.audit_claims(claim.parent) == []
@@ -249,8 +255,7 @@ def test_producer_payload_passes_audit_and_tampering_is_rejected(canonical_sprin
     assert spec.loader is not None
     spec.loader.exec_module(module)
     episodes = [{"episode_id": 97_001 + index, "goal_id": f"goal-{index // 2}", "goal_label": f"goal-{index // 2}", "init_template": "straight", "success": True, "steps": 1, "return": 1.0, "discounted_return": 1.0, "final_d": 0.1, "d_at_done": 0.1, "d_at_done_fallback": False, "d_steps": [0.1], "min_d": 0.1, "d_initial": 0.2, "d_shape_initial": 0.2, "d_shape_at_done": 0.1, "q_first": None, "eval_wall_guard": False, "discard_exposure": 0} for index in range(200)]
-    summary = {"n_episodes": 200, "success_rate": 1.0, "mean_return": 1.0, "mean_final_d": 0.1, "mean_d_at_done": 0.1, "mean_min_d": 0.1, "per_template_success": {"straight": 1.0}, "per_template_episodes": {"straight": 200}}
-    result = module.canonical_result_payload(run_tag="synthetic", arm="bb", seed=7, manifest={"config_sha256": "d" * 64, "ckpt_sha256": "c" * 64, "selector_version": "test", "val_rows": []}, selection_manifest="/synthetic/selection.json", selection_sha="e" * 64, claim_sha=claim_sha, result={"episodes": episodes, **summary})
+    result = module.canonical_result_payload(run_tag="synthetic", arm="bb", seed=7, manifest={"config_sha256": "d" * 64, "ckpt_sha256": "c" * 64, "selector_version": "test", "val_rows": []}, selection_manifest="/synthetic/selection.json", selection_sha="e" * 64, claim_sha=claim_sha, result={"episodes": episodes, **evaluation_summary(episodes)})
     output = claim.parent / "p1_bb_sprint_heldout_synthetic.json"
     output.write_text(json.dumps(result))
     assert claims.audit_claims(claim.parent) == []
