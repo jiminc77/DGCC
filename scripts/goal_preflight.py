@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,22 +63,63 @@ def _to_native(curve32: np.ndarray, n_native: int) -> np.ndarray:
     return np.column_stack([np.interp(t, s, curve32[:, k]) for k in range(3)])
 
 
-def measure(env, params, curve32: np.ndarray) -> dict:
+def measure(env, params, curve32: np.ndarray, length_m: float = P1_LENGTH_M) -> dict:
     n_native = env.get_centerline_raw_batch().shape[1]
     placed = z_align(_to_native(curve32, n_native))
     env.place_rod_vertices_batch(placed[None])
     converged = env.settle(max_steps=SETTLE_MAX_STEPS)
     settled = env.get_centerline_batch()[0]
-    drift_shape = correspondence_l2(settled, curve32, P1_LENGTH_M, shape_only=True)
+    drift_shape = correspondence_l2(settled, curve32, length_m, shape_only=True)
     anchor_delta = float(np.linalg.norm(settled.mean(axis=0) - curve32.mean(axis=0)))
     return {"converged": bool(converged), "drift_shape": float(drift_shape), "anchor_delta": anchor_delta}
 
+def patch_eval_lengths(payload: dict) -> tuple[float, ...]:
+    """Return the train reference and both committed OOD rope lengths."""
+    transform = payload["ood_length_transform"]
+    train_length = float(transform["l_train_m"])
+    ood_lengths = tuple(float(length) for length in transform["l_ood_m"])
+    if len(ood_lengths) != 2 or set(ood_lengths) & {train_length}:
+        raise ValueError("patch split must define two OOD lengths distinct from L_train")
+    return tuple(sorted((train_length, *ood_lengths)))
+
+
+def load_patch_eval_split(path: Path | None = None) -> tuple[dict, list[dict], bool]:
+    """Load the committed patch split without touching protected T2 splits."""
+    split_path = path or REPO / "src/dgcc/tasks/splits/t2_patch_eval_v1.json"
+    payload = json.loads(split_path.read_text(encoding="utf-8"))
+    specs = payload["specs"]
+    if payload.get("n_goals") != 100 or len(specs) != 100:
+        raise ValueError("t2_patch_eval_v1 must contain exactly 100 goals")
+    patch_eval_lengths(payload)
+    return payload, specs, False
+
+
+def append_patch_breakdown(lines: list[str], rows: list[dict]) -> None:
+    """Append converged-only length × family drift results for the patch split."""
+    lines.append("| rope length (m) | family | n | drift median | drift max | >eps | non-converged |")
+    lines.append("|---:|---|---:|---:|---:|---:|---:|")
+    lengths = sorted({float(row["rope_length_m"]) for row in rows})
+    families = sorted({str(row["template"]) for row in rows})
+    for length in lengths:
+        for family in families:
+            group = [row for row in rows if row["rope_length_m"] == length and row["template"] == family]
+            conv = [row for row in group if row["converged"]]
+            drifts = np.array([row["drift_shape"] for row in conv])
+            over = int((drifts > EPS_SUCC).sum()) if len(drifts) else 0
+            median = f"{np.median(drifts):.4f}" if len(drifts) else "—"
+            maximum = f"{drifts.max():.4f}" if len(drifts) else "—"
+            lines.append(
+                f"| {length:.2f} | {family} | {len(conv)} | {median} | {maximum} | {over} | {len(group) - len(conv)} |"
+            )
+    lines.append("")
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--t1-samples", type=int, default=25, help="sampled goals per T1 task (t1b/t1c)")
     parser.add_argument("--include-sprint-split", action="store_true",
                         help="also preflight t2_sprint_heldout_v1 (NOT the M4 held-out)")
+    parser.add_argument("--include-patch-split", action="store_true",
+                        help="also preflight t2_patch_eval_v1 at its train/OOD rope lengths")
     parser.add_argument("--report", type=Path, default=Path("outputs/reports/goal_preflight.md"))
     parser.add_argument("--json", type=Path, default=Path("outputs/metrics/goal_preflight.json"))
     args = parser.parse_args()
@@ -127,10 +169,33 @@ def main() -> int:
             r["template"] = str(spec["family"])
             rows.append(r)
         blocks["t2_sprint_heldout"] = rows
+    if args.include_patch_split:
+        from dgcc.tasks.t2 import build_t2_goal
+
+        patch_payload, patch_specs, access_recorded = load_patch_eval_split()
+        rows = []
+        for length_m in patch_eval_lengths(patch_payload):
+            patch_params = replace(params, length_m=length_m)
+            env.reset(patch_params, init_shape="straight", seed=910_000)
+            for spec in patch_specs:
+                goal = build_t2_goal(spec)
+                curve = goal_curve(goal, length_m)
+                r = measure(env, patch_params, curve, length_m)
+                r["label"] = spec["goal_id"]
+                r["template"] = str(spec["family"])
+                r["rope_length_m"] = length_m
+                rows.append(r)
+        blocks["t2_patch_eval_v1"] = rows
 
     payload = {"generated_at": datetime.now(timezone.utc).isoformat(),
                "framing": "drift = elastic relaxation distance to straight-rest equilibrium (NOT goal quality)",
                "eps_succ": EPS_SUCC, "wall_s": time.time() - t0, "blocks": blocks}
+    if args.include_patch_split:
+        payload["patch_split_access"] = {
+            "loaded": True,
+            "recorded": access_recorded,
+            "purpose": "preflight",
+        }
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(payload, indent=1) + "\n")
 
@@ -139,6 +204,11 @@ def main() -> int:
              "> Framing (fixed): drift = elastic relaxation toward straight-rest (kappa_rest=0) equilibrium — measurement only, goal definitions unchanged.",
              "> Metric: correspondence_l2(goal, settled, shape_only=True) + anchor delta; Chamfer forbidden. Converged-mask gated.",
              "> Leakage guard: T2 val only; M4 held-out preflight completes after the M4 final held-out evaluation.", ""]
+    if args.include_patch_split:
+        lines.append(
+            "> Patch split loaded for purpose=preflight; no dedicated record_access path is available."
+        )
+        lines.append("")
     for name, rows in blocks.items():
         conv = [r for r in rows if r["converged"]]
         nonconv = len(rows) - len(conv)
@@ -157,6 +227,8 @@ def main() -> int:
                 arr = np.array(per_t[t])
                 lines.append(f"| {t} | {len(arr)} | {np.median(arr):.4f} | {arr.max():.4f} | {(arr > EPS_SUCC).sum()} |")
         lines.append("")
+        if name == "t2_patch_eval_v1":
+            append_patch_breakdown(lines, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text("\n".join(lines) + "\n")
     print(f"preflight report: {args.report} (wall {payload['wall_s']:.0f}s)")
