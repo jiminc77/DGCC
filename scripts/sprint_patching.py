@@ -20,7 +20,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.mode == "rollout":
-        parser.error("rollout mode is not implemented in this CPU patching release; separate implementation is planned")
+        parser.error("rollout mode moved to scripts/sprint_patch_rollout.py; use its one-shot patch-eval CLI")
     probes = load_probe_manifest(args.probe_manifest)
     # Estimator inputs may only originate from this verified opaque bundle.
     args.out.parent.mkdir(parents=True, exist_ok=True)

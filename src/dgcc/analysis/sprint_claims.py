@@ -14,10 +14,13 @@ from typing import Any, Mapping
 
 PRIMITIVE_SCHEMA_VERSION = 1
 CANONICAL_SPLIT_SHA256 = "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754"
+PATCH_EVAL_SPLIT_SHA256 = "7afba6d23c0a5d77205549b6f8b0b11a124a7c363dbf4fcd86e4fac7d59e8d72"
+
 # Canonical AMD-3 paired seed set; verdict 5029426419.
 AMD3_PAIRED_SEEDS = frozenset({0, 1, 2, 3, 4, 6, 7})
 # This is intentionally anchored at the installed source tree, never at CWD.
 REPO_ROOT = Path(__file__).resolve().parents[3]
+PATCH_EVAL_SPLIT_PATH = REPO_ROOT / "src/dgcc/tasks/splits/t2_patch_eval_v1.json"
 # Canonical summaries are derivable from the durable episode rows alone.
 CANONICAL_SUMMARY_KEYS = frozenset({
     "n_episodes", "success_rate", "mean_return", "mean_final_d",
@@ -33,6 +36,7 @@ _CLAIM_KEYS = frozenset({"schema_version", "claim_before_load", "timestamp", "pi
 # This registry is deliberately module-private.  Reflection in the same process is
 # out of scope; normal callers can only consume an authority we issued.
 _ISSUED_CAPABILITIES: dict[int, tuple["ClaimCapability", str]] = {}
+_ISSUED_PATCH_CAPABILITIES: dict[int, tuple["ClaimCapability", str]] = {}
 
 class SprintClaimError(RuntimeError):
     """A held-out evaluation is not authorized."""
@@ -115,6 +119,75 @@ def canonical_raw_path(run_tag: str, arm: str, generation: str | None = None) ->
 def canonical_metric_lock_path() -> Path:
     """The sole durable BB metric-lock location."""
     return REPO_ROOT / "outputs/metrics/sprint_metric.lock"
+
+def canonical_patch_claim_path(run_tag: str, arm: str) -> Path:
+    return REPO_ROOT / "outputs/metrics" / f"p1_{_arm(arm)}_patch_eval_{run_tag}_claim.json"
+
+def canonical_patch_result_path(run_tag: str, arm: str) -> Path:
+    return REPO_ROOT / "outputs/metrics" / f"p1_{_arm(arm)}_patch_eval_{run_tag}.json"
+
+def _validate_patch_claim(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("split_sha256") != PATCH_EVAL_SPLIT_SHA256:
+        raise SprintClaimError("patch claim split_sha256 is invalid")
+    baseline = dict(value)
+    baseline["split_sha256"] = CANONICAL_SPLIT_SHA256
+    _validate_claim(baseline)
+    return dict(value)
+
+def acquire_patch_claim(claim_path: Path, payload: Mapping[str, Any]) -> ClaimCapability:
+    """Create exclusive patch-evaluation authority before opening its split."""
+    body = dict(payload)
+    body["split_sha256"] = payload.get("split_sha256")
+    body.update(schema_version=PRIMITIVE_SCHEMA_VERSION, claim_before_load=True)
+    body.setdefault("timestamp", utc_now())
+    body.setdefault("pid", os.getpid())
+    body["arm"] = _arm(body.get("arm", ""))
+    _validate_patch_claim(body)
+    expected = canonical_patch_claim_path(body["run_tag"], body["arm"])
+    if Path(claim_path).absolute() != expected.absolute() or Path(claim_path).is_symlink():
+        raise SprintClaimError("patch claim path must be canonical and not a symlink")
+    expected.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(expected, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError as exc:
+        raise SprintClaimError(f"patch-eval claim already exists: {expected}; do NOT delete it to re-run") from exc
+    try:
+        os.write(fd, (json.dumps(body, indent=1, sort_keys=True) + "\n").encode())
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _fsync_dir(expected.parent)
+    capability = ClaimCapability(expected)
+    _ISSUED_PATCH_CAPABILITIES[id(capability)] = (capability, sha256_file(expected))
+    return capability
+
+def consume_patch_claim_and_load_split(capability: ClaimCapability, split_path: Path, *, access_log: Path) -> dict[str, Any]:
+    """Consume a patch-only claim and record the sole authorized split access."""
+    issued = _ISSUED_PATCH_CAPABILITIES.pop(id(capability), None) if isinstance(capability, ClaimCapability) else None
+    if issued is None or issued[0] is not capability:
+        raise SprintClaimError("patch split consumption requires an unconsumed acquired claim capability")
+    claim_path, issued_digest = capability._path, issued[1]
+    try:
+        if claim_path.is_symlink():
+            raise SprintClaimError("claim must not be a symlink")
+        raw_claim = claim_path.read_bytes()
+        value = _validate_patch_claim(_json_bytes(raw_claim, "patch claim"))
+    except (OSError, SprintClaimError) as exc:
+        raise SprintClaimError("patch claim is unreadable or modified") from exc
+    if hashlib.sha256(raw_claim).hexdigest() != issued_digest:
+        raise SprintClaimError("patch claim was modified after capability issuance")
+    requested = Path(split_path)
+    if requested.is_symlink() or requested.absolute() != PATCH_EVAL_SPLIT_PATH.absolute() or requested.resolve(strict=True) != PATCH_EVAL_SPLIT_PATH.resolve(strict=True):
+        raise SprintClaimError("only the canonical non-symlink patch split is permitted")
+    raw = PATCH_EVAL_SPLIT_PATH.read_bytes()
+    measured = hashlib.sha256(raw).hexdigest()
+    if measured != PATCH_EVAL_SPLIT_SHA256:
+        raise SprintClaimError("patch split bytes do not match trusted digest")
+    record_access(access_log, "patch_rollout", run_tag=value["run_tag"], arm=value["arm"], split_sha256=measured, claim_sha256=issued_digest)
+    payload = _json_bytes(raw, "canonical patch split")
+    if payload.get("n_goals") != 100 or len(payload.get("specs", [])) != 100:
+        raise SprintClaimError("patch split must contain exactly 100 goals")
+    return payload
 
 def validate_claim_payload(value: Any) -> dict[str, Any]:
     """Public trust-boundary wrapper for canonical claim validation."""
