@@ -1,0 +1,16 @@
+{
+ "arm": "bb",
+ "ckpt_sha256": "cfb61c5cabf3533595ead71451d5647e6de06bb4aaa8ffd1567c98681151f071",
+ "claim_before_load": true,
+ "config_sha256": "2f387f15b885ada5e6f07efe104503563742919c39c5830646d06eba594885be",
+ "episode_namespace": 97001,
+ "n_goals": 100,
+ "pid": 588077,
+ "run_tag": "sprint_t2_bb_s6",
+ "schema_version": 1,
+ "seed": 6,
+ "selection_manifest": "/home/simx2204/Workspaces/DGCC/outputs/metrics/sprint_sel_t2_bb_s6.json",
+ "selection_manifest_sha256": "0c6a67e0155b4bc2e5e4f5c2dc046db152800402eb259b3028539768f96a6775",
+ "split_sha256": "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754",
+ "timestamp": "2026-07-22T05:21:40.725353+00:00"
+}
