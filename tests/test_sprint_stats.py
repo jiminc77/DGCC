@@ -203,7 +203,10 @@ def test_judge_prohibits_unconditional_guard_confounded_claims(tmp_path: Path, m
     seed_effects = tmp_path / "effects.json"
     output_json = tmp_path / "judge.json"
     output_md = tmp_path / "judge.md"
-    lock.write_text(json.dumps({"endpoint": "success_rate"}))
+    lock.write_text(json.dumps({"endpoint": "success_rate", "created_at": "2026-07-22T20:00:00+00:00"}))
+    # V1 claims must postdate the lock; the temporal gate is exercised both ways.
+    v1_claim = tmp_path / "p1_v1_sprint_heldout_sprint_t2_v1_s0_claim.json"
+    v1_claim.write_text(json.dumps({"timestamp": "2026-07-23T00:00:00+00:00"}))
     seed_effects.write_text(json.dumps({
         "effects": [0.] * 8,
         "v1": {str(seed): [0.] for seed in range(8)},
@@ -220,7 +223,17 @@ def test_judge_prohibits_unconditional_guard_confounded_claims(tmp_path: Path, m
         "--json", str(output_json), "--md", str(output_md),
     ]) == 0
     assert json.loads(output_json.read_text())["unconditional_claim_prohibited"] is True
+    judged = json.loads(output_json.read_text())
+    assert judged["lock_predates_all_v1_claims"] is True and judged["v1_claim_files"] == [v1_claim.name]
     assert "do not make an unconditional claim" in output_md.read_text()
+    assert "machine-verified to predate" in output_md.read_text()
+    # A V1 claim at or before the lock timestamp refuses judgment (fail-closed).
+    v1_claim.write_text(json.dumps({"timestamp": "2026-07-22T19:59:59+00:00"}))
+    with pytest.raises(sprint_claims.SprintClaimError, match="does not predate"):
+        stats.main([
+            "judge", "--lock", str(lock), "--seed-effects", str(seed_effects),
+            "--json", str(output_json), "--md", str(output_md),
+        ])
 
 
 def test_zero_assert_accepts_anchored_legacy_lines_and_refuses_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -450,7 +450,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     judge = sub.add_parser("judge"); judge.add_argument("--lock", required=True); judge.add_argument("--seed-effects", required=True); judge.add_argument("--json", required=True); judge.add_argument("--md", required=True)
     args = parser.parse_args(argv)
     if args.command == "lock": print(json.dumps(publish_metric_lock(args.bb_claims, Path(args.lock)), indent=1)); return 0
-    metric = _load_json(Path(args.lock)); require_metric_lock(Path(args.lock), "v1")
+    lock_path = Path(args.lock); metric = _load_json(lock_path); require_metric_lock(lock_path, "v1")
+    lock_sha256 = sprint_claims.sha256_file(lock_path)
+    # G9b acceptance: the lock must predate every V1 heldout claim (machine check, fail-closed).
+    v1_claims = sorted(lock_path.parent.glob("p1_v1_sprint_heldout_*_claim.json"))
+    if not v1_claims:
+        raise SprintClaimError("primary judgment requires at least one V1 heldout claim")
+    lock_created = datetime.fromisoformat(metric["created_at"])
+    for claim_file in v1_claims:
+        body, _ = sprint_claims.json_file(claim_file, "V1 claim")
+        claim_ts = datetime.fromisoformat(str(body.get("timestamp", "")))
+        if claim_ts <= lock_created:
+            raise SprintClaimError(f"metric lock does not predate V1 claim: {claim_file.name}")
     seed_input = _load_json(Path(args.seed_effects))
     if isinstance(seed_input, dict) and {"effects", "v1", "bb"} <= set(seed_input):
         decision = primary_decision(seed_input["effects"], endpoint=metric["endpoint"])
@@ -463,11 +474,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     else: decision = primary_decision(seed_input, endpoint=metric["endpoint"])
     if metric["endpoint"] == "success_rate": benchmark = "+10%p benchmark applies to success_rate only"
     else: benchmark = f"Return benchmark: 0.5σ={SIGMA_GOAL / 2:.3f} (return units)"
+    decision["lock_sha256"] = lock_sha256
+    decision["lock_created_at"] = metric["created_at"]
+    decision["lock_predates_all_v1_claims"] = True
+    decision["v1_claim_files"] = [claim_file.name for claim_file in v1_claims]
     Path(args.json).write_text(json.dumps(decision, indent=1) + "\n")
     sensitivity = "\n\n## Sensitivity analysis\n\nIncluded in JSON judgment." if "bb_three_way_sensitivity" in decision else ""
     if decision.get("unconditional_claim_prohibited"):
         sensitivity += "\n\n**Guard-confounded sensitivity: do not make an unconditional claim from this result.**"
-    Path(args.md).write_text(f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\n\n{benchmark}{sensitivity}\n")
+    Path(args.md).write_text(f"# Sprint primary judgment\n\nEndpoint: {metric['endpoint']}\nLock sha256: `{lock_sha256}`\nLock created_at: {metric['created_at']} (machine-verified to predate all {len(v1_claims)} V1 heldout claims)\n\n{benchmark}{sensitivity}\n")
     return 0
 
 if __name__ == "__main__": raise SystemExit(main())
