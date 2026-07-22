@@ -219,3 +219,57 @@ def test_judge_prohibits_unconditional_guard_confounded_claims(tmp_path: Path, m
     ]) == 0
     assert json.loads(output_json.read_text())["unconditional_claim_prohibited"] is True
     assert "do not make an unconditional claim" in output_md.read_text()
+
+
+def test_zero_assert_accepts_anchored_legacy_lines_and_refuses_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sprint_claims, "REPO_ROOT", tmp_path)
+    metrics = tmp_path / "outputs/metrics"; metrics.mkdir(parents=True)
+    log = metrics / "t2_sprint_heldout_access.log"
+    legacy_line = "2026-07-18T01:03:50+00:00 pid=1 argv=scripts/p1_sprint_retro_eval.py --m4-tag m4_t2_s0"
+    log.write_text(legacy_line + "\n" + json.dumps({"arm": "bb", "purpose": "final_eval"}) + "\n")
+    # Unanchored non-JSONL line refuses the lock.
+    with pytest.raises(sprint_claims.SprintClaimError, match="unrecognized non-JSONL"):
+        stats._zero_assert()
+    # The exact-content anchor admits only the accepted legacy lines.
+    monkeypatch.setattr(stats, "LEGACY_ACCESS_LINE_SHA256", frozenset({hashlib.sha256(legacy_line.encode()).hexdigest()}))
+    stats._zero_assert()
+    # Duplicating an anchored line beyond the frozen count refuses.
+    log.write_text((legacy_line + "\n") * 2)
+    with pytest.raises(sprint_claims.SprintClaimError, match="duplicated legacy access records"):
+        stats._zero_assert()
+
+
+def test_bundle_access_log_prefix_integrity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sprint_claims, "REPO_ROOT", tmp_path)
+    metrics = tmp_path / "outputs/metrics"; metrics.mkdir(parents=True)
+    legacy_paths = []
+    for seed in range(3):
+        tag = f"m4_t2_s{seed}"
+        claim = metrics / f"p1_sprint_heldout_claim_{tag}.json"
+        claim.write_text(json.dumps({"m4_tag": tag, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256}))
+        result = metrics / f"p1_t2_sprint_heldout_{tag}.json"
+        result.write_text(json.dumps({"seed": seed, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "summary": {"n_episodes": 200, "success_rate": 0.0}}))
+        selection = metrics / f"p1_sprint_retro_val_{tag}.json"; selection.write_text("{}")
+        legacy_paths.extend((claim, result, selection))
+    access = metrics / "t2_sprint_heldout_access.log"
+    prefix = json.dumps({"arm": "bb", "purpose": "retro audit"}) + "\n"
+    access.write_text(prefix)
+    legacy_paths.append(access)
+    files = {str(p.relative_to(tmp_path)): {"sha256": sprint_claims.sha256_file(p), "size": p.stat().st_size} for p in legacy_paths}
+    bundle = metrics / "sprint_retro_audit_bundle.json"
+    bundle.write_text(json.dumps({"schema_version": 1, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "files": files}))
+    monkeypatch.setattr(stats, "LEGACY_RETRO_AUDIT_BUNDLE_SHA256", sprint_claims.sha256_file(bundle))
+    claim0 = metrics / "p1_sprint_heldout_claim_m4_t2_s0.json"
+    # Post-epoch append-only growth of the access log is accepted (prefix hash unchanged).
+    access.write_text(prefix + json.dumps({"arm": "bb", "purpose": "final_eval"}) + "\n")
+    assert stats._validated_legacy_bb_pair(claim0)[0] == {"arm": "bb", "seed": 0}
+    # Any mutation of the anchored prefix bytes refuses.
+    access.write_text(json.dumps({"arm": "v1", "purpose": "retro audit"}) + "\n" + prefix)
+    with pytest.raises(sprint_claims.SprintClaimError, match="access-log prefix"):
+        stats._validated_legacy_bb_pair(claim0)
+
+
+def test_lock_cli_rejects_eight_claims() -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        stats.main(["lock", "--bb-claims", *(["x.json"] * 8), "--lock", "y.lock"])
+    assert excinfo.value.code == 2

@@ -204,6 +204,15 @@ def _canonical_paths(claim: Path, claim_body: Mapping[str, Any]) -> tuple[Path, 
         sprint_claims.canonical_raw_path(claim_body["run_tag"], claim_body["arm"], claim_body.get("generation")),
     )
 
+# G009-accepted legacy retro-eval access lines (pre-hardening text format; commit 0a922c3 epoch).
+# Exact-content sha256 anchors — any other non-JSONL line refuses the lock (fail-closed).
+LEGACY_ACCESS_LINE_SHA256 = frozenset({
+    "78b1ad527a15702ef2bb2b73fd0b0e789573496784a371178331364e39a551c8",  # m4_t2_s0 retro eval
+    "0b6a2155c9bd3782305347c3e964cbb2fdc11b12e1ddb35decc0e744a300d369",  # m4_t2_s1 retro eval
+    "a37662f5c6079e6f8bfc7181e3c12c1399725eb310b067d5b9a72d47263967ed",  # m4_t2_s2 retro eval
+})
+
+
 def _zero_assert() -> None:
     root = sprint_claims.canonical_metric_lock_path().parent
     for arm in ("v1", "matched", "random"):
@@ -211,12 +220,20 @@ def _zero_assert() -> None:
             raise SprintClaimError("metric lock refused: non-BB canonical held-out artifact exists")
     log = root / "t2_sprint_heldout_access.log"
     if log.exists():
+        legacy_seen = 0
         for line in log.read_text(encoding="utf-8").splitlines():
-            try: row = json.loads(line)
-            except json.JSONDecodeError as exc: raise SprintClaimError("access log is not valid JSONL") from exc
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                if hashlib.sha256(line.encode("utf-8")).hexdigest() in LEGACY_ACCESS_LINE_SHA256:
+                    legacy_seen += 1  # G009-accepted BB retro eval (purpose: retro performance endpoint)
+                    continue
+                raise SprintClaimError("metric lock refused: unrecognized non-JSONL held-out access record")
             if not isinstance(row, dict): raise SprintClaimError("access log is not valid JSONL")
             if str(row.get("arm", "")).lower() != "bb" or not row.get("purpose"):
                 raise SprintClaimError("metric lock refused: non-BB or purpose-less held-out access record exists")
+        if legacy_seen > len(LEGACY_ACCESS_LINE_SHA256):
+            raise SprintClaimError("metric lock refused: duplicated legacy access records")
 
 
 def _validated_canonical_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
@@ -271,9 +288,17 @@ def _validated_legacy_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, di
         if not isinstance(relative, str) or relative_path.is_absolute() or ".." in relative_path.parts:
             raise SprintClaimError("retro audit bundle contains an unsafe path")
         path = sprint_claims.REPO_ROOT / relative_path
-        if not isinstance(entry, dict) or set(entry) != {"sha256", "size"} or not path.is_file() or entry["sha256"] != sprint_claims.sha256_file(path) or entry["size"] != path.stat().st_size:
+        if not isinstance(entry, dict) or set(entry) != {"sha256", "size"} or not path.is_file():
             raise SprintClaimError("retro audit bundle file verification failed")
-    claim_relative = str(claim_path.relative_to(sprint_claims.REPO_ROOT))
+        if relative_path == access_relative:
+            # Append-only access log: bundle anchors the legacy prefix; later appends are
+            # validated line-by-line by _zero_assert (JSONL, BB-only, purposed).
+            data = path.read_bytes()
+            if len(data) < entry["size"] or hashlib.sha256(data[: entry["size"]]).hexdigest() != entry["sha256"]:
+                raise SprintClaimError("retro audit bundle access-log prefix verification failed")
+        elif entry["sha256"] != sprint_claims.sha256_file(path) or entry["size"] != path.stat().st_size:
+            raise SprintClaimError("retro audit bundle file verification failed")
+    claim_relative = str(claim_path.resolve().relative_to(sprint_claims.REPO_ROOT.resolve()))
     if claim_relative != str(metrics_relative / f"p1_sprint_heldout_claim_{claim['m4_tag']}.json"):
         raise SprintClaimError("legacy BB claim must be at its archived canonical path")
 
@@ -421,7 +446,7 @@ def _load_json(path: Path) -> Any:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__); sub = parser.add_subparsers(dest="command", required=True)
-    lock = sub.add_parser("lock"); lock.add_argument("--bb-claims", nargs=8, required=True); lock.add_argument("--lock", required=True)
+    lock = sub.add_parser("lock"); lock.add_argument("--bb-claims", nargs=len(AMD3_PAIRED_SEEDS), required=True); lock.add_argument("--lock", required=True)
     judge = sub.add_parser("judge"); judge.add_argument("--lock", required=True); judge.add_argument("--seed-effects", required=True); judge.add_argument("--json", required=True); judge.add_argument("--md", required=True)
     args = parser.parse_args(argv)
     if args.command == "lock": print(json.dumps(publish_metric_lock(args.bb_claims, Path(args.lock)), indent=1)); return 0
