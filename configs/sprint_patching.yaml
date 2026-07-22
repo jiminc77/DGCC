@@ -1,0 +1,24 @@
+# AMD-2 (2026-07-19) pre-observation pins; response-conditioned h_p mediation only.
+pairing:
+  pairs_per_run: 100
+  seed: 20260723
+  null_donors_per_real: 1
+  rule: "same goal/p/nuisance; minimize |delta_m(donor)-rescale(delta_m(target))|"
+operators:
+  a0_interchange:
+    status: confirmatory
+    formula: "h_p_prime = h_d"
+  a1_projected_splice:
+    status: exploratory
+    seed: 20260719
+    projector_sha256: "408120a3db83df654ee3d1ead6e54a09b04d0c5d6c7a477dd8da301c822d51ab"
+    formula: "h_p_prime = (I-Pi_P) h_r + Pi_P h_d"
+  mean_ablation:
+    formula: "replace all 256 h_p channels with per-run probe mean"
+  graded_corruption:
+    # Observed before outcomes; exploratory.
+    alpha: [0.25, 0.5, 0.75, 1.0]
+rescale_mask:
+  order: axis-major-24ch-dct
+  scaled: x/y modes 1-7 times L_ood_over_L_train
+  absolute: x0/y0/z0 and all z modes
