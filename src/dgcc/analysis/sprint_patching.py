@@ -7,8 +7,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from types import MappingProxyType
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import h5py
 import numpy as np
@@ -38,12 +39,17 @@ class LoadedProjector:
 class VerifiedProbeBundle:
     """Opaque manifest-verified probe inputs for confirmatory estimation."""
     _rows: tuple[Mapping[str, np.ndarray], ...]
+    _estimator_records: tuple[Mapping[str, Any], ...]
     manifest_sha256: str
     _seal: object
 
     @property
     def rows(self) -> tuple[Mapping[str, np.ndarray], ...]:
         return self._rows
+
+    @property
+    def estimator_records(self) -> tuple[Mapping[str, Any], ...]:
+        return self._estimator_records
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -73,9 +79,9 @@ def a0_interchange(recipient: torch.Tensor, donor: torch.Tensor) -> torch.Tensor
     return donor.clone()
 
 
-def verify_projector_sha256(projector: torch.Tensor, expected_sha256: str = PROJECTOR_SHA256) -> None:
+def verify_projector_sha256(projector: torch.Tensor) -> None:
     raw = hashlib.sha256(projector.detach().cpu().contiguous().numpy().tobytes()).hexdigest()
-    if expected_sha256 not in {raw, tensor_sha256(projector)}:
+    if PROJECTOR_SHA256 not in {raw, tensor_sha256(projector)}:
         raise ValueError("matched-P projector sha256 mismatch")
 
 
@@ -89,15 +95,15 @@ def _validate_projector_geometry(projector: torch.Tensor) -> None:
         raise ValueError("matched-P projector rows must be orthonormal")
 
 
-def load_projector(path: Path | str, *, expected_sha256: str = PROJECTOR_SHA256) -> LoadedProjector:
+def load_projector(path: Path | str) -> LoadedProjector:
     path = Path(path)
-    if sha256_file(path) != expected_sha256:
+    if sha256_file(path) != PROJECTOR_SHA256:
         raise ValueError("matched-P projector sha256 mismatch")
     value = torch.load(path, map_location="cpu", weights_only=True)
     if not isinstance(value, torch.Tensor):
         raise ValueError("matched-P projector must be a 24x256 tensor")
     _validate_projector_geometry(value)
-    return LoadedProjector(value=value, sha256=expected_sha256, _tensor_sha256=tensor_sha256(value), _seal=_LOADED_PROJECTOR_SEAL)
+    return LoadedProjector(value=value, sha256=PROJECTOR_SHA256, _tensor_sha256=tensor_sha256(value), _seal=_LOADED_PROJECTOR_SEAL)
 
 
 def a1_projected_splice(recipient: torch.Tensor, donor: torch.Tensor, projector: LoadedProjector) -> torch.Tensor:
@@ -142,8 +148,16 @@ def rescale_delta(delta: torch.Tensor, ratio: float) -> torch.Tensor:
     return delta * rescale_mask(ratio, device=delta.device, dtype=delta.dtype)
 
 
+def _freeze_record(value: Any) -> Any:
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze_record(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze_record(item) for item in value)
+    return value
+
+
 def load_probe_manifest(path: Path | str, *, required_fields: Sequence[str] = ("h_p",)) -> VerifiedProbeBundle:
-    """Return an opaque bundle after verifying exactly manifest-listed HDF5 files."""
+    """Return an opaque bundle after verifying manifest-listed probes and estimator records."""
     manifest_path = Path(path)
     try:
         manifest_bytes = manifest_path.read_bytes()
@@ -154,6 +168,7 @@ def load_probe_manifest(path: Path | str, *, required_fields: Sequence[str] = ("
     if not isinstance(files, dict) or set(manifest) != {"schema_version", "files"} or not files:
         raise ValueError("probe manifest schema is invalid")
     rows: list[Mapping[str, np.ndarray]] = []
+    estimator_records: list[Mapping[str, Any]] = []
     seen: set[Path] = set()
     for digest, entry in sorted(files.items()):
         if not isinstance(entry, dict) or set(("path", "sha256", "size")) - set(entry):
@@ -168,13 +183,20 @@ def load_probe_manifest(path: Path | str, *, required_fields: Sequence[str] = ("
         seen.add(canonical)
         try:
             with h5py.File(canonical, "r") as handle:
-                missing = [field for field in required_fields if field not in handle]
+                missing = [field for field in (*required_fields, "estimator_records") if field not in handle]
                 if missing:
                     raise ValueError(f"probe file missing fields: {missing}")
                 rows.append({field: np.asarray(handle[field]) for field in required_fields})
-        except OSError as exc:
+                encoded_records = handle["estimator_records"][()]
+                if isinstance(encoded_records, bytes):
+                    encoded_records = encoded_records.decode()
+                parsed_records = json.loads(encoded_records)
+                if not isinstance(parsed_records, list) or not all(isinstance(record, dict) for record in parsed_records):
+                    raise ValueError("probe estimator records are invalid")
+                estimator_records.extend(_freeze_record(record) for record in parsed_records)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise ValueError("manifest-listed probe is not valid HDF5") from exc
-    return VerifiedProbeBundle(tuple(rows), hashlib.sha256(manifest_bytes).hexdigest(), _VERIFIED_BUNDLE_SEAL)
+    return VerifiedProbeBundle(tuple(rows), tuple(estimator_records), hashlib.sha256(manifest_bytes).hexdigest(), _VERIFIED_BUNDLE_SEAL)
 
 
 def exploratory_pairing(recipients: Sequence[Mapping[str, Any]], donors: Sequence[Mapping[str, Any]], *, ratio: float = 1.0, seed: int = PAIRING_SEED) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
@@ -206,17 +228,19 @@ def ranking_change(baseline_q: Sequence[float], patched_q: Sequence[float]) -> d
     return {"kendall_tau_change": float(1.0 - (0.0 if np.isnan(tau) else tau)), "top1_flip": float(np.argmax(base) != np.argmax(patch))}
 
 
-def _validate_estimator_inputs(real_rows: list[Mapping[str, Any]], null_rows: list[Mapping[str, Any]], bundle: VerifiedProbeBundle) -> None:
+def _validate_estimator_inputs(bundle: VerifiedProbeBundle) -> tuple[list[Mapping[str, Any]], list[Mapping[str, Any]]]:
     if not isinstance(bundle, VerifiedProbeBundle) or bundle._seal is not _VERIFIED_BUNDLE_SEAL:
         raise TypeError("confirmatory estimator requires a VerifiedProbeBundle")
-    if len(real_rows) != len(null_rows) or not real_rows:
-        raise ValueError("real and null pair counts must match and be nonempty")
-    required = {"pair_id", "goal_id", "run", "operator"}
+    real_rows = [row for row in bundle.estimator_records if row.get("arm") == "real"]
+    null_rows = [row for row in bundle.estimator_records if row.get("arm") == "null"]
+    if len(real_rows) != len(null_rows) or not real_rows or len(real_rows) + len(null_rows) != len(bundle.estimator_records):
+        raise ValueError("bundle requires nonempty matched real and null estimator records")
+    required = {"pair_id", "goal_id", "run", "operator", "baseline_q", "patched_q"}
     real_keys, null_keys = [], []
     for arm, rows, keys in (("real", real_rows, real_keys), ("null", null_rows, null_keys)):
         for row in rows:
             if not required <= set(row) or any(row[field] is None for field in required):
-                raise ValueError(f"{arm} rows require pair_id, goal_id, run, and operator")
+                raise ValueError(f"{arm} rows require pair_id, goal_id, run, operator, baseline_q, and patched_q")
             keys.append((row["run"], row["pair_id"], row["goal_id"], row["operator"]))
         if len(set(keys)) != len(keys):
             raise ValueError(f"duplicate {arm} pair identity")
@@ -226,20 +250,12 @@ def _validate_estimator_inputs(real_rows: list[Mapping[str, Any]], null_rows: li
         goals = [key[2] for key in real_keys if key[0] == run]
         if len(goals) != N_PAIRS_PER_RUN or len(set(goals)) != N_PAIRS_PER_RUN:
             raise ValueError("each run requires exactly 100 unique goals")
+    return real_rows, null_rows
 
 
-def estimate_real_minus_null(real: Iterable[Mapping[str, Any]], null: Iterable[Mapping[str, Any]], bundle: VerifiedProbeBundle) -> dict[str, float]:
-    real_rows, null_rows = list(real), list(null)
-    _validate_estimator_inputs(real_rows, null_rows, bundle)
-    null_by_key = {(n["run"], n["pair_id"], n["goal_id"], n["operator"]): n for n in null_rows}
-    effects = [{key: ranking_change(r["baseline_q"], r["patched_q"])[key] - ranking_change(null_by_key[(r["run"], r["pair_id"], r["goal_id"], r["operator"])]["baseline_q"], null_by_key[(r["run"], r["pair_id"], r["goal_id"], r["operator"])]["patched_q"])[key] for key in ("kendall_tau_change", "top1_flip")} for r in real_rows]
-    return {key: float(np.mean([row[key] for row in effects])) for key in effects[0]}
-
-
-def estimate_by_run(real: Iterable[Mapping[str, Any]], null: Iterable[Mapping[str, Any]], bundle: VerifiedProbeBundle, *, bootstrap_draws: int = 10_000) -> dict[str, Any]:
-    """AMD-2 estimator: matched pair effects → run means → seed-cluster BCa."""
-    real_rows, null_rows = list(real), list(null)
-    _validate_estimator_inputs(real_rows, null_rows, bundle)
+def estimate_from_bundle(bundle: VerifiedProbeBundle, *, bootstrap_draws: int = 10_000) -> dict[str, Any]:
+    """AMD-2 estimator consuming only records sealed in a VerifiedProbeBundle."""
+    real_rows, null_rows = _validate_estimator_inputs(bundle)
     null_by_key = {(n["run"], n["pair_id"], n["goal_id"], n["operator"]): n for n in null_rows}
     by_run: dict[Any, dict[str, list[float]]] = {}
     for r in real_rows:
@@ -254,7 +270,7 @@ def estimate_by_run(real: Iterable[Mapping[str, Any]], null: Iterable[Mapping[st
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
     from sprint_stats import seed_cluster_bootstrap
-    return {"run_means": run_means, "bca": {key: seed_cluster_bootstrap(values, draws=bootstrap_draws) for key, values in run_means.items()}, "provenance": {"probe_manifest_sha256": bundle.manifest_sha256}}
+    return {"run_means": run_means, "bca": {key: seed_cluster_bootstrap(values, draws=bootstrap_draws) for key, values in run_means.items()}, "provenance": {"probe_manifest_sha256": bundle.manifest_sha256, "pairing_seed": PAIRING_SEED}}
 
 
 def provenance_record(*, arm: str, ckpt_sha256: str, split_sha256: str, claim_sha256: str, operator: str, parameter_pre: torch.Tensor, parameter_post: torch.Tensor, probe_manifest_sha256: str) -> dict[str, str]:
