@@ -471,6 +471,8 @@ def is_canonical_result(body: Any, *, claim: Mapping[str, Any], claim_sha256: st
 def audit_claims(directory: Path) -> list[dict[str, Any]]:
     rows = []
     for claim in Path(directory).glob("*claim*.json"):
+        if "_patch_eval_" in claim.name:
+            continue  # patch-eval claims live in their own namespace/audit (canonical_patch_claim_path)
         try:
             data, digest = json_file(claim, "claim")
             data = _validate_claim(data)

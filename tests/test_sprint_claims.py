@@ -466,3 +466,14 @@ def test_preclaim_check_and_publish_quarantine(tmp_path: Path, monkeypatch: pyte
     with pytest.raises(OSError, match="publish failed"):
         module.publish_or_quarantine(out, result=result, payload={"canonical": True})
     assert json.loads((tmp_path / "result_quarantine.json").read_text()) == result
+
+
+def test_audit_claims_ignores_patch_eval_namespace(canonical_sprint: Path) -> None:
+    # A patch-eval claim in the same metrics directory must not pollute the sprint audit.
+    claim = claim_path()
+    claims.acquire_claim(claim, payload())
+    patch_claim = claim.parent / "p1_v1_patch_eval_sprint_t2_v1_s0_claim.json"
+    patch_claim.write_text(json.dumps({"schema_version": 1, "kind": "patch_eval"}))
+    rows = claims.audit_claims(claim.parent)
+    assert all("_patch_eval_" not in row["claim"] for row in rows)
+    assert len(rows) == 1
