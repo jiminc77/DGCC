@@ -45,10 +45,10 @@
 |s5r|12h|경합 추정|rebuild-limit crash|
 |s7r|12.5h|경합 집중 창|rebuild-limit crash|
 |s6/s6r|3-chain / 없음|경합 중 완주 사례|s6 kill 후 s6r 완주|
-STEP_LOG 시각 대조상 경합은 악화 요인이나 단독 원인은 아니다. batch-effect는 사전등록 3-way 감도분석 대상이다.
+STEP_LOG 시각 대조에서는 포켓 지속과 경합 기록을 병기하며 인과 귀속은 하지 않는다 — 미통제 관찰이다. batch-effect는 사전등록 3-way 감도분석 대상이다.
 
 ## 5. AMD-3 및 F-a
-AMD-3: seed 5 페어(BB+V1)를 기술 결함으로 제외하고 대체하지 않는다; BB 평균이 상향되는 방향이므로 V1−BB 델타에는 보수적 방향의 민감도 노트다.
+AMD-3 (verdict comment 5029426419): seed 5 페어(BB+V1)를 기술 결함으로 제외하고 대체하지 않는다; BB 평균이 상향되는 방향이므로 V1−BB 델타에는 보수적 방향의 민감도 노트다.
 |seed/attempt|initial_weights_sha256|byte-일치 증거|
 |---|---|---|
 |sprint_t2_bb_s3|`b1ee2f73778061694a5bb5977d53c144bd0f3a67eb556083cf9d0a51eb76a910`|run JSON/아카이브 run JSON|

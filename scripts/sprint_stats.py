@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -15,7 +16,7 @@ import numpy as np
 from scipy.stats import norm, t
 
 from dgcc.analysis import sprint_claims
-from dgcc.analysis.sprint_claims import PRIMITIVE_SCHEMA_VERSION, SprintClaimError, require_metric_lock
+from dgcc.analysis.sprint_claims import AMD3_PAIRED_SEEDS, PRIMITIVE_SCHEMA_VERSION, SprintClaimError, require_metric_lock
 
 B = 10_000
 RNG_SEED = 20260703
@@ -214,7 +215,7 @@ def _zero_assert() -> None:
                 raise SprintClaimError("metric lock refused: non-BB or purpose-less held-out access record exists")
 
 
-def _validated_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
+def _validated_canonical_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
     claim, digest = sprint_claims.json_file(claim_path, "BB claim")
     claim = sprint_claims.validate_claim_payload(claim)
     result_path, raw_path = _canonical_paths(claim_path, claim)
@@ -226,21 +227,64 @@ def _validated_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str,
     return claim, digest, result["summary"]
 
 
+def _validated_legacy_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
+    bundle_path = sprint_claims.REPO_ROOT / "outputs/metrics/sprint_retro_audit_bundle.json"
+    try:
+        bundle, _ = sprint_claims.json_file(bundle_path, "retro audit bundle")
+    except (OSError, SprintClaimError) as exc:
+        raise SprintClaimError("legacy BB claim requires an archived retro audit bundle") from exc
+    if not isinstance(bundle, dict) or bundle.get("schema_version") != 1 or bundle.get("split_sha256") != sprint_claims.CANONICAL_SPLIT_SHA256 or not isinstance(bundle.get("files"), dict):
+        raise SprintClaimError("retro audit bundle schema is invalid")
+    for relative, entry in bundle["files"].items():
+        path = sprint_claims.REPO_ROOT / relative
+        if not isinstance(relative, str) or not isinstance(entry, dict) or set(entry) != {"sha256", "size"} or not path.is_file() or entry["sha256"] != sprint_claims.sha256_file(path) or entry["size"] != path.stat().st_size:
+            raise SprintClaimError("retro audit bundle file verification failed")
+    claim, digest = sprint_claims.json_file(claim_path, "legacy BB claim")
+    if not isinstance(claim, dict) or claim.get("split_sha256") != sprint_claims.CANONICAL_SPLIT_SHA256 or not isinstance(claim.get("m4_tag"), str):
+        raise SprintClaimError("legacy BB claim schema is invalid")
+    if str(claim_path.relative_to(sprint_claims.REPO_ROOT)) not in bundle["files"]:
+        raise SprintClaimError("legacy BB claim is not archived in the retro audit bundle")
+    seed_match = re.search(r"_s([012])$", claim["m4_tag"])
+    if seed_match is None:
+        raise SprintClaimError("legacy BB claim has no accepted AMD-3 seed")
+    seed = int(seed_match.group(1))
+    result_path = sprint_claims.REPO_ROOT / "outputs/metrics" / f"p1_t2_sprint_heldout_{claim['m4_tag']}.json"
+    result, _ = sprint_claims.json_file(result_path, "legacy BB result")
+    summary = result.get("summary") if isinstance(result, dict) else None
+    if result.get("seed") != seed or result.get("split_sha256") != sprint_claims.CANONICAL_SPLIT_SHA256 or not isinstance(summary, dict) or not isinstance(summary.get("n_episodes"), int) or summary["n_episodes"] <= 0 or not isinstance(summary.get("success_rate"), (int, float)):
+        raise SprintClaimError("legacy BB result schema is invalid")
+    return {"arm": "bb", "seed": seed}, digest, summary
+
+
 def publish_metric_lock(bb_claims: Sequence[Path], lock: Path) -> dict[str, Any]:
     canonical_lock = sprint_claims.canonical_metric_lock_path()
     if Path(lock).absolute() != canonical_lock.absolute():
         raise SprintClaimError("metric lock path must be the canonical metrics lock path")
     paths = [Path(p) for p in bb_claims]
-    if len(paths) != 8: raise SprintClaimError("exactly eight BB claim/result pairs are required")
+    if len(paths) != len(AMD3_PAIRED_SEEDS):
+        raise SprintClaimError("exactly seven BB claim/result pairs are required")
     _zero_assert()
-    rows = [_validated_bb_pair(path) for path in paths]
-    if any(row[0]["arm"] != "bb" for row in rows): raise SprintClaimError("metric lock requires BB claim/result pairs only")
+    rows = []
+    for path in paths:
+        body, _ = sprint_claims.json_file(path, "BB claim")
+        if isinstance(body, dict) and "schema_version" in body:
+            row = _validated_canonical_bb_pair(path)
+            kind = "canonical"
+        else:
+            row = _validated_legacy_bb_pair(path)
+            kind = "legacy_bundle"
+        rows.append((*row, kind))
+    if any(row[0]["arm"] != "bb" for row in rows):
+        raise SprintClaimError("metric lock requires BB claim/result pairs only")
     seeds = {row[0]["seed"] for row in rows}
-    if seeds != set(range(8)): raise SprintClaimError("BB claims must have seed set exactly {0,...,7}")
+    if seeds != set(AMD3_PAIRED_SEEDS):
+        raise SprintClaimError("BB claims must have the AMD-3 canonical seed set")
+    if {row[3] for row in rows if row[0]["seed"] in {0, 1, 2}} != {"legacy_bundle"} or {row[3] for row in rows if row[0]["seed"] not in {0, 1, 2}} != {"canonical"}:
+        raise SprintClaimError("legacy and canonical BB claims do not match AMD-3 acceptance")
     total = sum(row[2]["n_episodes"] for row in rows)
     success = sum(row[2]["success_rate"] * row[2]["n_episodes"] for row in rows) / total
     endpoint = "return" if success <= .01 else "success_rate"
-    body = {"schema_version": 1, "endpoint": endpoint, "aggregate": success, "created_at": datetime.now(timezone.utc).isoformat(), "bb_claim_sha256": [row[1] for row in rows], "primitive_version": str(PRIMITIVE_SCHEMA_VERSION)}
+    body = {"schema_version": 1, "endpoint": endpoint, "aggregate": success, "created_at": datetime.now(timezone.utc).isoformat(), "bb_claim_sha256": [row[1] for row in rows], "bb_claim_audit": [{"seed": row[0]["seed"], "kind": row[3], "claim_sha256": row[1]} for row in rows], "primitive_version": str(PRIMITIVE_SCHEMA_VERSION)}
     target = canonical_lock; target.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
     try: os.write(fd, (json.dumps(body, indent=1, sort_keys=True) + "\n").encode()); os.fsync(fd)
@@ -251,15 +295,16 @@ def publish_metric_lock(bb_claims: Sequence[Path], lock: Path) -> dict[str, Any]
     return body
 def _seed_mapping(values: Mapping[int | str, Sequence[float]]) -> dict[int, Sequence[float]]:
     normalized = {int(seed): rows for seed, rows in values.items()}
-    if set(normalized) != set(range(8)):
-        raise ValueError("sensitivity analysis requires seed set exactly {0,...,7}")
+    if set(normalized) != set(AMD3_PAIRED_SEEDS):
+        raise ValueError("sensitivity analysis requires the AMD-3 canonical seed set")
     return normalized
+
 
 def bb_three_way_sensitivity(v1: Mapping[int | str, Sequence[float]], bb: Mapping[int | str, Sequence[float]], *, draws: int = B) -> dict[str, Any]:
     """Report preregistered reuse/new/pooled seed-cluster BCa sensitivity."""
     left, right = _seed_mapping(v1), _seed_mapping(bb)
-    effects = {seed: float(_finite(left[seed]).mean() - _finite(right[seed]).mean()) for seed in range(8)}
-    groups = {"reuse": (0, 1, 2), "new": (3, 4, 5, 6, 7), "pooled": tuple(range(8))}
+    effects = {seed: float(_finite(left[seed]).mean() - _finite(right[seed]).mean()) for seed in AMD3_PAIRED_SEEDS}
+    groups = {"reuse": (0, 1, 2), "new": (3, 4, 6, 7), "pooled": tuple(sorted(AMD3_PAIRED_SEEDS))}
     report = {name: seed_cluster_bootstrap([effects[seed] for seed in seeds], draws=draws, rng_seed=RNG_SEED + min(seeds)) for name, seeds in groups.items()}
     reuse_ci, new_ci = report["reuse"]["ci"], report["new"]["ci"]
     report["batch_effect_flag"] = reuse_ci[1] < new_ci[0] or new_ci[1] < reuse_ci[0]
@@ -294,7 +339,7 @@ def guard_sensitivity(arms: Mapping[str, Mapping[int | str, Sequence[Mapping[str
         policies[name] = {
             "v1_minus_bb": seed_cluster_bootstrap([
                 rate(normalized["v1"][seed], exclude) - rate(normalized["bb"][seed], exclude)
-                for seed in range(8)
+                for seed in sorted(AMD3_PAIRED_SEEDS)
             ], draws=draws),
             "dropout_limitation": "guarded episodes excluded; dropout is non-random" if exclude else None,
         }
@@ -307,7 +352,7 @@ def guard_sensitivity(arms: Mapping[str, Mapping[int | str, Sequence[Mapping[str
     }
     difference = activation["v1"]["estimate"] - activation["bb"]["estimate"]
     common_effects = []
-    for seed in range(8):
+    for seed in sorted(AMD3_PAIRED_SEEDS):
         v1_common = common_support_rate(normalized["v1"][seed])
         bb_common = common_support_rate(normalized["bb"][seed])
         common_goals = sorted(set(v1_common) & set(bb_common))

@@ -348,9 +348,14 @@ def test_probe_manifest_content_address_and_parallel_registration(canonical_spri
 
 def test_metric_lock_has_strict_schema_and_bb_only_bypasses(canonical_sprint: Path) -> None:
     lock = canonical_sprint / "lock.json"
-    valid = {"schema_version": 1, "endpoint": "success_rate", "aggregate": 0.5, "created_at": "now", "bb_claim_sha256": [f"{index:064x}" for index in range(8)], "primitive_version": "v1"}
+    valid = {"schema_version": 1, "endpoint": "success_rate", "aggregate": 0.5, "created_at": "now", "bb_claim_sha256": [f"{index:064x}" for index in claims.AMD3_PAIRED_SEEDS], "bb_claim_audit": [{"seed": seed, "kind": "legacy_bundle" if seed < 3 else "canonical", "claim_sha256": f"{seed:064x}"} for seed in sorted(claims.AMD3_PAIRED_SEEDS)], "primitive_version": "v1"}
     lock.write_text(json.dumps(valid))
     claims.require_metric_lock(lock, "v1")
+    valid["bb_claim_sha256"].append("f" * 64)
+    lock.write_text(json.dumps(valid))
+    with pytest.raises(claims.SprintClaimError, match="schema"):
+        claims.require_metric_lock(lock, "v1")
+    valid["bb_claim_sha256"].pop()
     valid["extra"] = True
     lock.write_text(json.dumps(valid))
     with pytest.raises(claims.SprintClaimError, match="schema"):

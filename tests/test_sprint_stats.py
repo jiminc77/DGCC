@@ -91,33 +91,40 @@ def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkey
     monkeypatch.setattr(sprint_claims, "REPO_ROOT", tmp_path)
     metrics = tmp_path / "outputs/metrics"; metrics.mkdir(parents=True)
     paths = []
-    for seed in range(8):
+    for seed in sprint_claims.AMD3_PAIRED_SEEDS:
         tag, digest = f"seed{seed}", "a" * 64
-        path = sprint_claims.canonical_claim_path(tag, "bb")
-        claim = {"schema_version": 1, "claim_before_load": True, "timestamp": "now", "pid": 1, "run_tag": tag, "arm": "bb", "ckpt_sha256": digest, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "seed": seed, "config_sha256": digest, "selection_manifest": "/selection", "selection_manifest_sha256": digest, "episode_namespace": 97001, "n_goals": 100}
-        path.write_text(json.dumps(claim)); claim_sha = sprint_claims.sha256_file(path)
-        episodes = _canonical_episodes()
-        result = sprint_heldout_eval.canonical_result_payload(
-            run_tag=tag,
-            arm="bb",
-            seed=seed,
-            manifest={
-                "config_sha256": digest,
-                "ckpt_sha256": digest,
-                "selector_version": "test",
-                "val_rows": [],
-            },
-            selection_manifest=claim["selection_manifest"],
-            selection_sha=claim["selection_manifest_sha256"],
-            claim_sha=claim_sha,
-            result={"episodes": episodes, **sprint_claims._summary_aggregates(episodes)},
-        )
-        sprint_claims.canonical_result_path(tag, "bb").write_text(json.dumps(result))
-        sprint_claims.canonical_raw_path(tag, "bb").write_bytes(b"raw")
+        if seed < 3:
+            tag = f"m4_t2_s{seed}"
+            path = metrics / f"p1_sprint_heldout_claim_{tag}.json"
+            claim = {"m4_tag": tag, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256}
+            path.write_text(json.dumps(claim))
+            result_path = metrics / f"p1_t2_sprint_heldout_{tag}.json"
+            result_path.write_text(json.dumps({"seed": seed, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "summary": {"n_episodes": 200, "success_rate": 0.0}}))
+        else:
+            path = sprint_claims.canonical_claim_path(tag, "bb")
+            claim = {"schema_version": 1, "claim_before_load": True, "timestamp": "now", "pid": 1, "run_tag": tag, "arm": "bb", "ckpt_sha256": digest, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "seed": seed, "config_sha256": digest, "selection_manifest": "/selection", "selection_manifest_sha256": digest, "episode_namespace": 97001, "n_goals": 100}
+            path.write_text(json.dumps(claim)); claim_sha = sprint_claims.sha256_file(path)
+            episodes = _canonical_episodes()
+            result = sprint_heldout_eval.canonical_result_payload(
+                run_tag=tag, arm="bb", seed=seed,
+                manifest={"config_sha256": digest, "ckpt_sha256": digest, "selector_version": "test", "val_rows": []},
+                selection_manifest=claim["selection_manifest"], selection_sha=claim["selection_manifest_sha256"],
+                claim_sha=claim_sha, result={"episodes": episodes, **sprint_claims._summary_aggregates(episodes)},
+            )
+            sprint_claims.canonical_result_path(tag, "bb").write_text(json.dumps(result))
+            sprint_claims.canonical_raw_path(tag, "bb").write_bytes(b"raw")
         paths.append(path)
+    files = {
+        str(path.relative_to(tmp_path)): {"sha256": sprint_claims.sha256_file(path), "size": path.stat().st_size}
+        for path in metrics.glob("*") if path.is_file()
+    }
+    (metrics / "sprint_retro_audit_bundle.json").write_text(json.dumps({"schema_version": 1, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "files": files}))
     lock = sprint_claims.canonical_metric_lock_path()
     assert stats.publish_metric_lock(paths, lock)["endpoint"] == "return"
     sprint_claims.require_metric_lock(lock, "v1")
+    paths[0].write_text(paths[0].read_text() + " ")
+    with pytest.raises(sprint_claims.SprintClaimError, match="bundle file verification"):
+        stats._validated_legacy_bb_pair(paths[0])
     with pytest.raises(sprint_claims.SprintClaimError): stats.publish_metric_lock(paths, tmp_path / "off-root.lock")
 
 def test_lock_rejects_summary_tamper_missing_episodes_and_wrong_seed_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,10 +134,10 @@ def test_lock_rejects_summary_tamper_missing_episodes_and_wrong_seed_set(tmp_pat
     with pytest.raises(sprint_claims.SprintClaimError): stats.publish_metric_lock([tmp_path / "x"] * 8, sprint_claims.canonical_metric_lock_path())
 
 def test_sensitivity_boundaries() -> None:
-    v1 = {seed: [10.] for seed in range(8)}; bb = {seed: [0.] for seed in range(8)}
+    v1 = {seed: [10.] for seed in sprint_claims.AMD3_PAIRED_SEEDS}; bb = {seed: [0.] for seed in sprint_claims.AMD3_PAIRED_SEEDS}
     report = stats.bb_three_way_sensitivity(v1, bb, draws=200)
     assert set(report) >= {"reuse", "new", "pooled", "batch_effect_flag"}
-    arms = {arm: {seed: [{"success": True, "eval_wall_guard": arm == "v1"}] for seed in range(8)} for arm in ("v1", "bb")}
+    arms = {arm: {seed: [{"success": True, "eval_wall_guard": arm == "v1"}] for seed in sprint_claims.AMD3_PAIRED_SEEDS} for arm in ("v1", "bb")}
     with pytest.raises(ValueError, match="no episodes"): stats.guard_sensitivity(arms, draws=200)
 
 
@@ -139,7 +146,7 @@ def test_guard_sensitivity_uses_preregistered_guard_and_common_support_rules() -
         return {"goal_id": goal_id, "success": success, "eval_wall_guard": guarded}
 
     arms = {"v1": {}, "bb": {}}
-    for seed in range(8):
+    for seed in sprint_claims.AMD3_PAIRED_SEEDS:
         arms["v1"][seed] = [
             row("common", True),
             *[row("v1-guarded", True, True) for _ in range(10)],

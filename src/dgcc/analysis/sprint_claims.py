@@ -14,6 +14,8 @@ from typing import Any, Mapping
 
 PRIMITIVE_SCHEMA_VERSION = 1
 CANONICAL_SPLIT_SHA256 = "76335ae50efd8164df1f8e241ae69aa30685f201aa6f0554d4a5b077cc1e2754"
+# Canonical AMD-3 paired seed set; verdict 5029426419.
+AMD3_PAIRED_SEEDS = frozenset({0, 1, 2, 3, 4, 6, 7})
 # This is intentionally anchored at the installed source tree, never at CWD.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # Canonical summaries are derivable from the durable episode rows alone.
@@ -224,10 +226,21 @@ def require_metric_lock(lock_path: Path | None, arm: str) -> None:
     if lock_path is None: raise SprintClaimError(f"arm {arm!r} requires --lock before split load")
     try: value, _ = json_file(Path(lock_path), "metric lock")
     except (OSError, SprintClaimError) as exc: raise SprintClaimError(f"metric lock is invalid: {lock_path}") from exc
-    required = {"schema_version", "endpoint", "aggregate", "created_at", "bb_claim_sha256", "primitive_version"}
-    if not isinstance(value, dict) or set(value) != required or value["schema_version"] != 1 or value["endpoint"] not in {"success_rate", "return"} or not isinstance(value["aggregate"], (int, float)) or isinstance(value["aggregate"], bool) or not value["created_at"] or not value["primitive_version"]: raise SprintClaimError("metric lock schema is invalid")
+    required = {"schema_version", "endpoint", "aggregate", "created_at", "bb_claim_sha256", "bb_claim_audit", "primitive_version"}
+    if not isinstance(value, dict) or set(value) != required or value["schema_version"] != 1 or value["endpoint"] not in {"success_rate", "return"} or not isinstance(value["aggregate"], (int, float)) or isinstance(value["aggregate"], bool) or not value["created_at"] or not value["primitive_version"]:
+        raise SprintClaimError("metric lock schema is invalid")
     hashes = value["bb_claim_sha256"]
-    if not isinstance(hashes, list) or len(hashes) != 8 or len(set(hashes)) != 8 or any(not isinstance(x, str) or not _HEX64.fullmatch(x) for x in hashes): raise SprintClaimError("metric lock schema is invalid")
+    audits = value["bb_claim_audit"]
+    if not isinstance(hashes, list) or len(hashes) != len(AMD3_PAIRED_SEEDS) or len(set(hashes)) != len(AMD3_PAIRED_SEEDS) or any(not isinstance(x, str) or not _HEX64.fullmatch(x) for x in hashes):
+        raise SprintClaimError("metric lock schema is invalid")
+    if not isinstance(audits, list) or len(audits) != len(AMD3_PAIRED_SEEDS):
+        raise SprintClaimError("metric lock schema is invalid")
+    expected_kinds = {0: "legacy_bundle", 1: "legacy_bundle", 2: "legacy_bundle", 3: "canonical", 4: "canonical", 6: "canonical", 7: "canonical"}
+    if not all(
+        isinstance(row, dict) and set(row) == {"seed", "kind", "claim_sha256"} and row["seed"] in expected_kinds and row["kind"] == expected_kinds[row["seed"]] and row["claim_sha256"] in hashes
+        for row in audits
+    ) or {row["seed"] for row in audits} != set(AMD3_PAIRED_SEEDS) or {row["claim_sha256"] for row in audits} != set(hashes):
+        raise SprintClaimError("metric lock schema is invalid")
 
 def _is_finite_json(value: Any) -> bool:
     if value is None or isinstance(value, (bool, str)):
