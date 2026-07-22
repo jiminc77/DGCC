@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 
@@ -90,6 +91,7 @@ def _canonical_episodes() -> list[dict[str, object]]:
 def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sprint_claims, "REPO_ROOT", tmp_path)
     metrics = tmp_path / "outputs/metrics"; metrics.mkdir(parents=True)
+    legacy_paths = []
     paths = []
     for seed in sprint_claims.AMD3_PAIRED_SEEDS:
         tag, digest = f"seed{seed}", "a" * 64
@@ -100,6 +102,9 @@ def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkey
             path.write_text(json.dumps(claim))
             result_path = metrics / f"p1_t2_sprint_heldout_{tag}.json"
             result_path.write_text(json.dumps({"seed": seed, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "summary": {"n_episodes": 200, "success_rate": 0.0}}))
+            selection_path = metrics / f"p1_sprint_retro_val_{tag}.json"
+            selection_path.write_text("{}")
+            legacy_paths.extend((path, result_path, selection_path))
         else:
             path = sprint_claims.canonical_claim_path(tag, "bb")
             claim = {"schema_version": 1, "claim_before_load": True, "timestamp": "now", "pid": 1, "run_tag": tag, "arm": "bb", "ckpt_sha256": digest, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "seed": seed, "config_sha256": digest, "selection_manifest": "/selection", "selection_manifest_sha256": digest, "episode_namespace": 97001, "n_goals": 100}
@@ -114,16 +119,42 @@ def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkey
             sprint_claims.canonical_result_path(tag, "bb").write_text(json.dumps(result))
             sprint_claims.canonical_raw_path(tag, "bb").write_bytes(b"raw")
         paths.append(path)
+    access_path = metrics / "t2_sprint_heldout_access.log"
+    access_path.write_text(json.dumps({"arm": "bb", "purpose": "retro audit"}) + "\n")
+    legacy_paths.append(access_path)
     files = {
         str(path.relative_to(tmp_path)): {"sha256": sprint_claims.sha256_file(path), "size": path.stat().st_size}
-        for path in metrics.glob("*") if path.is_file()
+        for path in legacy_paths
     }
-    (metrics / "sprint_retro_audit_bundle.json").write_text(json.dumps({"schema_version": 1, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "files": files}))
+    bundle_path = metrics / "sprint_retro_audit_bundle.json"
+    bundle_path.write_text(json.dumps({"schema_version": 1, "split_sha256": sprint_claims.CANONICAL_SPLIT_SHA256, "files": files}))
+    # Fixture bundles are synthetic; replace the production immutable anchor for this happy path.
+    monkeypatch.setattr(stats, "LEGACY_RETRO_AUDIT_BUNDLE_SHA256", sprint_claims.sha256_file(bundle_path))
     lock = sprint_claims.canonical_metric_lock_path()
     assert stats.publish_metric_lock(paths, lock)["endpoint"] == "return"
     sprint_claims.require_metric_lock(lock, "v1")
-    paths[0].write_text(paths[0].read_text() + " ")
-    with pytest.raises(sprint_claims.SprintClaimError, match="bundle file verification"):
+    original_bundle = bundle_path.read_bytes()
+    bundle = json.loads(original_bundle)
+    del bundle["files"][str(legacy_paths[0].relative_to(tmp_path))]
+    bundle_path.write_text(json.dumps(bundle))
+    monkeypatch.setattr(stats, "LEGACY_RETRO_AUDIT_BUNDLE_SHA256", sprint_claims.sha256_file(bundle_path))
+    with pytest.raises(sprint_claims.SprintClaimError, match="exact legacy file set"):
+        stats._validated_legacy_bb_pair(paths[0])
+
+    bundle_path.write_bytes(original_bundle)
+    rewritten_result = json.loads((metrics / "p1_t2_sprint_heldout_m4_t2_s0.json").read_text())
+    rewritten_result["summary"]["success_rate"] = 0.5
+    rewritten_path = metrics / "p1_t2_sprint_heldout_m4_t2_s0.json"
+    rewritten_path.write_text(json.dumps(rewritten_result))
+    coherent_bundle = json.loads(original_bundle)
+    coherent_bundle["files"][str(rewritten_path.relative_to(tmp_path))] = {
+        "sha256": sprint_claims.sha256_file(rewritten_path),
+        "size": rewritten_path.stat().st_size,
+    }
+    bundle_path.write_text(json.dumps(coherent_bundle))
+    # The result and bundle agree, but the immutable production-style anchor rejects both rewrites.
+    monkeypatch.setattr(stats, "LEGACY_RETRO_AUDIT_BUNDLE_SHA256", hashlib.sha256(original_bundle).hexdigest())
+    with pytest.raises(sprint_claims.SprintClaimError, match="immutable SHA-256 anchor"):
         stats._validated_legacy_bb_pair(paths[0])
     with pytest.raises(sprint_claims.SprintClaimError): stats.publish_metric_lock(paths, tmp_path / "off-root.lock")
 

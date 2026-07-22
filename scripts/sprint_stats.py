@@ -25,6 +25,10 @@ SIGMA_GOAL = 1.8605
 RETURN_EQUIV_MARGIN = 0.465
 SUCCESS_EQUIV_MARGIN = 0.05
 
+# SHA-256 of outputs/metrics/sprint_retro_audit_bundle.json at commit
+# 0a922c31729cfcef98e97f3842c0cc1c91ffbaaa; this legacy audit is immutable.
+LEGACY_RETRO_AUDIT_BUNDLE_SHA256 = "998fb666db41dc8d54729bfea8e975812a705ff9ac09f30cebc0f80c875cb832"
+
 
 def _finite(values: Sequence[float]) -> np.ndarray:
     a = np.asarray(values, dtype=float)
@@ -230,25 +234,50 @@ def _validated_canonical_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str,
 def _validated_legacy_bb_pair(claim_path: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
     bundle_path = sprint_claims.REPO_ROOT / "outputs/metrics/sprint_retro_audit_bundle.json"
     try:
-        bundle, _ = sprint_claims.json_file(bundle_path, "retro audit bundle")
-    except (OSError, SprintClaimError) as exc:
+        bundle_sha256 = sprint_claims.sha256_file(bundle_path)
+    except OSError as exc:
         raise SprintClaimError("legacy BB claim requires an archived retro audit bundle") from exc
+    if bundle_sha256 != LEGACY_RETRO_AUDIT_BUNDLE_SHA256:
+        raise SprintClaimError("retro audit bundle does not match its immutable SHA-256 anchor")
+    bundle, _ = sprint_claims.json_file(bundle_path, "retro audit bundle")
     if not isinstance(bundle, dict) or bundle.get("schema_version") != 1 or bundle.get("split_sha256") != sprint_claims.CANONICAL_SPLIT_SHA256 or not isinstance(bundle.get("files"), dict):
         raise SprintClaimError("retro audit bundle schema is invalid")
-    for relative, entry in bundle["files"].items():
-        path = sprint_claims.REPO_ROOT / relative
-        if not isinstance(relative, str) or not isinstance(entry, dict) or set(entry) != {"sha256", "size"} or not path.is_file() or entry["sha256"] != sprint_claims.sha256_file(path) or entry["size"] != path.stat().st_size:
-            raise SprintClaimError("retro audit bundle file verification failed")
+
     claim, digest = sprint_claims.json_file(claim_path, "legacy BB claim")
     if not isinstance(claim, dict) or claim.get("split_sha256") != sprint_claims.CANONICAL_SPLIT_SHA256 or not isinstance(claim.get("m4_tag"), str):
         raise SprintClaimError("legacy BB claim schema is invalid")
-    if str(claim_path.relative_to(sprint_claims.REPO_ROOT)) not in bundle["files"]:
-        raise SprintClaimError("legacy BB claim is not archived in the retro audit bundle")
     seed_match = re.search(r"_s([012])$", claim["m4_tag"])
     if seed_match is None:
         raise SprintClaimError("legacy BB claim has no accepted AMD-3 seed")
     seed = int(seed_match.group(1))
-    result_path = sprint_claims.REPO_ROOT / "outputs/metrics" / f"p1_t2_sprint_heldout_{claim['m4_tag']}.json"
+
+    metrics_relative = Path("outputs/metrics")
+    access_relative = metrics_relative / "t2_sprint_heldout_access.log"
+    required = {
+        metrics_relative / f"p1_sprint_heldout_claim_m4_t2_s{legacy_seed}.json"
+        for legacy_seed in range(3)
+    } | {
+        metrics_relative / f"p1_t2_sprint_heldout_m4_t2_s{legacy_seed}.json"
+        for legacy_seed in range(3)
+    } | {
+        metrics_relative / f"p1_sprint_retro_val_m4_t2_s{legacy_seed}.json"
+        for legacy_seed in range(3)
+    } | {access_relative}
+    archived = set(bundle["files"])
+    if archived != {str(path) for path in required}:
+        raise SprintClaimError("retro audit bundle does not contain the exact legacy file set")
+    for relative, entry in bundle["files"].items():
+        relative_path = Path(relative)
+        if not isinstance(relative, str) or relative_path.is_absolute() or ".." in relative_path.parts:
+            raise SprintClaimError("retro audit bundle contains an unsafe path")
+        path = sprint_claims.REPO_ROOT / relative_path
+        if not isinstance(entry, dict) or set(entry) != {"sha256", "size"} or not path.is_file() or entry["sha256"] != sprint_claims.sha256_file(path) or entry["size"] != path.stat().st_size:
+            raise SprintClaimError("retro audit bundle file verification failed")
+    claim_relative = str(claim_path.relative_to(sprint_claims.REPO_ROOT))
+    if claim_relative != str(metrics_relative / f"p1_sprint_heldout_claim_{claim['m4_tag']}.json"):
+        raise SprintClaimError("legacy BB claim must be at its archived canonical path")
+
+    result_path = sprint_claims.REPO_ROOT / metrics_relative / f"p1_t2_sprint_heldout_{claim['m4_tag']}.json"
     result, _ = sprint_claims.json_file(result_path, "legacy BB result")
     summary = result.get("summary") if isinstance(result, dict) else None
     if result.get("seed") != seed or result.get("split_sha256") != sprint_claims.CANONICAL_SPLIT_SHA256 or not isinstance(summary, dict) or not isinstance(summary.get("n_episodes"), int) or summary["n_episodes"] <= 0 or not isinstance(summary.get("success_rate"), (int, float)):
