@@ -22,6 +22,13 @@
    "sha256": "4e39f6d53261a20f1f558fc34b4beffa220ec8fe2a6d87cb0a38fe89b9c3f850",
    "size": 1430797
   },
+  "6875098d288b6d0655870073de88976f442c0ab1cb36b8c4ac7e9cfe39c16a0b": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_bb_sprint_heldout_sprint_t2_bb_s7.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_bb_s7",
+   "sha256": "6875098d288b6d0655870073de88976f442c0ab1cb36b8c4ac7e9cfe39c16a0b",
+   "size": 4073360
+  },
   "7fa21a937b3a9b14c4eb17182ba2255b10e3af42ac93b5770eff8676297fa520": {
    "kind": "legacy_raw_no_probe",
    "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
