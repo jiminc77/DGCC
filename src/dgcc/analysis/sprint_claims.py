@@ -221,11 +221,25 @@ def probe_manifest_register(manifest_path: Path, file_path: Path, meta: Mapping[
             return manifest
         finally: fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
+# Issued metric lock trust anchor: sha256 of the immutable published lock file
+# (commit 44ad038, G9a publication). Consumers refuse any other lock bytes.
+PUBLISHED_METRIC_LOCK_SHA256 = "7cb96288c9b27290674488c7ae34c854efe82f0e04628af26b6e93166a562122"
+
+
 def require_metric_lock(lock_path: Path | None, arm: str) -> None:
     if _arm(arm) == "bb": return
     if lock_path is None: raise SprintClaimError(f"arm {arm!r} requires --lock before split load")
-    try: value, _ = json_file(Path(lock_path), "metric lock")
+    canonical = canonical_metric_lock_path()
+    try:
+        resolved = Path(lock_path).resolve(strict=True)
+    except OSError as exc:
+        raise SprintClaimError(f"metric lock is invalid: {lock_path}") from exc
+    if Path(lock_path).is_symlink() or resolved != canonical.resolve():
+        raise SprintClaimError("metric lock must be the canonical issued lock path")
+    try: value, digest = json_file(resolved, "metric lock")
     except (OSError, SprintClaimError) as exc: raise SprintClaimError(f"metric lock is invalid: {lock_path}") from exc
+    if digest != PUBLISHED_METRIC_LOCK_SHA256:
+        raise SprintClaimError("metric lock does not match the issued trust anchor")
     required = {"schema_version", "endpoint", "aggregate", "created_at", "bb_claim_sha256", "bb_claim_audit", "primitive_version"}
     if not isinstance(value, dict) or set(value) != required or value["schema_version"] != 1 or value["endpoint"] not in {"success_rate", "return"} or not isinstance(value["aggregate"], (int, float)) or isinstance(value["aggregate"], bool) or not value["created_at"] or not value["primitive_version"]:
         raise SprintClaimError("metric lock schema is invalid")

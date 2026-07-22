@@ -132,6 +132,8 @@ def test_lock_audits_canonical_producer_payload_and_paths(tmp_path: Path, monkey
     monkeypatch.setattr(stats, "LEGACY_RETRO_AUDIT_BUNDLE_SHA256", sprint_claims.sha256_file(bundle_path))
     lock = sprint_claims.canonical_metric_lock_path()
     assert stats.publish_metric_lock(paths, lock)["endpoint"] == "return"
+    # The freshly issued fixture lock becomes the consumer trust anchor for this repo root.
+    monkeypatch.setattr(sprint_claims, "PUBLISHED_METRIC_LOCK_SHA256", sprint_claims.sha256_file(lock))
     sprint_claims.require_metric_lock(lock, "v1")
     original_bundle = bundle_path.read_bytes()
     bundle = json.loads(original_bundle)

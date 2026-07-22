@@ -346,18 +346,33 @@ def test_probe_manifest_content_address_and_parallel_registration(canonical_spri
     assert len(json.loads(manifest.read_text())["files"]) == 16
 
 
-def test_metric_lock_has_strict_schema_and_bb_only_bypasses(canonical_sprint: Path) -> None:
-    lock = canonical_sprint / "lock.json"
+def test_metric_lock_has_strict_schema_and_bb_only_bypasses(canonical_sprint: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    lock = claims.canonical_metric_lock_path()
+    lock.parent.mkdir(parents=True, exist_ok=True)
     valid = {"schema_version": 1, "endpoint": "success_rate", "aggregate": 0.5, "created_at": "now", "bb_claim_sha256": [f"{index:064x}" for index in claims.AMD3_PAIRED_SEEDS], "bb_claim_audit": [{"seed": seed, "kind": "legacy_bundle" if seed < 3 else "canonical", "claim_sha256": f"{seed:064x}"} for seed in sorted(claims.AMD3_PAIRED_SEEDS)], "primitive_version": "v1"}
-    lock.write_text(json.dumps(valid))
+
+    def _issue(body: dict) -> None:
+        lock.write_text(json.dumps(body))
+        monkeypatch.setattr(claims, "PUBLISHED_METRIC_LOCK_SHA256", claims.sha256_file(lock))
+
+    # Off-canonical-path locks are refused even with a schema-valid body.
+    off_path = canonical_sprint / "lock.json"
+    off_path.write_text(json.dumps(valid))
+    with pytest.raises(claims.SprintClaimError, match="canonical issued lock path"):
+        claims.require_metric_lock(off_path, "v1")
+    _issue(valid)
     claims.require_metric_lock(lock, "v1")
+    # Canonical-path bytes differing from the issued trust anchor are refused (coherent rewrite).
+    lock.write_text(json.dumps(valid, indent=1))
+    with pytest.raises(claims.SprintClaimError, match="issued trust anchor"):
+        claims.require_metric_lock(lock, "v1")
     valid["bb_claim_sha256"].append("f" * 64)
-    lock.write_text(json.dumps(valid))
+    _issue(valid)
     with pytest.raises(claims.SprintClaimError, match="schema"):
         claims.require_metric_lock(lock, "v1")
     valid["bb_claim_sha256"].pop()
     valid["extra"] = True
-    lock.write_text(json.dumps(valid))
+    _issue(valid)
     with pytest.raises(claims.SprintClaimError, match="schema"):
         claims.require_metric_lock(lock, "v1")
     claims.require_metric_lock(None, "bb")
