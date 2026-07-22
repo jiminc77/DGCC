@@ -34,3 +34,22 @@ def test_patch_report_breakdown_is_length_and_family_with_nonconverged() -> None
 
     assert "| 0.75 | s | 1 | 0.0400 | 0.0400 | 0 | 1 |" in lines
     assert "| 1.25 | u | 1 | 0.0600 | 0.0600 | 1 | 0 |" in lines
+
+
+def test_sprint_split_mode_fail_closed_without_issued_lock(monkeypatch, tmp_path) -> None:
+    import json
+
+    import pytest
+
+    from dgcc.analysis import sprint_claims
+
+    # Missing lock: refused at argument boundary, before any environment work.
+    monkeypatch.setattr("sys.argv", ["goal_preflight.py", "--include-sprint-split"])
+    with pytest.raises(sprint_claims.SprintClaimError, match="requires --lock"):
+        preflight.main()
+    # Off-path schema-valid lock: refused by the canonical issued-path gate.
+    fake = tmp_path / "lock.json"
+    fake.write_text(json.dumps({"schema_version": 1}))
+    monkeypatch.setattr("sys.argv", ["goal_preflight.py", "--include-sprint-split", "--lock", str(fake)])
+    with pytest.raises(sprint_claims.SprintClaimError, match="canonical issued lock path"):
+        preflight.main()

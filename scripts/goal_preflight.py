@@ -117,12 +117,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--t1-samples", type=int, default=25, help="sampled goals per T1 task (t1b/t1c)")
     parser.add_argument("--include-sprint-split", action="store_true",
-                        help="also preflight t2_sprint_heldout_v1 (NOT the M4 held-out)")
+                        help="also preflight t2_sprint_heldout_v1 (NOT the M4 held-out); requires --lock")
+    parser.add_argument("--lock", type=Path, default=None,
+                        help="canonical issued metric lock; mandatory gate for --include-sprint-split")
     parser.add_argument("--include-patch-split", action="store_true",
                         help="also preflight t2_patch_eval_v1 at its train/OOD rope lengths")
     parser.add_argument("--report", type=Path, default=Path("outputs/reports/goal_preflight.md"))
     parser.add_argument("--json", type=Path, default=Path("outputs/metrics/goal_preflight.json"))
     args = parser.parse_args()
+    if args.include_sprint_split:
+        # Fail-closed before any environment work: the sprint split is unreachable
+        # without the canonical issued metric lock (non-BB caller boundary).
+        from dgcc.analysis.sprint_claims import require_metric_lock
+        require_metric_lock(args.lock, "v1")  # strictest non-BB gate; preflight is arm-agnostic
 
     from dgcc.tasks.t2 import load_t2_split
 
@@ -158,6 +165,9 @@ def main() -> int:
     blocks["t2_val"] = rows
 
     if args.include_sprint_split:
+        # Non-BB caller boundary: the sprint split may not be read without the issued metric lock.
+        from dgcc.analysis.sprint_claims import require_metric_lock
+        require_metric_lock(args.lock, "v1")  # strictest non-BB gate; preflight is arm-agnostic
         sprint = json.loads((REPO / "src/dgcc/tasks/splits/t2_sprint_heldout_v1.json").read_text())
         from dgcc.tasks.t2 import build_t2_goal
         rows = []
