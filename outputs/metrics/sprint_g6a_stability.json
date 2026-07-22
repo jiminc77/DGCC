@@ -1,0 +1,314 @@
+{
+  "method": "scripts/sprint_stability_recount.py recount_log individually over current and archived immutable logs",
+  "runs": [
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "d96ec5cba24c38016b5e0db31a9d979a4984c2eba43a563f596d12fb89e6e710",
+      "log": "outputs/archive/sprint_crash/s5-20260719T1835Z/p1_sprint_train_sprint_t2_bb_s5.log.crashed-20260719T1835Z",
+      "rebuilds": 9,
+      "recounted_lower_bound": {
+        "mag": 8,
+        "nan": 3
+      },
+      "reported": null,
+      "reset_boundaries": [
+        {
+          "line": 298,
+          "reason": "rebuild"
+        },
+        {
+          "line": 437,
+          "reason": "rebuild"
+        },
+        {
+          "line": 524,
+          "reason": "rebuild"
+        },
+        {
+          "line": 571,
+          "reason": "rebuild"
+        },
+        {
+          "line": 692,
+          "reason": "rebuild"
+        },
+        {
+          "line": 951,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1074,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1127,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1328,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s5",
+      "status": "archived",
+      "transitions": 50176
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "d96ec5cba24c38016b5e0db31a9d979a4984c2eba43a563f596d12fb89e6e710",
+      "log": "outputs/archive/sprint_crash/s5r-20260721T0107Z/p1_sprint_train_sprint_t2_bb_s5.log.crashed-20260721T0107Z",
+      "rebuilds": 9,
+      "recounted_lower_bound": {
+        "mag": 1,
+        "nan": 0
+      },
+      "reported": null,
+      "reset_boundaries": [
+        {
+          "line": 630,
+          "reason": "rebuild"
+        },
+        {
+          "line": 707,
+          "reason": "rebuild"
+        },
+        {
+          "line": 882,
+          "reason": "rebuild"
+        },
+        {
+          "line": 933,
+          "reason": "rebuild"
+        },
+        {
+          "line": 998,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1123,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1330,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1479,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1562,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s5",
+      "status": "archived",
+      "transitions": 25600
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "00d53f65687288d083f03c80c2bb1a10d967e9e5fa9157ba1814c6d9940ead67",
+      "log": "outputs/archive/sprint_crash/s6-killed-20260720T0312Z/p1_sprint_train_sprint_t2_bb_s6.log.killed-20260720T0312Z",
+      "rebuilds": 3,
+      "recounted_lower_bound": {
+        "mag": 13,
+        "nan": 12
+      },
+      "reported": null,
+      "reset_boundaries": [
+        {
+          "line": 894,
+          "reason": "rebuild"
+        },
+        {
+          "line": 983,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1388,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s6",
+      "status": "archived",
+      "transitions": 125952
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "5ce71f924ad3f185e95ea6e58c00d7205d2c1812c6d24ef4f80a33ab254380c9",
+      "log": "outputs/archive/sprint_crash/s7-killed-20260721T0559Z/p1_sprint_train_sprint_t2_bb_s7.log.killed-20260721T0559Z",
+      "rebuilds": 1,
+      "recounted_lower_bound": {
+        "mag": 10,
+        "nan": 6
+      },
+      "reported": null,
+      "reset_boundaries": [
+        {
+          "line": 214,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s7",
+      "status": "archived",
+      "transitions": 50176
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "5ce71f924ad3f185e95ea6e58c00d7205d2c1812c6d24ef4f80a33ab254380c9",
+      "log": "outputs/archive/sprint_crash/s7r-20260722T0117Z/p1_sprint_train_sprint_t2_bb_s7.log.crashed-20260722T0117Z",
+      "rebuilds": 9,
+      "recounted_lower_bound": {
+        "mag": 1,
+        "nan": 0
+      },
+      "reported": null,
+      "reset_boundaries": [
+        {
+          "line": 364,
+          "reason": "rebuild"
+        },
+        {
+          "line": 485,
+          "reason": "rebuild"
+        },
+        {
+          "line": 632,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1151,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1544,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1641,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1912,
+          "reason": "rebuild"
+        },
+        {
+          "line": 2039,
+          "reason": "rebuild"
+        },
+        {
+          "line": 2192,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s7",
+      "status": "archived",
+      "transitions": 25600
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "b1ee2f73778061694a5bb5977d53c144bd0f3a67eb556083cf9d0a51eb76a910",
+      "log": "outputs/reports/p1_sprint_train_sprint_t2_bb_s3.log",
+      "rebuilds": 1,
+      "recounted_lower_bound": {
+        "mag": 69,
+        "nan": 82
+      },
+      "reported": {
+        "mag": 7,
+        "nan": 20
+      },
+      "reset_boundaries": [
+        {
+          "line": 1118,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s3",
+      "status": "complete",
+      "transitions": 300032
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "b31ccdf019d52483020210da9f6e647b945d0b25e3552a7eb86c23f21203311e",
+      "log": "outputs/reports/p1_sprint_train_sprint_t2_bb_s4.log",
+      "rebuilds": 1,
+      "recounted_lower_bound": {
+        "mag": 38,
+        "nan": 45
+      },
+      "reported": {
+        "mag": 20,
+        "nan": 24
+      },
+      "reset_boundaries": [
+        {
+          "line": 500,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s4",
+      "status": "complete",
+      "transitions": 300032
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "00d53f65687288d083f03c80c2bb1a10d967e9e5fa9157ba1814c6d9940ead67",
+      "log": "outputs/reports/p1_sprint_train_sprint_t2_bb_s6.log",
+      "rebuilds": 3,
+      "recounted_lower_bound": {
+        "mag": 31,
+        "nan": 37
+      },
+      "reported": {
+        "mag": 0,
+        "nan": 0
+      },
+      "reset_boundaries": [
+        {
+          "line": 161,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1055,
+          "reason": "rebuild"
+        },
+        {
+          "line": 1344,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s6",
+      "status": "complete",
+      "transitions": 300032
+    },
+    {
+      "halt_reason": null,
+      "initial_weights_sha256": "5ce71f924ad3f185e95ea6e58c00d7205d2c1812c6d24ef4f80a33ab254380c9",
+      "log": "outputs/reports/p1_sprint_train_sprint_t2_bb_s7.log",
+      "rebuilds": 2,
+      "recounted_lower_bound": {
+        "mag": 28,
+        "nan": 48
+      },
+      "reported": {
+        "mag": 14,
+        "nan": 29
+      },
+      "reset_boundaries": [
+        {
+          "line": 613,
+          "reason": "rebuild"
+        },
+        {
+          "line": 942,
+          "reason": "rebuild"
+        }
+      ],
+      "run_tag": "sprint_t2_bb_s7",
+      "status": "complete",
+      "transitions": 300032
+    }
+  ],
+  "schema_version": 1
+}
