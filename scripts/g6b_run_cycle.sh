@@ -10,10 +10,21 @@ cfg="configs/sprint_t2_${arm}.yaml"
 log="outputs/reports/p1_sprint_train_${tag}.log"
 
 echo "CYCLE_START arm=${arm} seed=${seed} $(date -u +%FT%TZ)"
-uv run python scripts/p1_sprint_train.py --config "${cfg}" --arm "${arm}" --seed "${seed}" --run-tag "${tag}" > "${log}" 2>&1
-rc=$?
-echo "TRAIN_END arm=${arm} seed=${seed} rc=${rc} $(date -u +%FT%TZ)"
-if [ $rc -ne 0 ]; then echo "CYCLE_FAIL stage=train arm=${arm} seed=${seed}"; exit 1; fi
+# Resume guard: a completed, non-halted training run is never re-trained (protects 11h+ runs
+# from post-train tooling failures; the per-tag gate below still re-verifies it).
+if uv run python -c "
+import json,sys
+try: r=json.load(open('outputs/metrics/p1_run_${tag}.json'))
+except Exception: sys.exit(1)
+sys.exit(0 if (r.get('transitions')==300032 and r.get('halt_reason') is None) else 1)
+" 2>/dev/null; then
+  echo "TRAIN_SKIP_COMPLETE arm=${arm} seed=${seed}"
+else
+  uv run python scripts/p1_sprint_train.py --config "${cfg}" --arm "${arm}" --seed "${seed}" --run-tag "${tag}" > "${log}" 2>&1
+  rc=$?
+  echo "TRAIN_END arm=${arm} seed=${seed} rc=${rc} $(date -u +%FT%TZ)"
+  if [ $rc -ne 0 ]; then echo "CYCLE_FAIL stage=train arm=${arm} seed=${seed}"; exit 1; fi
+fi
 
 # Per-tag gate (fail-closed): budget 300,032 · halt None · run-complete log line · init hash recorded.
 uv run python - "$tag" <<'PYEOF'

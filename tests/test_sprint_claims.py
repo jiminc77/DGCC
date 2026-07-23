@@ -477,3 +477,21 @@ def test_audit_claims_ignores_patch_eval_namespace(canonical_sprint: Path) -> No
     rows = claims.audit_claims(claim.parent)
     assert all("_patch_eval_" not in row["claim"] for row in rows)
     assert len(rows) == 1
+
+
+def test_validate_checkpoint_arm_schema_v2(tmp_path: Path) -> None:
+    import torch
+
+    bb = tmp_path / "bb.pt"; torch.save({"encoder": {}}, bb)
+    v1 = tmp_path / "v1.pt"; torch.save({"encoder": {}, "sprint_arm": {"schema_version": 2, "arm": "v1", "aux_weight": 1.0}}, v1)
+    legacy_str = tmp_path / "s.pt"; torch.save({"sprint_arm": "v1"}, legacy_str)
+    claims.validate_checkpoint_arm(bb, "bb")
+    claims.validate_checkpoint_arm(v1, "v1")
+    with pytest.raises(claims.SprintClaimError):
+        claims.validate_checkpoint_arm(v1, "matched")  # wrong arm
+    with pytest.raises(claims.SprintClaimError):
+        claims.validate_checkpoint_arm(v1, "bb")  # sprint ckpt declared as BB
+    with pytest.raises(claims.SprintClaimError):
+        claims.validate_checkpoint_arm(legacy_str, "v1")  # non-schema-v2 payload
+    with pytest.raises(claims.SprintClaimError):
+        claims.validate_checkpoint_arm(bb, "v1")  # baseline ckpt declared as sprint arm

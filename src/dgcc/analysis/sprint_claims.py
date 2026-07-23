@@ -80,7 +80,9 @@ def validate_checkpoint_arm(path: Path, arm: str) -> None:
     declared = payload.get("sprint_arm") if isinstance(payload, dict) else None
     if arm == "bb":
         if declared is not None: raise SprintClaimError("BB declaration requires a baseline checkpoint without sprint_arm")
-    elif declared != arm:
+        return
+    # Contract ⑦: sprint checkpoints carry the schema-v2 `sprint_arm` namespace (dict with `arm`).
+    if not isinstance(declared, dict) or declared.get("schema_version") != 2 or declared.get("arm") != arm:
         raise SprintClaimError("checkpoint sprint_arm does not match declared arm")
 
 def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
