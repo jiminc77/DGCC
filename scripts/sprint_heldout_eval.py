@@ -75,7 +75,31 @@ def build_run(config: str, seed: int, run_tag: str, device: str):
     spec = importlib.util.spec_from_file_location("p1_train", REPO / "scripts/p1_train.py"); module = importlib.util.module_from_spec(spec); sys.modules["p1_train"] = module
     assert spec.loader is not None; spec.loader.exec_module(module)
     run = module.TrainingRun(argparse.Namespace(config=config, seed=seed, run_tag=run_tag, total_override=None, device=device)); run.config.setdefault("eval", {})["wall_guard_k"] = WALL_GUARD_K
+    _swap_sprint_agent(run, seed, device)
     return run
+
+
+def _swap_sprint_agent(run, seed: int, device: str) -> None:
+    """Non-BB configs need the sprint agent so schema-v2 checkpoints (extra
+    f_resp optimizer group) load; BB keeps the baseline agent (contract ⑦)."""
+    sprint_cfg = run.config.get("sprint", {}) or {}
+    arm = sprint_cfg.get("arm")
+    if not arm or arm == "bb":
+        return
+    import torch
+
+    from dgcc.rl.sprint_arms import create_sprint_agent
+
+    torch.manual_seed(seed)  # same F-a construction seam as create_seeded_agent
+    run.agent = create_sprint_agent(
+        arm,
+        run.agent_config,
+        device=device,
+        reward_constants=run.episode_config.reward,
+        aux_weight=float(sprint_cfg.get("aux_weight", 1.0)),
+        projection_seed=int(sprint_cfg.get("projection_seed", 20260719)),
+        target_seed=int(sprint_cfg.get("target_seed", 20260718)),
+    )
 
 def canonical_result_payload(*, run_tag: str, arm: str, seed: int, manifest: dict[str, Any], selection_manifest: str, selection_sha: str, claim_sha: str, result: dict[str, Any]) -> dict[str, Any]:
     """Build the audit-facing canonical result after frozen driver fields are removed."""

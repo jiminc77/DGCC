@@ -75,7 +75,31 @@ def build_run(config_path: str, seed: int, run_tag: str, device: str):
     run = p1_train.TrainingRun(run_args)
     # Sprint protocol: guard ON for every eval in this script.
     run.config.setdefault("eval", {})["wall_guard_k"] = WALL_GUARD_K
+    _swap_sprint_agent(run, seed, device)
     return run
+
+
+def _swap_sprint_agent(run, seed: int, device: str) -> None:
+    """Non-BB configs need the sprint agent so schema-v2 checkpoints (extra
+    f_resp optimizer group) load; BB keeps the baseline agent (contract ⑦)."""
+    sprint_cfg = run.config.get("sprint", {}) or {}
+    arm = sprint_cfg.get("arm")
+    if not arm or arm == "bb":
+        return
+    import torch
+
+    from dgcc.rl.sprint_arms import create_sprint_agent
+
+    torch.manual_seed(seed)  # same F-a construction seam as create_seeded_agent
+    run.agent = create_sprint_agent(
+        arm,
+        run.agent_config,
+        device=device,
+        reward_constants=run.episode_config.reward,
+        aux_weight=float(sprint_cfg.get("aux_weight", 1.0)),
+        projection_seed=int(sprint_cfg.get("projection_seed", 20260719)),
+        target_seed=int(sprint_cfg.get("target_seed", 20260718)),
+    )
 
 
 def eval_with_recovery(run, *, episode_index_start: int, record_raw: bool = False, record_probe: bool = False, max_rebuilds: int = 8):
