@@ -15,7 +15,7 @@ from torch import nn
 from dgcc.phi.dct import Phi_DCT
 from dgcc.rl.td3 import TD3Agent, TD3Config, select_p_star, u_tensor
 
-SprintArm = Literal["bb", "v1", "matched", "random"]
+SprintArm = Literal["bb", "v1", "matched", "random", "v2-dmm", "v2-d1m", "v2-d11", "v2-bgt"]
 MATCHED_PROJECTION_SEED = 20260719
 RANDOM_TARGET_SEED = 20260718
 
@@ -244,6 +244,8 @@ class SprintTD3Agent(TD3Agent):
                 "td_target_bound": dict(self.td_target_bound),
                 "metadata": self.to_dict(),
                 "update_count": self.update_count,
+                "actor_update_count": self.actor_update_count,
+                "target_update_count": self.target_update_count,
                 "encoder": self.encoder.state_dict(), "critic": self.critic.state_dict(), "actor": self.actor.state_dict(),
                 "encoder_target": self.encoder_target.state_dict(), "critic_target": self.critic_target.state_dict(), "actor_target": self.actor_target.state_dict(),
                 "critic_optimizer": self.critic_optimizer.state_dict(), "actor_optimizer": self.actor_optimizer.state_dict(),
@@ -299,6 +301,8 @@ class SprintTD3Agent(TD3Agent):
                 self.target_seed = int(sprint.get("target_seed", RANDOM_TARGET_SEED))
                 self.random_target_buffer = _RandomTarget(self.target_seed, self.device)
         self.update_count = int(payload["update_count"])
+        self.actor_update_count = int(payload.get("actor_update_count", self.update_count))
+        self.target_update_count = int(payload.get("target_update_count", self.update_count))
         self.encoder.load_state_dict(payload["encoder"]); self.critic.load_state_dict(payload["critic"]); self.actor.load_state_dict(payload["actor"])
         self.encoder_target.load_state_dict(payload["encoder_target"]); self.critic_target.load_state_dict(payload["critic_target"]); self.actor_target.load_state_dict(payload["actor_target"])
         self.critic_optimizer.load_state_dict(payload["critic_optimizer"])
@@ -313,9 +317,13 @@ def create_sprint_agent(
     aux_weight: float = 1.0,
     projection_seed: int = MATCHED_PROJECTION_SEED,
     target_seed: int = RANDOM_TARGET_SEED,
+    beta_contact: float = 0.010,
+    bgt_margin: float | None = None,
+    bgt_onset_transition: int | None = None,
+    bgt_calibration_sha256: str | None = None,
     **kwargs: Any,
 ) -> TD3Agent:
-    """Create a sprint arm; BB deliberately returns the unmodified baseline."""
+    """Create a sprint or V2 arm from the shared training-driver seam."""
     if arm == "bb":
         return TD3Agent(config, device=device, **kwargs)
     if arm in {"v1", "matched", "random"}:
@@ -326,6 +334,20 @@ def create_sprint_agent(
             projection_seed=projection_seed,
             target_seed=target_seed,
             device=device,
+            **kwargs,
+        )
+    if arm in {"v2-dmm", "v2-d1m", "v2-d11", "v2-bgt"}:
+        from dgcc.rl.v2_arms import create_v2_agent
+
+        return create_v2_agent(
+            arm,
+            config,
+            device=device,
+            aux_weight=aux_weight,
+            beta_contact=beta_contact,
+            bgt_margin=bgt_margin,
+            bgt_onset_transition=bgt_onset_transition,
+            bgt_calibration_sha256=bgt_calibration_sha256,
             **kwargs,
         )
     raise ValueError(f"unknown sprint arm {arm!r}")

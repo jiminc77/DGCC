@@ -117,6 +117,7 @@ def create_seeded_agent(
     aux_weight: float,
     projection_seed: int = 20260719,
     target_seed: int = 20260718,
+    candidate_kwargs: dict[str, Any] | None = None,
 ) -> Any:
     """F-a construction seam: seed precedes the sole retained agent creation."""
     torch.manual_seed(seed)
@@ -128,6 +129,7 @@ def create_seeded_agent(
         aux_weight=aux_weight,
         projection_seed=projection_seed,
         target_seed=target_seed,
+        **(candidate_kwargs or {}),
     )
 
 
@@ -147,7 +149,11 @@ def assert_bundle_modules(bundle: Path) -> dict[str, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="P1 sprint training driver")
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--arm", choices=("bb", "v1", "matched", "random"), required=True)
+    parser.add_argument(
+        "--arm",
+        choices=("bb", "v1", "matched", "random", "v2-dmm", "v2-d1m", "v2-d11", "v2-bgt"),
+        required=True,
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--run-tag", type=str, default=None)
     parser.add_argument("--source-bundle", type=Path)
@@ -174,6 +180,14 @@ def main(argv: list[str] | None = None) -> int:
     aux_weight = float(sprint_cfg.get("aux_weight", 1.0))
     projection_seed = int(sprint_cfg.get("projection_seed", 20260719))
     target_seed = int(sprint_cfg.get("target_seed", 20260718))
+    beta_contact = float(sprint_cfg.get("beta_contact", 0.010))
+    bgt_cfg = sprint_cfg.get("bgt", {})
+    candidate_kwargs = {
+        "beta_contact": beta_contact,
+        "bgt_margin": bgt_cfg.get("margin"),
+        "bgt_onset_transition": bgt_cfg.get("onset_transition"),
+        "bgt_calibration_sha256": bgt_cfg.get("calibration_sha256"),
+    }
 
     class SprintTrainingRun(base.TrainingRun):
         def __init__(self, run_args: argparse.Namespace) -> None:
@@ -193,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
                 aux_weight,
                 projection_seed,
                 target_seed,
+                candidate_kwargs,
             )
             self.initial_weights_sha256 = base.initial_weights_sha256(self.agent)
 
@@ -200,7 +215,11 @@ def main(argv: list[str] | None = None) -> int:
             super().save_run_summary()
             path = Path("outputs/metrics") / f"p1_run_{self.run_tag}.json"
             payload = json.loads(path.read_text(encoding="utf-8"))
-            payload["sprint"] = {"arm": args.arm, "aux_weight": aux_weight}
+            payload["sprint"] = {
+                "arm": args.arm,
+                "aux_weight": aux_weight,
+                "agent": self.agent.to_dict().get("v2_arm"),
+            }
             if bundle_info:
                 payload["source_bundle"] = {**bundle_info, "module_origins": bundle_origins}
             path.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")

@@ -67,6 +67,7 @@ class DiagnosticsLogger:
         self.step_d_series: list[dict[str, float | str]] = []
         self.lift_dist_series: list[dict[str, float | str]] = []
         self.flip_flicker_series: list[dict[str, float | str]] = []
+        self.selection_series: list[dict[str, Any]] = []
         self.plots_written: list[str] = []
 
     # ------------------------------------------------------------------
@@ -189,6 +190,10 @@ class DiagnosticsLogger:
 
         self.eval_series.append({"transitions": float(transitions), **eval_result})
 
+    def log_selection_panel(self, transitions: int, stats: dict[str, Any]) -> None:
+        """Record fixed development-panel selector diagnostics."""
+        self.selection_series.append({"transitions": float(transitions), **stats})
+
     # ------------------------------------------------------------------
     # Output
     # ------------------------------------------------------------------
@@ -204,6 +209,7 @@ class DiagnosticsLogger:
             "step_d": self.step_d_series,
             "lift_dist": self.lift_dist_series,
             "flip_flicker": self.flip_flicker_series,
+            "selection_panel": self.selection_series,
             "plots_written": self.plots_written,
         }
 

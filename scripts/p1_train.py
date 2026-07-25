@@ -37,6 +37,7 @@ from dgcc.models.networks import goal_residual_flips
 from dgcc.rl.diagnostics import DiagnosticsLogger
 from dgcc.rl.evaluation import evaluate_episodes
 from dgcc.rl.replay import ReplayBuffer
+from dgcc.rl.selection import compare_selection_snapshots
 from dgcc.rl.td3 import TD3Agent, TD3Config, TrainingNaNError
 from dgcc.tasks.domain import (
     P1_LENGTH_M,
@@ -212,6 +213,15 @@ class TrainingRun:
         self.best_success = -1.0
         self.eval_history: list[dict[str, Any]] = []
         self.halt_reason: str | None = None
+        self._selection_panel_limit = int(
+            self.config.get("eval", {}).get("selection_panel_states", 300)
+        )
+        if self._selection_panel_limit < 1:
+            raise ValueError("eval.selection_panel_states must be positive")
+        self._selection_panel_X: list[np.ndarray] = []
+        self._selection_panel_G: list[np.ndarray] = []
+        self._selection_panel_frozen_at: int | None = None
+        self._previous_selection_snapshot = None
         self._prev_goal_flip = np.full(self.n_envs, -1, dtype=np.int8)
         self._episode_flip_transitions = np.zeros(self.n_envs, dtype=int)
         self._episode_flip_observations = np.zeros(self.n_envs, dtype=int)
@@ -541,6 +551,62 @@ class TrainingRun:
 
     # ------------------------------------------------------------------
 
+    def counterfactual_selector_metrics(self, *, episode_index_start: int) -> dict[str, float]:
+        """Measure paired one-step Q1/Qmin progress from identical development starts."""
+        if self.task != "t2":
+            return {}
+        assert self.runner is not None and self.val_goals is not None
+        count = min(len(self.val_goals), self.n_envs)
+        goals = [self.val_goals[slot % len(self.val_goals)] for slot in range(self.n_envs)]
+
+        def branch(selector_operator: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+            begin_info = self.runner.begin_episodes(
+                seed=self.seed + 500,
+                episode_index=episode_index_start,
+                goals=goals,
+            )
+            X = self.runner.env.get_centerline_batch()
+            G = np.stack([goal_curve(goal, P1_LENGTH_M) for goal in self.runner.goals])
+            p, delta, lift = self.agent.select_actions(
+                X,
+                G,
+                step=self.transitions,
+                total_budget=self.total,
+                rng=np.random.default_rng(self.seed + 9_501),
+                deterministic=True,
+                selector_operator=selector_operator,
+            )
+            record = self.runner.step(
+                p, delta, lift, rng=np.random.default_rng(self.seed + 9_502)
+            )
+            if record.get("discarded"):
+                raise FloatingPointError(
+                    f"non-finite counterfactual selector branch: {record.get('reason')}"
+                )
+            active = np.asarray(record["active"][:count], dtype=bool)
+            progress = (
+                np.asarray(begin_info["d_initial"][:count], dtype=float)
+                - np.asarray(record["d_after"][:count], dtype=float)
+            )
+            if not np.isfinite(progress[active]).all():
+                raise FloatingPointError("non-finite counterfactual selector progress")
+            return np.asarray(p[:count], dtype=int), progress, active
+
+        p_q1, progress_q1, active_q1 = branch("q1")
+        p_qmin, progress_qmin, active_qmin = branch("qmin")
+        valid = active_q1 & active_qmin
+        if not valid.any():
+            raise RuntimeError("counterfactual selector branches have no paired active states")
+        return {
+            "states": float(valid.sum()),
+            "p_q1_p_qmin_agreement": float(np.mean(p_q1[valid] == p_qmin[valid])),
+            "q1_selected_realized_progress_mean": float(progress_q1[valid].mean()),
+            "qmin_selected_realized_progress_mean": float(progress_qmin[valid].mean()),
+            "q1_minus_qmin_realized_progress_mean": float(
+                (progress_q1[valid] - progress_qmin[valid]).mean()
+            ),
+        }
+
     def deterministic_eval(
         self, *, episode_index_start: int, record_raw: bool = False, record_probe: bool = False
     ) -> dict[str, Any]:
@@ -556,6 +622,13 @@ class TrainingRun:
         }
 
         def eval_action_fn(X: np.ndarray, G: np.ndarray, _rng: np.random.Generator):
+            if len(self._selection_panel_X) < self._selection_panel_limit:
+                remaining = self._selection_panel_limit - len(self._selection_panel_X)
+                take = min(remaining, len(X))
+                self._selection_panel_X.extend(np.asarray(X[:take]).copy())
+                self._selection_panel_G.extend(np.asarray(G[:take]).copy())
+                if len(self._selection_panel_X) == self._selection_panel_limit:
+                    self._selection_panel_frozen_at = self.transitions
             p, delta, lift = self.agent.select_actions(
                 X,
                 G,
@@ -632,6 +705,29 @@ class TrainingRun:
                 record_raw=record_raw,
                 record_probe=record_probe,
             )
+        panel_stats, panel_snapshot = self.agent.selection_panel(
+            np.asarray(self._selection_panel_X),
+            np.asarray(self._selection_panel_G),
+        )
+        if self._previous_selection_snapshot is None:
+            panel_stats.update(
+                {
+                    "soft_weight_js_to_previous_checkpoint": None,
+                    "soft_weight_cosine_to_previous_checkpoint": None,
+                    "top8_contact_overlap": None,
+                    "hard_q1_churn": None,
+                    "hard_qmin_churn": None,
+                }
+            )
+        else:
+            panel_stats.update(
+                compare_selection_snapshots(panel_snapshot, self._previous_selection_snapshot)
+            )
+        panel_stats["panel_states"] = len(self._selection_panel_X)
+        panel_stats["panel_frozen_at_transition"] = self._selection_panel_frozen_at
+        self._previous_selection_snapshot = panel_snapshot
+        result["selection_diagnostics"] = panel_stats
+        self.diag.log_selection_panel(self.transitions, panel_stats)
         result["magnitude_incidents_during_eval"] = (
             self.runner.magnitude_incidents - magnitude_before
         )
@@ -647,9 +743,13 @@ class TrainingRun:
         record_raw = bool(final and self.config.get("eval", {}).get("record_raw_final", False))
         while True:
             try:
+                counterfactual = self.counterfactual_selector_metrics(
+                    episode_index_start=eval_index_start
+                )
                 result = self.deterministic_eval(
                     episode_index_start=eval_index_start, record_raw=record_raw
                 )
+                result["counterfactual_selector"] = counterfactual
                 break
             except (FloatingPointError, ValueError, RuntimeError) as exc:
                 if not is_nonfinite_error(exc):
@@ -722,6 +822,8 @@ class TrainingRun:
             "total_budget": self.total,
             "transitions": self.transitions,
             "updates": self.agent.update_count,
+            "actor_updates": self.agent.actor_update_count,
+            "target_updates": self.agent.target_update_count,
             "nan_incidents_env": self.runner.nan_incidents if self.runner else None,
             "magnitude_incidents_env": self.runner.magnitude_incidents if self.runner else None,
             "full_scene_rebuilds": self.full_rebuilds,

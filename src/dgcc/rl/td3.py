@@ -65,6 +65,7 @@ class TD3Config:
     batch_size: int = 256
     replay_capacity: int = 500_000
     utd: int = 1
+    policy_delay: int = 2
     warmup_transitions: int = 5_000
     grad_clip: float = 10.0
     huber_delta: float = 1.0
@@ -185,6 +186,8 @@ class TD3Agent:
         reward_constants: RewardConstants | None = None,
     ) -> None:
         self.config = config or TD3Config()
+        if self.config.policy_delay < 1:
+            raise ValueError("policy_delay must be at least 1")
         self.device = torch.device(device)
         self.length_m = float(length_m)
         self.reward_constants = reward_constants or RewardConstants()
@@ -207,6 +210,8 @@ class TD3Agent:
         )
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.config.lr)
         self.update_count = 0
+        self.actor_update_count = 0
+        self.target_update_count = 0
 
     # ------------------------------------------------------------------
     # Feature/embedding helpers
@@ -386,18 +391,19 @@ class TD3Agent:
     def update(
         self, batch: dict[str, np.ndarray], *, generator: torch.Generator | None = None
     ) -> dict[str, float]:
-        """One §7 update: critic (+encoder), actor, target soft update.
-
-        The X_before feature build is shared between the critic and actor
-        passes (M1 gate MEDIUM: avoid recomputing canonical flips).
-        """
+        """Update critic every step and actor/targets at ``policy_delay`` cadence."""
 
         feats_before = self.features(
             batch["X_before"], batch["goal_curve"], batch.get("flip_before")
         )
         stats = self.critic_update(batch, generator=generator, feats_before=feats_before)
-        stats.update(self.actor_update(batch, feats_before=feats_before))
-        self.soft_update_targets()
+        actor_due = (self.update_count + 1) % self.config.policy_delay == 0
+        stats["actor_updated"] = float(actor_due)
+        if actor_due:
+            stats.update(self.actor_update(batch, feats_before=feats_before))
+            self.actor_update_count += 1
+            self.soft_update_targets()
+            self.target_update_count += 1
         self.update_count += 1
         return stats
 
@@ -415,6 +421,7 @@ class TD3Agent:
         rng: np.random.Generator,
         deterministic: bool = False,
         return_info: bool = False,
+        selector_operator: str = "q1",
     ) -> tuple[np.ndarray, np.ndarray, list[str]] | tuple[np.ndarray, np.ndarray, list[str], dict[str, np.ndarray]]:
         """Return (p, delta, lift) for a batch of states.
 
@@ -428,7 +435,14 @@ class TD3Agent:
             h = self.encoder(feats)
             u_all = self.actor(h)
             q1 = self._q_all_candidates(self.critic.q1, h, u_all)
-            greedy_p = q1.argmax(dim=1).cpu().numpy()
+            if selector_operator == "q1":
+                selector_scores = q1
+            elif selector_operator == "qmin":
+                q2 = self._q_all_candidates(self.critic.q2, h, u_all)
+                selector_scores = torch.minimum(q1, q2)
+            else:
+                raise ValueError("selector_operator must be 'q1' or 'qmin'")
+            greedy_p = selector_scores.argmax(dim=1).cpu().numpy()
 
         batch = feats.shape[0]
         p = greedy_p.copy()
@@ -448,10 +462,36 @@ class TD3Agent:
         if return_info:
             info = {
                 "q1_candidates": q1.cpu().numpy(),
+                "selector_operator": np.asarray([selector_operator] * batch),
                 "u_executed": np.column_stack([delta, u[:, 3]]),
             }
             return p.astype(int), delta.astype(float), lift, info
         return p.astype(int), delta.astype(float), lift
+
+    @torch.no_grad()
+    def selection_panel(
+        self, X: np.ndarray, G_curve: np.ndarray, *, include_lift: bool = True
+    ) -> tuple[dict[str, float], Any]:
+        """Evaluate common selector diagnostics on an ordered development panel."""
+
+        from dgcc.rl.selection import (
+            lift_statistics,
+            selection_snapshot,
+            selection_statistics,
+            uniform_contact_weights,
+        )
+
+        h = self.encoder(self.features(X, G_curve))
+        u_all = self.actor(h)
+        q1 = self._q_all_candidates(self.critic.q1, h, u_all)
+        q2 = self._q_all_candidates(self.critic.q2, h, u_all)
+        weights = uniform_contact_weights(q1)
+        selected = q1.argmax(dim=1)
+        stats = selection_statistics(q1, q2, weights, selected=selected)
+        if include_lift:
+            stats.update(lift_statistics(self, h, u_all, q1, q2, selected))
+        return stats, selection_snapshot(q1, q2, weights).cpu()
+
 
     @torch.no_grad()
     def q_min_executed(
@@ -487,6 +527,11 @@ class TD3Agent:
             "config": self.config.to_dict(),
             "reward_constants": asdict(self.reward_constants),
             "td_target_bound": dict(self.td_target_bound),
+            "update_counts": {
+                "critic": self.update_count,
+                "actor": self.actor_update_count,
+                "target": self.target_update_count,
+            },
         }
 
     def save_checkpoint(self, path: Path | str) -> Path:
@@ -499,6 +544,8 @@ class TD3Agent:
                 "td_target_bound": dict(self.td_target_bound),
                 "metadata": self.to_dict(),
                 "update_count": self.update_count,
+                "actor_update_count": self.actor_update_count,
+                "target_update_count": self.target_update_count,
                 "encoder": self.encoder.state_dict(),
                 "critic": self.critic.state_dict(),
                 "actor": self.actor.state_dict(),
@@ -525,6 +572,8 @@ class TD3Agent:
             }
             warnings.warn(f"checkpoint config drift (saved, current): {drift}", stacklevel=2)
         self.update_count = int(payload["update_count"])
+        self.actor_update_count = int(payload.get("actor_update_count", self.update_count))
+        self.target_update_count = int(payload.get("target_update_count", self.update_count))
         self.encoder.load_state_dict(payload["encoder"])
         self.critic.load_state_dict(payload["critic"])
         self.actor.load_state_dict(payload["actor"])
