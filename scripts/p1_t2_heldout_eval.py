@@ -197,7 +197,7 @@ def main() -> int:
         device=args.device,
     )
     run = p1_train.TrainingRun(run_args)
-    run.agent.load_checkpoint(ckpt)
+    run.agent.load_checkpoint(ckpt, eval_only=True)
     # Swap the val episode set for the held-out set so deterministic_eval —
     # the SAME code path used for every val eval — scores held-out goals.
     run.val_goals = goals

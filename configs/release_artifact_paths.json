@@ -1,0 +1,24 @@
+{
+  "schema_version": 3,
+  "purpose": "Reference-only release artifact inventory; it is never an access or package allowlist.",
+  "reference_artifacts": [
+    "outputs/models/frozen_m4_bundle",
+    "outputs/models/source_289c543_closure",
+    "outputs/metrics/sprint_bb_parity_proof.json",
+    "outputs/metrics/patch_eval_preflight.json",
+    "outputs/metrics/goal_preflight.json"
+  ],
+  "sensitive_references_denied_content_not_opened": [
+    "outputs/metrics/sprint_probe_manifest.json",
+    "outputs/metrics/sprint_retro_audit_bundle.json",
+    "outputs/metrics/v2_protocol_launch_receipt.json"
+  ],
+  "explicitly_excluded_nonexistent_artifacts": [
+    "outputs/metrics/bgt_exclusion.json",
+    "outputs/metrics/bgt_exclusion_artifact.json"
+  ],
+  "bgt": {
+    "status": "conditional",
+    "exclusion_artifact_required": false
+  }
+}

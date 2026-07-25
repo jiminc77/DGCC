@@ -44,7 +44,7 @@ sim:
   grasp_realism: true
 sprint:
   aux_weight: 1.0
-  beta_contact: 0.010
+  beta_contact: 0.015363
   eval:
     wall_guard_k: 5
     record_raw_final: true

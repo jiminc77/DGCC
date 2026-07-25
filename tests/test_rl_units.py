@@ -66,6 +66,7 @@ def make_batch(size: int = 6, seed: int = 0) -> dict[str, np.ndarray]:
         "lift": rng.integers(0, 2, size=size),
         "reward": rng.normal(0.0, 1.0, size=size),
         "done": rng.random(size) < 0.2,
+        "truncated": rng.random(size) < 0.1,
     }
 
 
@@ -81,12 +82,13 @@ def test_select_p_star_hand_table() -> None:
 
 def test_td_target_hand_computed() -> None:
     y = td_target(
-        reward=torch.tensor([1.0, 2.0]),
-        done=torch.tensor([False, True]),
+        reward=torch.tensor([1.0, 2.0, 3.0]),
+        done=torch.tensor([False, True, True]),
         gamma=0.95,
-        q_min=torch.tensor([10.0, 10.0]),
+        q_min=torch.tensor([10.0, 10.0, 10.0]),
+        truncated=torch.tensor([False, False, True]),
     )
-    assert y.tolist() == pytest.approx([1.0 + 0.95 * 10.0, 2.0])
+    assert y.tolist() == pytest.approx([1.0 + 0.95 * 10.0, 2.0, 3.0 + 0.95 * 10.0])
 
 
 def test_smooth_target_u_clips_noise_and_box() -> None:
@@ -107,7 +109,13 @@ def test_decoupling_selection_critic_differs_from_evaluation() -> None:
     p_star = select_p_star(q1)
     assert p_star.tolist() == [1]
     q_min_at_star = torch.minimum(q1[0, p_star], q2[0, p_star])
-    y = td_target(torch.tensor([1.0]), torch.tensor([False]), 0.95, q_min_at_star)
+    y = td_target(
+        torch.tensor([1.0]),
+        torch.tensor([False]),
+        0.95,
+        q_min_at_star,
+        truncated=torch.tensor([False]),
+    )
     assert y.item() == pytest.approx(1.0 + 0.95 * -5.0)
 
 
@@ -365,8 +373,16 @@ def test_checkpoint_save_load_equality(tmp_path: Path) -> None:
     path = agent1.save_checkpoint(tmp_path / "ckpt.pt")
 
     agent2 = TD3Agent()
-    agent2.load_checkpoint(path)
-    assert agent2.update_count == agent1.update_count
+    with pytest.raises(
+        ValueError,
+        match="all checkpoints are evaluation-only",
+    ):
+        agent2.load_checkpoint(path)
+    agent2.load_checkpoint(path, eval_only=True)
+    assert agent2.fresh_restart_only
+    with pytest.raises(RuntimeError, match="fresh_restart_only"):
+        agent2.update({})
+    assert agent2.update_count == 0
     for module1, module2 in (
         (agent1.encoder, agent2.encoder),
         (agent1.critic, agent2.critic),

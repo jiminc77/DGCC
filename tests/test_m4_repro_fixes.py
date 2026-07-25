@@ -61,8 +61,8 @@ def test_hash_covers_target_networks() -> None:
 
 def test_driver_seeds_before_agent_construction() -> None:
     src = inspect.getsource(p1_train.TrainingRun.__init__)
-    assert src.index("torch.manual_seed") < src.index("TD3Agent("), (
-        "F-a regression: torch.manual_seed must precede TD3Agent construction"
+    assert src.index("torch.manual_seed") < src.index("self.create_agent("), (
+        "F-a regression: torch.manual_seed must precede the agent construction seam"
     )
     assert "initial_weights_sha256(self.agent)" in src
 

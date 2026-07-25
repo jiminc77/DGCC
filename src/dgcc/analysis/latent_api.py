@@ -110,7 +110,7 @@ class FrozenLatentExtractor:
         config = TD3Config(**payload["config"])
         constants = RewardConstants(**payload["reward_constants"])
         agent = TD3Agent(config, device=device, reward_constants=constants)
-        agent.load_checkpoint(ckpt_path)
+        agent.load_checkpoint(ckpt_path, eval_only=True)
         return cls(agent, ckpt_path=ckpt_path, ckpt_sha256=sha256_file(ckpt_path))
 
     # ------------------------------------------------------------------

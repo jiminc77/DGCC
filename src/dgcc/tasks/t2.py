@@ -220,11 +220,18 @@ def write_split_file(path: Path | None = None) -> Path:
     return target
 
 
+def load_t2_payload_bytes(payload: bytes | str) -> dict[str, Any]:
+    """Parse one immutable split snapshot already read by the caller."""
+    document = json.loads(payload)
+    if not isinstance(document, dict):
+        raise ValueError("T2 split payload must be an object")
+    return document
+
+
 def load_t2_payload(path: Path | None = None) -> dict[str, Any]:
     """Load the committed split payload (source of truth for T2 goals)."""
-
     source = default_split_path() if path is None else Path(path)
-    return json.loads(source.read_text(encoding="utf-8"))
+    return load_t2_payload_bytes(source.read_bytes())
 
 
 def build_t2_goal(spec: dict[str, Any]) -> DualGoal:
@@ -264,12 +271,14 @@ def _log_heldout_access(n_pairs: int) -> Path:
     return log_path
 
 
-def load_t2_split(split: str, path: Path | None = None) -> list[tuple[dict[str, Any], DualGoal]]:
-    """Return ``(spec, goal)`` pairs for one split from the committed file."""
-
-    payload = load_t2_payload(path)
+def load_t2_split_payload(
+    split: str, payload: dict[str, Any]
+) -> list[tuple[dict[str, Any], DualGoal]]:
+    """Resolve one split from an immutable payload snapshot."""
     if split not in payload["splits"]:
-        raise ValueError(f"unknown split {split!r}; expected one of {sorted(payload['splits'])}")
+        raise ValueError(
+            f"unknown split {split!r}; expected one of {sorted(payload['splits'])}"
+        )
     wanted = set(payload["splits"][split])
     pairs = [
         (spec, build_t2_goal(spec))
@@ -277,10 +286,19 @@ def load_t2_split(split: str, path: Path | None = None) -> list[tuple[dict[str, 
         if spec["goal_id"] in wanted
     ]
     if len(pairs) != len(wanted):
-        raise RuntimeError(f"split {split!r} resolved {len(pairs)} of {len(wanted)} goals")
+        raise RuntimeError(
+            f"split {split!r} resolved {len(pairs)} of {len(wanted)} goals"
+        )
     if split == "heldout":
         _log_heldout_access(len(pairs))
     return pairs
+
+
+def load_t2_split(
+    split: str, path: Path | None = None
+) -> list[tuple[dict[str, Any], DualGoal]]:
+    """Return ``(spec, goal)`` pairs for one split from the committed file."""
+    return load_t2_split_payload(split, load_t2_payload(path))
 
 
 __all__ = [
@@ -294,7 +312,9 @@ __all__ = [
     "default_split_path",
     "generate_t2_payload",
     "load_t2_payload",
+    "load_t2_payload_bytes",
     "load_t2_split",
+    "load_t2_split_payload",
     "payload_json",
     "t2_unit_template",
     "write_split_file",

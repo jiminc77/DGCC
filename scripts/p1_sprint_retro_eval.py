@@ -173,7 +173,7 @@ def main() -> int:
     rows = []
     for ckpt in ckpts:
         transitions = int(ckpt.stem.split("_")[1])
-        run.agent.load_checkpoint(ckpt)
+        run.agent.load_checkpoint(ckpt, eval_only=True)
         start = time.perf_counter()
         result = eval_with_recovery(run, episode_index_start=90_001 + transitions // 25_000)
         wall = time.perf_counter() - start
@@ -240,7 +240,7 @@ def main() -> int:
     labels = [s["goal_id"] for s, _ in pairs for _ in range(2)]
     print(f"sprint heldout claim acquired: {claim}")
 
-    run.agent.load_checkpoint(selected["ckpt"])
+    run.agent.load_checkpoint(selected["ckpt"], eval_only=True)
     run.val_goals = goals
     run.val_labels = labels
     run.build_scene()

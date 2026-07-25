@@ -30,6 +30,9 @@ training, custom CUDA.
 from __future__ import annotations
 
 import copy
+import hashlib
+import os
+import stat
 from decimal import Decimal
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -65,7 +68,7 @@ class TD3Config:
     batch_size: int = 256
     replay_capacity: int = 500_000
     utd: int = 1
-    policy_delay: int = 2
+    policy_delay: int = 1
     warmup_transitions: int = 5_000
     grad_clip: float = 10.0
     huber_delta: float = 1.0
@@ -139,17 +142,17 @@ def td_target(
     gamma: float,
     q_min: torch.Tensor,
     *,
-    truncated: torch.Tensor | None = None,
+    truncated: torch.Tensor,
     v_max: float | None = None,
 ) -> torch.Tensor:
     """P1.md §7 TD target with verdict F1 timeout masking and S3 clamp.
 
     ``terminal = done & ~truncated``; timeout truncations bootstrap, while true
-    success terminations zero the bootstrap term.
+    success terminations zero the bootstrap term.  Training batches must provide
+    ``truncated`` explicitly; treating a missing field as false changes targets.
     """
-
-    if truncated is None:
-        truncated = torch.zeros_like(done, dtype=torch.bool)
+    if reward.shape != done.shape or reward.shape != truncated.shape or reward.shape != q_min.shape:
+        raise ValueError("reward, done, truncated, and q_min must have identical shapes")
     terminal = done.to(torch.bool) & ~truncated.to(torch.bool)
     y = reward + gamma * (1.0 - terminal.to(reward.dtype)) * q_min
     if v_max is not None:
@@ -212,6 +215,15 @@ class TD3Agent:
         self.update_count = 0
         self.actor_update_count = 0
         self.target_update_count = 0
+        self.fresh_restart_only = False
+
+    def _assert_trainable(self) -> None:
+        """Reject every direct optimizer or target mutation after eval-only loading."""
+        if self.fresh_restart_only:
+            raise RuntimeError(
+                "checkpoint was loaded eval-only and is fresh_restart_only; "
+                "create a new agent before training"
+            )
 
     # ------------------------------------------------------------------
     # Feature/embedding helpers
@@ -260,6 +272,7 @@ class TD3Agent:
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
         """Compute the P1.md §7/F1 target and apply the S3 derived clamp."""
+        self._validate_target_batch(batch)
         feats_next = self.features(
             batch["X_after"], batch["goal_curve"], batch.get("flip_after")
         )
@@ -281,10 +294,10 @@ class TD3Agent:
         q1_t, q2_t = self.critic_target(h_star, u_tilde)
         q_min = torch.minimum(q1_t, q2_t)
         reward = torch.as_tensor(batch["reward"], dtype=torch.float32, device=self.device)
-        done_np = np.asarray(batch["done"], dtype=bool)
-        truncated_np = np.asarray(batch.get("truncated", np.zeros_like(done_np)), dtype=bool)
-        done = torch.as_tensor(done_np, dtype=torch.bool, device=self.device)
-        truncated = torch.as_tensor(truncated_np, dtype=torch.bool, device=self.device)
+        done = torch.as_tensor(np.asarray(batch["done"], dtype=bool), dtype=torch.bool, device=self.device)
+        truncated = torch.as_tensor(
+            np.asarray(batch["truncated"], dtype=bool), dtype=torch.bool, device=self.device
+        )
         unclamped = td_target(
             reward,
             done,
@@ -309,6 +322,7 @@ class TD3Agent:
         generator: torch.Generator | None = None,
         feats_before: torch.Tensor | None = None,
     ) -> dict[str, float]:
+        self._assert_trainable()
         y = self.compute_target(batch, generator=generator)
 
         feats = (
@@ -355,6 +369,7 @@ class TD3Agent:
         *,
         feats_before: torch.Tensor | None = None,
     ) -> dict[str, float]:
+        self._assert_trainable()
         feats = (
             self.features(batch["X_before"], batch["goal_curve"], batch.get("flip_before"))
             if feats_before is None
@@ -363,22 +378,31 @@ class TD3Agent:
         with torch.no_grad():
             h = self.encoder(feats)  # trunk detached: actor grads flow via u only
         u_all = self.actor(h)  # (B, K, 4)
-        q1 = self._q_all_candidates(self.critic.q1, h, u_all)
-        q2 = self._q_all_candidates(self.critic.q2, h, u_all)
-        q_min = torch.minimum(q1, q2)
-        loss = -q_min.mean()  # (1/K) Σ_p over all candidates, all samples
-        self._assert_finite_loss(loss, "actor loss")
+        critic_params = list(self.critic.parameters())
+        requires_grad = [parameter.requires_grad for parameter in critic_params]
+        try:
+            for parameter in critic_params:
+                parameter.requires_grad_(False)
+            q1 = self._q_all_candidates(self.critic.q1, h, u_all)
+            q2 = self._q_all_candidates(self.critic.q2, h, u_all)
+            q_min = torch.minimum(q1, q2)
+            loss = -q_min.mean()  # (1/K) Σ_p over all candidates, all samples
+            self._assert_finite_loss(loss, "actor loss")
 
-        self.actor_optimizer.zero_grad(set_to_none=True)
-        self.critic_optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        grad_norm = self._clip_and_check_grads(list(self.actor.parameters()), "actor")
-        self.actor_optimizer.step()
-        # Discard critic/encoder grads produced by the actor objective.
-        self.critic_optimizer.zero_grad(set_to_none=True)
+            self.actor_optimizer.zero_grad(set_to_none=True)
+            self.critic_optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            grad_norm = self._clip_and_check_grads(list(self.actor.parameters()), "actor")
+            self.actor_optimizer.step()
+        finally:
+            for parameter, was_required in zip(critic_params, requires_grad, strict=True):
+                parameter.requires_grad_(was_required)
+            # Discard critic/encoder grads produced by the actor objective.
+            self.critic_optimizer.zero_grad(set_to_none=True)
         return {"actor_loss": float(loss.detach().cpu()), "actor_grad_norm": grad_norm}
 
     def soft_update_targets(self) -> None:
+        self._assert_trainable()
         tau = self.config.tau
         for target, online in (
             (self.encoder_target, self.encoder),
@@ -392,6 +416,7 @@ class TD3Agent:
         self, batch: dict[str, np.ndarray], *, generator: torch.Generator | None = None
     ) -> dict[str, float]:
         """Update critic every step and actor/targets at ``policy_delay`` cadence."""
+        self._assert_trainable()
 
         feats_before = self.features(
             batch["X_before"], batch["goal_curve"], batch.get("flip_before")
@@ -406,6 +431,33 @@ class TD3Agent:
             self.target_update_count += 1
         self.update_count += 1
         return stats
+    @staticmethod
+    def _validate_target_batch(batch: dict[str, np.ndarray]) -> None:
+        """Reject target-contract violations before an update can mutate state."""
+        missing = {"reward", "done", "truncated"} - batch.keys()
+        if missing:
+            raise ValueError(
+                "training batch lacks required target fields: " + ", ".join(sorted(missing))
+            )
+        shapes = {
+            name: np.asarray(batch[name]).shape for name in ("reward", "done", "truncated")
+        }
+        if len(set(shapes.values())) != 1 or len(shapes["reward"]) != 1:
+            raise ValueError(
+                "reward, done, and truncated must be one-dimensional with identical shapes: "
+                + ", ".join(f"{name}={shape}" for name, shape in shapes.items())
+            )
+        reward = np.asarray(batch["reward"])
+        for name in ("done", "truncated"):
+            value = np.asarray(batch[name])
+            if value.dtype.kind == "b":
+                continue
+            if value.dtype.kind not in "iuIf" or not np.isfinite(value).all() or not np.isin(value, (0, 1)).all():
+                raise ValueError(f"{name} must contain only boolean or numeric 0/1 values")
+        if not np.isfinite(reward).all():
+            raise TrainingNaNError("reward is non-finite")
+        if "X_after" in batch and np.asarray(batch["X_after"]).shape[0] != shapes["reward"][0]:
+            raise ValueError("X_after batch length must match reward, done, and truncated")
 
     # ------------------------------------------------------------------
     # Action selection (§7 exploration / deterministic eval)
@@ -521,67 +573,155 @@ class TD3Agent:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Agent metadata echoed in checkpoints and diagnostics configs."""
-
+        """Agent metadata echoed in evaluation-only checkpoints and diagnostics."""
         return {
             "config": self.config.to_dict(),
+            "length_m": self.length_m,
             "reward_constants": asdict(self.reward_constants),
             "td_target_bound": dict(self.td_target_bound),
-            "update_counts": {
-                "critic": self.update_count,
-                "actor": self.actor_update_count,
-                "target": self.target_update_count,
+            "resume": {
+                "fresh_restart_only": True,
+                "reason": "run, replay, RNG, and environment state are not serialized",
             },
         }
 
     def save_checkpoint(self, path: Path | str) -> Path:
+        """Save model weights for evaluation only, never as a training resume."""
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
+                "checkpoint_schema": 1,
+                "checkpoint_type": "evaluation_only",
                 "config": self.config.to_dict(),
+                "length_m": self.length_m,
                 "reward_constants": asdict(self.reward_constants),
                 "td_target_bound": dict(self.td_target_bound),
                 "metadata": self.to_dict(),
-                "update_count": self.update_count,
-                "actor_update_count": self.actor_update_count,
-                "target_update_count": self.target_update_count,
                 "encoder": self.encoder.state_dict(),
                 "critic": self.critic.state_dict(),
                 "actor": self.actor.state_dict(),
                 "encoder_target": self.encoder_target.state_dict(),
                 "critic_target": self.critic_target.state_dict(),
                 "actor_target": self.actor_target.state_dict(),
-                "critic_optimizer": self.critic_optimizer.state_dict(),
-                "actor_optimizer": self.actor_optimizer.state_dict(),
             },
             target,
         )
         return target
 
-    def load_checkpoint(self, path: Path | str) -> None:
-        payload = torch.load(Path(path), map_location=self.device, weights_only=False)
-        saved_config = payload.get("config")
-        if saved_config is not None and saved_config != self.config.to_dict():
-            import warnings
+    def _read_evaluation_checkpoint(
+        self,
+        path: Path | str,
+        *,
+        expected_sha256: str | None = None,
+    ) -> Any:
+        checkpoint = Path(path)
+        try:
+            fd = os.open(checkpoint, os.O_RDONLY | os.O_NOFOLLOW)
+            handle = os.fdopen(fd, "rb")
+        except OSError as error:
+            raise ValueError("checkpoint path is missing or unsafe") from error
+        with handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("checkpoint path is not a regular file")
+            if expected_sha256 is not None:
+                digest = hashlib.sha256()
+                while chunk := handle.read(1 << 20):
+                    digest.update(chunk)
+                if digest.hexdigest() != expected_sha256:
+                    raise ValueError(
+                        "evaluation checkpoint bytes do not match SHA-256 pin"
+                    )
+                handle.seek(0)
+            return torch.load(
+                handle, map_location=self.device, weights_only=True
+            )
 
-            drift = {
-                key: (saved_config.get(key), self.config.to_dict().get(key))
-                for key in set(saved_config) | set(self.config.to_dict())
-                if saved_config.get(key) != self.config.to_dict().get(key)
-            }
-            warnings.warn(f"checkpoint config drift (saved, current): {drift}", stacklevel=2)
-        self.update_count = int(payload["update_count"])
-        self.actor_update_count = int(payload.get("actor_update_count", self.update_count))
-        self.target_update_count = int(payload.get("target_update_count", self.update_count))
-        self.encoder.load_state_dict(payload["encoder"])
-        self.critic.load_state_dict(payload["critic"])
-        self.actor.load_state_dict(payload["actor"])
-        self.encoder_target.load_state_dict(payload["encoder_target"])
-        self.critic_target.load_state_dict(payload["critic_target"])
-        self.actor_target.load_state_dict(payload["actor_target"])
-        self.critic_optimizer.load_state_dict(payload["critic_optimizer"])
-        self.actor_optimizer.load_state_dict(payload["actor_optimizer"])
+    def _load_evaluation_checkpoint_payload(self, payload: Any) -> None:
+        self._validate_evaluation_checkpoint(payload)
+
+        # Validate every state mapping before loading any module, avoiding partial
+        # model mutation from a malformed later state mapping.
+        model_state = (
+            ("encoder", self.encoder),
+            ("critic", self.critic),
+            ("actor", self.actor),
+            ("encoder_target", self.encoder_target),
+            ("critic_target", self.critic_target),
+            ("actor_target", self.actor_target),
+        )
+        for name, module in model_state:
+            saved_state = payload[name]
+            expected_state = module.state_dict()
+            if not isinstance(saved_state, dict) or saved_state.keys() != expected_state.keys():
+                raise ValueError(f"checkpoint {name} state does not match the evaluation model")
+            if any(
+                not isinstance(value, torch.Tensor)
+                or value.shape != expected_state[key].shape
+                for key, value in saved_state.items()
+            ):
+                raise ValueError(f"checkpoint {name} state does not match the evaluation model")
+
+        for name, module in model_state:
+            module.load_state_dict(payload[name])
+        self.fresh_restart_only = True
+        self.update_count = 0
+        self.actor_update_count = 0
+        self.target_update_count = 0
+
+    def load_checkpoint(self, path: Path | str, *, eval_only: bool = False) -> None:
+        """Load an evaluation-only checkpoint.
+
+        Checkpoints intentionally exclude run, replay, RNG, and environment state,
+        so all continuation attempts are rejected, including payloads with
+        resume-looking keys.
+        """
+        if not eval_only:
+            raise ValueError(
+                "all checkpoints are evaluation-only; non-eval training continuation is forbidden"
+            )
+        self._load_evaluation_checkpoint_payload(
+            self._read_evaluation_checkpoint(path)
+        )
+
+    def _validate_evaluation_checkpoint(self, payload: Any) -> None:
+        """Validate immutable evaluation contracts before mutating model state."""
+        if not isinstance(payload, dict):
+            raise ValueError("checkpoint payload must be a mapping")
+        required = {
+            "checkpoint_schema",
+            "checkpoint_type",
+            "config",
+            "length_m",
+            "reward_constants",
+            "td_target_bound",
+            "metadata",
+            "encoder",
+            "critic",
+            "actor",
+            "encoder_target",
+            "critic_target",
+            "actor_target",
+        }
+        missing = sorted(required - payload.keys())
+        if missing:
+            raise ValueError("checkpoint lacks required evaluation state: " + ", ".join(missing))
+        if payload["checkpoint_schema"] != 1 or payload["checkpoint_type"] != "evaluation_only":
+            raise ValueError("checkpoint is not schema-1 evaluation-only")
+        metadata = payload["metadata"]
+        resume = metadata.get("resume") if isinstance(metadata, dict) else None
+        if not isinstance(resume, dict) or resume.get("fresh_restart_only") is not True:
+            raise ValueError("checkpoint must explicitly prohibit training continuation")
+        saved_config = payload["config"]
+        if not isinstance(saved_config, dict) or saved_config.get("gamma") != self.config.gamma:
+            raise ValueError("checkpoint target-discount contract does not match this agent")
+        if payload["length_m"] != self.length_m:
+            raise ValueError("checkpoint length contract does not match this agent")
+        if payload["reward_constants"] != asdict(self.reward_constants):
+            raise ValueError("checkpoint reward contract does not match this agent")
+        if payload["td_target_bound"] != self.td_target_bound:
+            raise ValueError("checkpoint target contract does not match this agent")
 
     # ------------------------------------------------------------------
     # Training-level NaN covenant (global rule 6)

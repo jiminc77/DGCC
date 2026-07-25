@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
 import torch
 
 ContactOperator = Literal["q1", "qmin"]
-CONTACT_WEIGHT_BETA = 0.010
+CONTACT_WEIGHT_BETA = 0.015363
 
 
 def contact_softmax_weights(
@@ -44,8 +44,7 @@ def uniform_contact_weights(scores: torch.Tensor) -> torch.Tensor:
 
 
 def kendall_rank_tau(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
-    """Per-row Kendall tau-a, excluding tied pairs from the denominator."""
-
+    """Return per-row Kendall tau-b, with a zero result for zero denominators."""
     if left.shape != right.shape or left.ndim != 2:
         raise ValueError("rank tensors must have the same shape (B, K)")
     left_diff = left[:, :, None] - left[:, None, :]
@@ -54,10 +53,23 @@ def kendall_rank_tau(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
         torch.ones(left.shape[1], left.shape[1], dtype=torch.bool, device=left.device),
         diagonal=1,
     )
-    products = torch.sign(left_diff[:, upper]) * torch.sign(right_diff[:, upper])
-    valid = products != 0
-    denominator = valid.sum(dim=1).clamp_min(1)
-    return (products * valid).sum(dim=1) / denominator
+    left_sign = torch.sign(left_diff[:, upper])
+    right_sign = torch.sign(right_diff[:, upper])
+    products = left_sign * right_sign
+    concordant = (products > 0).sum(dim=1)
+    discordant = (products < 0).sum(dim=1)
+    tied_left = ((left_sign == 0) & (right_sign != 0)).sum(dim=1)
+    tied_right = ((right_sign == 0) & (left_sign != 0)).sum(dim=1)
+    numerator = concordant - discordant
+    denominator = torch.sqrt(
+        (concordant + discordant + tied_left).to(torch.float64)
+        * (concordant + discordant + tied_right).to(torch.float64)
+    )
+    return torch.where(
+        denominator > 0,
+        numerator.to(torch.float64) / denominator,
+        torch.zeros_like(denominator),
+    )
 
 
 def _normalized_histogram(indices: torch.Tensor, contacts: int) -> torch.Tensor:
@@ -74,6 +86,9 @@ class SelectionSnapshot:
     weights: torch.Tensor
     top8: torch.Tensor
     contact_histogram: torch.Tensor
+    contact_histogram_counts: torch.Tensor = field(
+        default_factory=lambda: torch.empty(0, dtype=torch.int64)
+    )
 
     def cpu(self) -> SelectionSnapshot:
         return SelectionSnapshot(
@@ -82,6 +97,7 @@ class SelectionSnapshot:
             weights=self.weights.detach().cpu(),
             top8=self.top8.detach().cpu(),
             contact_histogram=self.contact_histogram.detach().cpu(),
+            contact_histogram_counts=self.contact_histogram_counts.detach().cpu(),
         )
 
 
@@ -98,6 +114,9 @@ def selection_snapshot(
         weights=weights.detach(),
         top8=torch.topk(weights.detach(), min(8, weights.shape[1]), dim=1).indices,
         contact_histogram=_normalized_histogram(q1_selected, q1.shape[1]),
+        contact_histogram_counts=torch.bincount(
+            q1_selected, minlength=q1.shape[1]
+        ).to(torch.int64),
     )
 
 
@@ -121,7 +140,7 @@ def selection_statistics(
     histogram_entropy = -(
         histogram[histogram > 0] * histogram[histogram > 0].log()
     ).sum() / math.log(q1.shape[1])
-    return {
+    statistics: dict[str, float] = {
         "contact_weight_entropy": float(entropy.mean()),
         "contact_weight_neff": float((1.0 / weights.square().sum(dim=1)).mean()),
         "contact_weight_top1_mass": float(weights.max(dim=1).values.mean()),
@@ -135,6 +154,13 @@ def selection_statistics(
         "contact_histogram_entropy": float(histogram_entropy),
         "contact_histogram_max_share": float(histogram.max()),
     }
+    statistics.update(
+        {
+            f"contact_histogram_count_{index:02d}": int(count)
+            for index, count in enumerate(snapshot.contact_histogram_counts.tolist())
+        }
+    )
+    return statistics
 
 
 def _js_divergence(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:

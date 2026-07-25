@@ -70,7 +70,7 @@ def agent_for_arm(arm: str) -> Any:
 
 
 def load_checkpoint(agent: Any, path: Path) -> None:
-    agent.load_checkpoint(path)
+    agent.load_checkpoint(path, eval_only=True)
     for module_name in ("encoder", "critic", "actor"):
         getattr(agent, module_name).eval()
 

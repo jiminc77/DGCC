@@ -1,0 +1,13 @@
+{
+  "status": "REGISTERED_BEFORE_EXECUTION",
+  "rule": "G=min(M_Q1,M_Qmin); require G(0.025)>=12; 64 bisections on [0.010000,0.025000]; ceil upper to 6 decimals",
+  "checkpoint_hashes": [
+    "<checkpoint-00-sha256>", "<checkpoint-01-sha256>", "<checkpoint-02-sha256>", "<checkpoint-03-sha256>", "<checkpoint-04-sha256>",
+    "<checkpoint-05-sha256>", "<checkpoint-06-sha256>", "<checkpoint-07-sha256>", "<checkpoint-08-sha256>", "<checkpoint-09-sha256>"
+  ],
+  "fixed_panel_hash": "<fixed-panel-sha256>",
+  "input_manifest_sha256": "<input-manifest-sha256>",
+  "score_sha256": "<score-npz-sha256>",
+  "code_manifest_sha256": "<code-manifest-sha256>",
+  "calibrator_sha256": "<v2-beta-calibrator-sha256>"
+}

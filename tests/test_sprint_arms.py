@@ -28,7 +28,7 @@ def curve(seed: int) -> np.ndarray:
 
 def batch(n: int = 3) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(21)
-    return {"X_before": np.stack([curve(i) for i in range(n)]), "X_after": np.stack([curve(30 + i) for i in range(n)]), "goal_curve": np.stack([curve(60 + i) for i in range(n)]), "p": rng.integers(0, 32, n), "delta": rng.uniform(-.1, .1, (n, 3)), "lift": rng.integers(0, 2, n), "reward": rng.normal(size=n), "done": np.zeros(n, dtype=bool)}
+    return {"X_before": np.stack([curve(i) for i in range(n)]), "X_after": np.stack([curve(30 + i) for i in range(n)]), "goal_curve": np.stack([curve(60 + i) for i in range(n)]), "p": rng.integers(0, 32, n), "delta": rng.uniform(-.1, .1, (n, 3)), "lift": rng.integers(0, 2, n), "reward": rng.normal(size=n), "done": np.zeros(n, dtype=bool), "truncated": np.zeros(n, dtype=bool)}
 
 
 def digest(agent: TD3Agent) -> str:
@@ -174,7 +174,10 @@ class TestMatched:
         assert payload["sprint_arm"]["projection_seed"] == MATCHED_PROJECTION_SEED
         assert "P" not in payload["sprint_arm"]
         restored = SprintTD3Agent(arm="matched", projection_seed=1)
-        restored.load_checkpoint(path)
+        restored.load_checkpoint(path, eval_only=True)
+        assert restored.fresh_restart_only
+        with pytest.raises(RuntimeError, match="fresh_restart_only"):
+            restored.update({})
         assert restored.projection_seed == MATCHED_PROJECTION_SEED
         assert torch.equal(restored.projection, source.projection)
 
@@ -184,8 +187,8 @@ class TestMatched:
     ) -> None:
         path = SprintTD3Agent(arm=source_arm).save_checkpoint(tmp_path / f"{source_arm}.pt")
         assert torch.load(path, weights_only=False)["sprint_arm"]["schema_version"] == 2
-        with pytest.raises(ValueError, match="incompatible sprint checkpoint"):
-            SprintTD3Agent(arm=destination_arm).load_checkpoint(path)
+        with pytest.raises(ValueError, match="incompatible sprint evaluation checkpoint"):
+            SprintTD3Agent(arm=destination_arm).load_checkpoint(path, eval_only=True)
 
 
 class TestRandom:
@@ -241,6 +244,9 @@ class TestRandom:
         assert payload["sprint_arm"]["target_seed"] == RANDOM_TARGET_SEED
         assert "target" not in payload["sprint_arm"]
         restored = SprintTD3Agent(arm="random", target_seed=1)
-        restored.load_checkpoint(path)
+        restored.load_checkpoint(path, eval_only=True)
+        assert restored.fresh_restart_only
+        with pytest.raises(RuntimeError, match="fresh_restart_only"):
+            restored.update({})
         assert restored.target_seed == RANDOM_TARGET_SEED
         assert torch.equal(restored.random_target, source.random_target)

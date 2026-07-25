@@ -143,7 +143,7 @@ def main() -> int:
     preclaim_payload_self_check()
     capability = acquire_claim(expected_claim, {"run_tag":args.run_tag,"arm":args.arm,"ckpt_sha256":manifest["ckpt_sha256"],"split_sha256":CANONICAL_SPLIT_SHA256,"seed":args.seed,"config_sha256":manifest["config_sha256"],"selection_manifest":str(selection_path),"selection_manifest_sha256":selection_sha,"episode_namespace":EPISODE_INDEX_START,"n_goals":100})
     payload = consume_claim_and_load_split(capability, CANONICAL_SPLIT_PATH, access_log=SPRINT_ACCESS_LOG); pairs = _pairs(payload); goals=[g for _,g in pairs for _ in range(2)]; labels=[s["goal_id"] for s,_ in pairs for _ in range(2)]
-    run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"])); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
+    run=build_run(args.config,args.seed,f"{args.run_tag}_sprint_heldout",args.device); run.agent.load_checkpoint(Path(manifest["selected_ckpt"]), eval_only=True); run.val_goals,run.val_labels=goals,labels; run.build_scene(); started=time.perf_counter(); result=run.deterministic_eval(episode_index_start=EPISODE_INDEX_START,record_raw=True,record_probe=True); episodes=result["episodes"]
     if len(episodes)!=200: raise SprintClaimError("sprint evaluation must produce 200 episodes")
     canonicalize_episode_ids(episodes, EPISODE_INDEX_START)
     raw_path=expected_out.with_suffix(".raw.json.gz"); gzip.open(raw_path,"wt",encoding="utf-8").write(json.dumps({"run_tag":args.run_tag,"episodes":episodes}))

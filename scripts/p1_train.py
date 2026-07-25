@@ -19,7 +19,9 @@ import gc
 import hashlib
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,7 +39,8 @@ from dgcc.models.networks import goal_residual_flips
 from dgcc.rl.diagnostics import DiagnosticsLogger
 from dgcc.rl.evaluation import evaluate_episodes
 from dgcc.rl.replay import ReplayBuffer
-from dgcc.rl.selection import compare_selection_snapshots
+from dgcc.rl.panel_artifacts import PanelArtifact, load_panel, persist_panel
+from dgcc.rl.selection import SelectionSnapshot, compare_selection_snapshots
 from dgcc.rl.td3 import TD3Agent, TD3Config, TrainingNaNError
 from dgcc.tasks.domain import (
     P1_LENGTH_M,
@@ -48,10 +51,36 @@ from dgcc.tasks.domain import (
 )
 from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, is_nonfinite_error
 from dgcc.tasks.t1 import sample_t1_goal
-from dgcc.tasks.t2 import load_t2_split
+from dgcc.tasks.t2 import (
+    default_split_path,
+    load_t2_payload_bytes,
+    load_t2_split_payload,
+)
 from dgcc.utils.meta import get_git_commit_hash
+from dgcc.logging.attempt_registry import AttemptRegistry, sha256_file
+from dgcc.logging.asset_firewall import (
+    AssetAccessError,
+    AssetFirewall,
+    load_launch_asset_manifest,
+    persist_launch_receipts,
+    read_launch_asset_snapshot,
+)
 
 T1_TASKS = ("t1a_straighten", "t1b_single_bend", "t1c_endpoint_reposition")
+
+
+def expand_t2_validation_pairs(
+    val_pairs: list[tuple[str, Any]], episodes_per_goal: Any
+) -> tuple[list[str], list[Any]]:
+    if type(episodes_per_goal) is not int or episodes_per_goal < 1:
+        raise ValueError("eval.t2_episodes_per_goal must be a positive integer")
+    labels = [
+        label for label, _ in val_pairs for _ in range(episodes_per_goal)
+    ]
+    goals = [
+        goal for _, goal in val_pairs for _ in range(episodes_per_goal)
+    ]
+    return labels, goals
 
 # Env-stability operational limits (M3R gate verdict gate-m3r-reconvene-20260710,
 # choice D follow-ups — env/driver layer only; training code, hyperparameters,
@@ -159,8 +188,37 @@ def env_kwargs(config: dict[str, Any], n_envs: int) -> dict[str, Any]:
 
 
 class TrainingRun:
-    def __init__(self, args: argparse.Namespace) -> None:
-        self.config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        registry: AttemptRegistry | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> None:
+        self.registry = registry
+        self.asset_firewall: AssetFirewall | None = None
+        self.asset_manifest: dict[str, Any] | None = None
+        manifest_path = getattr(args, "asset_manifest", None)
+        expected_manifest_sha256 = getattr(args, "expected_asset_manifest_sha256", None)
+        if manifest_path is not None or expected_manifest_sha256 is not None:
+            if manifest_path is None or expected_manifest_sha256 is None:
+                raise AssetAccessError("asset manifest and independent manifest SHA-256 are both required")
+            audit_path = (
+                registry.attempt_path / "reports" / "protected_asset_audit.jsonl"
+                if registry is not None else Path("outputs") / "protected_asset_audit.jsonl"
+            )
+            self.asset_firewall, self.asset_manifest = load_launch_asset_manifest(
+                manifest_path, expected_manifest_sha256, audit_path
+            )
+            if config is None:
+                _, config_bytes = self.asset_firewall.read_bytes(
+                    args.config,
+                    operation="config-load",
+                    required_role="config",
+                )
+                config = yaml.safe_load(config_bytes)
+        elif config is None:
+            config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+        self.config = config
         self.seed = int(args.seed)
         self.task = str(self.config["task"])
         self.run_tag = args.run_tag or f"{self.task}_s{self.seed}"
@@ -185,25 +243,25 @@ class TrainingRun:
         )
         td3_cfg = dict(self.config.get("td3", {}))
         self.agent_config = TD3Config(**{k: v for k, v in td3_cfg.items()})
+        self.registry = registry
         # F-a (gate-m3r-reconvene-2-20260713 follow-up 3): seed ALL RNGs
         # strictly BEFORE agent construction so same-seed processes start
         # from identical weights.
         self.rng = np.random.default_rng(self.seed)
         torch.manual_seed(self.seed)
-        self.agent = TD3Agent(
-            self.agent_config,
-            device=self.device,
-            reward_constants=self.episode_config.reward,
-        )
+        self.agent = self.create_agent()
         # F-a: hash captured immediately after construction, before any
         # training; persisted via save_run_summary, never recomputed.
         self.initial_weights_sha256 = initial_weights_sha256(self.agent)
+        if self.registry is not None:
+            self.registry.initialized(self.initial_weights_sha256)
         self.buffer = ReplayBuffer(self.agent_config.replay_capacity)
-        self.diag = DiagnosticsLogger(self.run_tag)
+        self.diag = DiagnosticsLogger(self.registry.attempt_id if self.registry is not None else self.run_tag)
         # F-b: one-based successful-eval ordinal (rebuild-independent).
         self._eval_ordinal = 0
 
-        self.models_dir = Path("outputs/models") / self.run_tag
+        self.output_dir = self.registry.attempt_path if self.registry is not None else Path("outputs")
+        self.models_dir = self.output_dir / "models"
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.transitions = 0
         self.episode_index = 0
@@ -221,26 +279,299 @@ class TrainingRun:
         self._selection_panel_X: list[np.ndarray] = []
         self._selection_panel_G: list[np.ndarray] = []
         self._selection_panel_frozen_at: int | None = None
-        self._previous_selection_snapshot = None
+        self._previous_selection_snapshot: SelectionSnapshot | None = None
+        self.panel_path = self.output_dir / "artifacts" / "v2_development_panel.npz"
+        self.panel_artifact: PanelArtifact | None = None
+        self._selection_snapshot_path = self.output_dir / "artifacts" / "v2_previous_selection_snapshot.npz"
+        self._diagnostic_failure_path = self.output_dir / "metrics" / "counterfactual_failures.jsonl"
+        self.counterfactual_diagnostic: dict[str, object] = {
+            "status": "failed" if self.task == "t2" else "not_applicable",
+        }
+        expected_panel_sha = self.config.get("eval", {}).get("expected_panel_sha256")
+        if self.panel_path.exists():
+            self.panel_artifact = load_panel(
+                self.panel_path, expected_canonical_sha256=expected_panel_sha
+            )
+            with np.load(self.panel_path, allow_pickle=False) as panel:
+                self._selection_panel_X = [row.copy() for row in panel["X"]]
+                self._selection_panel_G = [row.copy() for row in panel["G"]]
+                self._selection_panel_frozen_at = int(panel["transition"])
+        self._load_previous_selection_snapshot()
         self._prev_goal_flip = np.full(self.n_envs, -1, dtype=np.int8)
         self._episode_flip_transitions = np.zeros(self.n_envs, dtype=int)
         self._episode_flip_observations = np.zeros(self.n_envs, dtype=int)
 
         if self.task == "t2":
-            self.train_goals = [g for _, g in load_t2_split("train")]
-            val_pairs = load_t2_split("val")
-            per_goal = int(self.config.get("eval", {}).get("t2_episodes_per_goal", 2))
-            self.val_goals = [g for _, g in val_pairs for _ in range(per_goal)]
-            self.val_labels = [s["goal_id"] for s, _ in val_pairs for _ in range(per_goal)]
+            split_path = default_split_path().resolve()
+            if self.asset_firewall is not None:
+                split_path, split_bytes = self.asset_firewall.read_bytes(
+                    split_path,
+                    operation="t2-split-load",
+                    required_role="t2_split",
+                )
+            else:
+                split_bytes = split_path.read_bytes()
+            self.development_split_path = split_path
+            self.development_split_sha256 = hashlib.sha256(
+                split_bytes
+            ).hexdigest()
+            self.development_split_role = "development_t2_split"
+            self._development_split_payload = load_t2_payload_bytes(split_bytes)
+            self.train_goals = [
+                goal
+                for _, goal in load_t2_split_payload(
+                    "train", self._development_split_payload
+                )
+            ]
+            val_pairs = load_t2_split_payload(
+                "val", self._development_split_payload
+            )
+            episodes_per_goal = self.config.get("eval", {}).get(
+                "t2_episodes_per_goal", 2
+            )
+            self.val_labels, self.val_goals = expand_t2_validation_pairs(
+                val_pairs, episodes_per_goal
+            )
         elif self.task in T1_TASKS:
             self.train_goals = None
             self.val_goals = None
+            self.val_labels = None
+            self.development_split_path = None
+            self.development_split_sha256 = None
+            self.development_split_role = None
+            self._development_split_payload = None
         else:
             raise ValueError(f"unknown task {self.task!r}")
 
         self.env: DLOLabEnv | None = None
         self.runner: BatchedEpisodeRunner | None = None
         self.goal_curves: np.ndarray | None = None
+
+    def create_agent(self) -> TD3Agent:
+        return TD3Agent(
+            self.agent_config,
+            device=self.device,
+            reward_constants=self.episode_config.reward,
+        )
+    def _load_previous_selection_snapshot(self) -> None:
+        if not self._selection_snapshot_path.exists():
+            return
+        try:
+            with np.load(self._selection_snapshot_path, allow_pickle=False) as data:
+                self._previous_selection_snapshot = SelectionSnapshot(
+                    **{key: torch.from_numpy(data[key]) for key in (
+                        "q1_selected", "qmin_selected", "weights", "top8",
+                        "contact_histogram", "contact_histogram_counts",
+                    )}
+                )
+        except (OSError, KeyError, ValueError) as exc:
+            raise RuntimeError(f"invalid previous selection snapshot: {exc}") from exc
+
+    def _persist_previous_selection_snapshot(self, snapshot: SelectionSnapshot) -> None:
+        snapshot = snapshot.cpu()
+        self._selection_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self._selection_snapshot_path.with_suffix(".tmp")
+        with temporary.open("wb") as handle:
+            np.savez(handle, **{key: getattr(snapshot, key).numpy() for key in (
+                "q1_selected", "qmin_selected", "weights", "top8",
+                "contact_histogram", "contact_histogram_counts",
+            )})
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, self._selection_snapshot_path)
+        directory = os.open(self._selection_snapshot_path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def _persist_panel(self) -> None:
+        self.panel_artifact = persist_panel(
+            self.panel_path, X=np.asarray(self._selection_panel_X),
+            G=np.asarray(self._selection_panel_G),
+            order=np.arange(len(self._selection_panel_X), dtype=np.int64),
+            seed=self.seed, transition=self.transitions, eval_ordinal=self._eval_ordinal,
+        )
+        expected = self.config.get("eval", {}).get("expected_panel_sha256")
+        if expected is not None and expected != self.panel_artifact.canonical_sha256:
+            raise RuntimeError("paired arm panel SHA mismatch")
+
+    def _record_counterfactual_failure(self, error: object) -> None:
+        self._diagnostic_failure_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._diagnostic_failure_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"generated_at": utc_now(), "transitions": self.transitions,
+                "error": f"{type(error).__name__}: {error}"}) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        directory = os.open(self._diagnostic_failure_path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def _validate_counterfactual_output(self, output: Path, request: dict[str, object]) -> None:
+        required = {
+            "panel_selector_agreement", "panel_q1_selected", "panel_qmin_selected", "panel_order",
+            "rollout_realized_progress_difference_mean", "rollout_q1_realized_progress_mean",
+            "rollout_qmin_realized_progress_mean", "rollout_q1_selected", "rollout_qmin_selected",
+            "rollout_validation_goal_ids", "rollout_episode_starts", "rollout_initial_state_sha256",
+            "rollout_provenance_sha256", "rollout_seed", "rollout_config_sha256",
+            "rollout_development_episode_index_start", "development_split_path",
+            "development_split_sha256", "development_split_role", "rollout_checkpoint_sha256",
+            "rollout_panel_sha256", "rollout_transition", "rollout_eval_ordinal",
+            "rollout_total_budget", "panel_sha256", "panel_artifact_sha256",
+            "panel_metadata_sha256", "request_sha256",
+            "model_sha256_before", "model_sha256_after", "transition", "eval_ordinal",
+        }
+        try:
+            with np.load(output, allow_pickle=False) as data:
+                if set(data.files) != required:
+                    raise RuntimeError("counterfactual output fields are not closed")
+                for name in data.files:
+                    value = data[name]
+                    if np.issubdtype(value.dtype, np.number) and not np.isfinite(value).all():
+                        raise RuntimeError(f"counterfactual output has non-finite {name}")
+                row_names = ("rollout_q1_selected", "rollout_qmin_selected",
+                    "rollout_validation_goal_ids", "rollout_episode_starts",
+                    "rollout_initial_state_sha256", "rollout_provenance_sha256")
+                cardinality = len(data["rollout_validation_goal_ids"])
+                if cardinality < 1 or any(len(data[name]) != cardinality for name in row_names):
+                    raise RuntimeError("counterfactual output row cardinalities differ")
+                if data["panel_q1_selected"].shape != data["panel_qmin_selected"].shape:
+                    raise RuntimeError("counterfactual panel selector cardinalities differ")
+                if not np.array_equal(data["rollout_validation_goal_ids"],
+                                      np.asarray(request["validation_goal_ids"], dtype=str)):
+                    raise RuntimeError("counterfactual output goal sequence mismatch")
+                if not np.array_equal(data["rollout_episode_starts"], np.sort(data["rollout_episode_starts"])):
+                    raise RuntimeError("counterfactual output episode starts are not ordered")
+                if not np.array_equal(np.sort(data["panel_order"]), np.arange(len(data["panel_order"]))):
+                    raise RuntimeError("counterfactual output panel order is not a permutation")
+                expected = {
+                    "rollout_seed": int(request["seed"]),
+                    "rollout_config_sha256": request["config_sha256"],
+                    "rollout_development_episode_index_start": int(request["development_episode_index_start"]),
+                    "development_split_path": str(Path(request["development_split_path"]).resolve()),
+                    "development_split_sha256": request["development_split_sha256"],
+                    "development_split_role": request["development_split_role"],
+                    "rollout_checkpoint_sha256": request["checkpoint_sha256"],
+                    "rollout_panel_sha256": request["panel_sha256"],
+                    "rollout_transition": int(request["transition"]),
+                    "rollout_eval_ordinal": int(request["eval_ordinal"]),
+                    "rollout_total_budget": int(request["total_budget"]),
+                    "panel_sha256": request["panel_sha256"],
+                    "panel_artifact_sha256": request["panel_artifact_sha256"],
+                    "panel_metadata_sha256": request["panel_metadata_sha256"],
+                    "request_sha256": request["request_sha256"],
+                    "transition": int(request["transition"]),
+                    "eval_ordinal": int(request["eval_ordinal"]),
+                }
+                for name, expected_value in expected.items():
+                    value = data[name]
+                    actual = value.item() if value.ndim == 0 else str(value)
+                    if actual != expected_value:
+                        raise RuntimeError(f"counterfactual output identity mismatch: {name}")
+                if str(data["model_sha256_before"].item()) != str(data["model_sha256_after"].item()):
+                    raise RuntimeError("counterfactual worker model immutability check failed")
+        except (OSError, ValueError, KeyError) as error:
+            raise RuntimeError(f"invalid counterfactual output: {error}") from error
+
+    def _run_counterfactual_worker_unsafe(self, checkpoint: Path, development_episode_index_start: int) -> None:
+        if self.task != "t2":
+            self.counterfactual_diagnostic = {"status": "not_applicable"}
+            return
+        if self.panel_artifact is None:
+            raise RuntimeError("V2 counterfactual diagnostic requires a frozen panel")
+        request = self.output_dir / "diagnostics" / f"counterfactual_{self.transitions:07d}.json"
+        request.parent.mkdir(parents=True, exist_ok=True)
+        config_snapshot = self.config
+        if self.development_split_path is None or self.development_split_sha256 is None:
+            raise RuntimeError("counterfactual diagnostic lacks authorized development split identity")
+        panel_metadata_path = self.panel_path.with_suffix(
+            self.panel_path.suffix + ".json"
+        )
+        request_payload = {
+            "checkpoint": str(checkpoint.resolve()), "checkpoint_sha256": sha256_file(checkpoint),
+            "panel": str(self.panel_path.resolve()), "panel_sha256": self.panel_artifact.canonical_sha256,
+            "panel_artifact_sha256": self.panel_artifact.artifact_sha256,
+            "panel_metadata": str(panel_metadata_path.resolve()),
+            "panel_metadata_sha256": sha256_file(panel_metadata_path),
+            "development_split_path": str(self.development_split_path),
+            "development_split_sha256": self.development_split_sha256,
+            "development_split_role": self.development_split_role,
+            "output": str(request.with_suffix(".npz").resolve()), "seed": self.seed,
+            "transition": self.transitions, "total_budget": self.total, "eval_ordinal": self._eval_ordinal,
+            "development_episode_index_start": development_episode_index_start,
+            "config_snapshot": config_snapshot,
+            "config_sha256": hashlib.sha256(json.dumps(
+                config_snapshot, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+            "validation_goal_ids": list(self.val_labels),
+        }
+        request_bytes = (
+            json.dumps(request_payload, sort_keys=True, separators=(",", ":")).encode()
+            + b"\n"
+        )
+        request_sha256 = hashlib.sha256(request_bytes).hexdigest()
+        fd, temporary_name = tempfile.mkstemp(prefix=f".{request.name}.", suffix=".tmp", dir=request.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(request_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.link(temporary, request)
+            temporary.unlink()
+            directory = os.open(request.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        output = request.with_suffix(".npz")
+        try:
+            subprocess.run([
+                sys.executable,
+                str(Path(__file__).with_name("v2_counterfactual_worker.py")),
+                str(request),
+                request_sha256,
+            ], check=True,
+                timeout=float(self.config.get("eval", {}).get("counterfactual_timeout_s", 120)),
+                capture_output=True, text=True)
+            self._validate_counterfactual_output(
+                output, {**request_payload, "request_sha256": request_sha256}
+            )
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            raise RuntimeError(f"counterfactual worker failed: {exc}") from exc
+        self.counterfactual_diagnostic = {
+            "status": "completed", "output": str(output),
+            "panel_sha256": self.panel_artifact.canonical_sha256,
+        }
+
+    def _record_counterfactual_failure_safely(self, error: Exception) -> None:
+        self.counterfactual_diagnostic = {
+            "status": "failed", "downstream_ready": False,
+            "error": f"{type(error).__name__}: {error}",
+        }
+        try:
+            self._record_counterfactual_failure(error)
+        except Exception:
+            pass
+        try:
+            self.save_run_summary()
+        except Exception:
+            pass
+
+    def _run_counterfactual_worker(self, checkpoint: Path, development_episode_index_start: int) -> None:
+        """Keep all ordinary diagnostic failures out of training control flow."""
+        if self.task != "t2":
+            self.counterfactual_diagnostic = {"status": "not_applicable"}
+            return
+        try:
+            self._run_counterfactual_worker_unsafe(checkpoint, development_episode_index_start)
+        except Exception as exc:
+            self._record_counterfactual_failure_safely(exc)
+            return
 
     # ------------------------------------------------------------------
 
@@ -551,61 +882,6 @@ class TrainingRun:
 
     # ------------------------------------------------------------------
 
-    def counterfactual_selector_metrics(self, *, episode_index_start: int) -> dict[str, float]:
-        """Measure paired one-step Q1/Qmin progress from identical development starts."""
-        if self.task != "t2":
-            return {}
-        assert self.runner is not None and self.val_goals is not None
-        count = min(len(self.val_goals), self.n_envs)
-        goals = [self.val_goals[slot % len(self.val_goals)] for slot in range(self.n_envs)]
-
-        def branch(selector_operator: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-            begin_info = self.runner.begin_episodes(
-                seed=self.seed + 500,
-                episode_index=episode_index_start,
-                goals=goals,
-            )
-            X = self.runner.env.get_centerline_batch()
-            G = np.stack([goal_curve(goal, P1_LENGTH_M) for goal in self.runner.goals])
-            p, delta, lift = self.agent.select_actions(
-                X,
-                G,
-                step=self.transitions,
-                total_budget=self.total,
-                rng=np.random.default_rng(self.seed + 9_501),
-                deterministic=True,
-                selector_operator=selector_operator,
-            )
-            record = self.runner.step(
-                p, delta, lift, rng=np.random.default_rng(self.seed + 9_502)
-            )
-            if record.get("discarded"):
-                raise FloatingPointError(
-                    f"non-finite counterfactual selector branch: {record.get('reason')}"
-                )
-            active = np.asarray(record["active"][:count], dtype=bool)
-            progress = (
-                np.asarray(begin_info["d_initial"][:count], dtype=float)
-                - np.asarray(record["d_after"][:count], dtype=float)
-            )
-            if not np.isfinite(progress[active]).all():
-                raise FloatingPointError("non-finite counterfactual selector progress")
-            return np.asarray(p[:count], dtype=int), progress, active
-
-        p_q1, progress_q1, active_q1 = branch("q1")
-        p_qmin, progress_qmin, active_qmin = branch("qmin")
-        valid = active_q1 & active_qmin
-        if not valid.any():
-            raise RuntimeError("counterfactual selector branches have no paired active states")
-        return {
-            "states": float(valid.sum()),
-            "p_q1_p_qmin_agreement": float(np.mean(p_q1[valid] == p_qmin[valid])),
-            "q1_selected_realized_progress_mean": float(progress_q1[valid].mean()),
-            "qmin_selected_realized_progress_mean": float(progress_qmin[valid].mean()),
-            "q1_minus_qmin_realized_progress_mean": float(
-                (progress_q1[valid] - progress_qmin[valid]).mean()
-            ),
-        }
 
     def deterministic_eval(
         self, *, episode_index_start: int, record_raw: bool = False, record_probe: bool = False
@@ -629,6 +905,7 @@ class TrainingRun:
                 self._selection_panel_G.extend(np.asarray(G[:take]).copy())
                 if len(self._selection_panel_X) == self._selection_panel_limit:
                     self._selection_panel_frozen_at = self.transitions
+                    self._persist_panel()
             p, delta, lift = self.agent.select_actions(
                 X,
                 G,
@@ -726,6 +1003,7 @@ class TrainingRun:
         panel_stats["panel_states"] = len(self._selection_panel_X)
         panel_stats["panel_frozen_at_transition"] = self._selection_panel_frozen_at
         self._previous_selection_snapshot = panel_snapshot
+        self._persist_previous_selection_snapshot(panel_snapshot)
         result["selection_diagnostics"] = panel_stats
         self.diag.log_selection_panel(self.transitions, panel_stats)
         result["magnitude_incidents_during_eval"] = (
@@ -743,13 +1021,9 @@ class TrainingRun:
         record_raw = bool(final and self.config.get("eval", {}).get("record_raw_final", False))
         while True:
             try:
-                counterfactual = self.counterfactual_selector_metrics(
-                    episode_index_start=eval_index_start
-                )
                 result = self.deterministic_eval(
                     episode_index_start=eval_index_start, record_raw=record_raw
                 )
-                result["counterfactual_selector"] = counterfactual
                 break
             except (FloatingPointError, ValueError, RuntimeError) as exc:
                 if not is_nonfinite_error(exc):
@@ -768,10 +1042,8 @@ class TrainingRun:
             # bulky fields from the in-memory history so run JSONs stay lean.
             import gzip
 
-            raw_path = (
-                Path("outputs/metrics")
-                / f"p1_raw_final_eval_{self.run_tag}_{self.transitions:07d}.json.gz"
-            )
+            raw_path = self.output_dir / "metrics" / f"p1_raw_final_eval_{self.transitions:07d}.json.gz"
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
             raw_payload = {
                 "run_tag": self.run_tag,
                 "transitions": self.transitions,
@@ -797,6 +1069,12 @@ class TrainingRun:
 
         ckpt = self.agent.save_checkpoint(self.models_dir / f"ckpt_{self.transitions:07d}.pt")
         self.last_checkpoint = ckpt
+        if self.panel_artifact is not None:
+            ckpt.with_suffix(ckpt.suffix + ".json").write_text(json.dumps({
+                "panel_canonical_sha256": self.panel_artifact.canonical_sha256,
+                "panel_artifact_sha256": self.panel_artifact.artifact_sha256,
+            }) + "\n", encoding="utf-8")
+        self._run_counterfactual_worker(ckpt, eval_index_start)
         if result["success_rate"] > self.best_success:
             self.best_success = result["success_rate"]
             self.agent.save_checkpoint(self.models_dir / "best.pt")
@@ -832,6 +1110,15 @@ class TrainingRun:
             "halt_reason": self.halt_reason,
             "best_success": self.best_success,
             "last_checkpoint": str(self.last_checkpoint) if self.last_checkpoint else None,
+            "panel_canonical_sha256": self.panel_artifact.canonical_sha256 if self.panel_artifact else None,
+            "panel_artifact_sha256": self.panel_artifact.artifact_sha256 if self.panel_artifact else None,
+            "diagnostic_failure_ledger": str(self._diagnostic_failure_path),
+            "counterfactual_diagnostic": self.counterfactual_diagnostic,
+            "v2_downstream_ready": (
+                self.task != "t2"
+                or self.counterfactual_diagnostic["status"] == "completed"
+            ),
+            "exact_training_resume_supported": False,
             "evals": [
                 {k: v for k, v in ev.items() if k != "episodes"} for ev in self.eval_history
             ],
@@ -840,7 +1127,15 @@ class TrainingRun:
                 for ev in self.eval_history
             ],
         }
-        path = Path("outputs/metrics") / f"p1_run_{self.run_tag}.json"
+        if self.asset_firewall is not None and self.asset_manifest is not None:
+            receipts = persist_launch_receipts(
+                self.output_dir, self.asset_manifest, self.asset_firewall
+            )
+            if (sha256_file(Path(receipts["r1"])) != receipts["r1_sha256"]
+                    or sha256_file(Path(receipts["r2"])) != receipts["r2_sha256"]):
+                raise RuntimeError("asset firewall receipt verification failed")
+            payload["asset_firewall"] = receipts
+        path = self.output_dir / "metrics" / "run_summary.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
 
@@ -917,18 +1212,73 @@ def main() -> int:
     parser.add_argument("--run-tag", type=str, default=None)
     parser.add_argument("--total-override", type=int, default=None)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--asset-manifest", type=Path, default=None)
+    parser.add_argument("--expected-asset-manifest-sha256", type=str, default=None)
     args = parser.parse_args()
 
-    run_tag = args.run_tag or f"{yaml.safe_load(Path(args.config).read_text())['task']}_s{args.seed}"
-    log_path = Path("outputs/reports") / f"p1_train_{run_tag}.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_root = Path("outputs/attempts")
+    if args.asset_manifest is None and args.expected_asset_manifest_sha256 is None:
+        config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
+    elif args.asset_manifest is not None and args.expected_asset_manifest_sha256 is not None:
+        _, config_bytes = read_launch_asset_snapshot(
+            args.asset_manifest,
+            args.expected_asset_manifest_sha256,
+            args.config,
+            "config",
+        )
+        config = yaml.safe_load(config_bytes)
+    else:
+        raise AssetAccessError(
+            "asset manifest and independent manifest SHA-256 are both required"
+        )
+    AttemptRegistry.recover(registry_root)
+    run_tag = args.run_tag or f"{config['task']}_s{args.seed}"
+    registry = AttemptRegistry(
+        registry_root,
+        run_tag=run_tag,
+        config=config,
+        code_sha256=sha256_file(Path(__file__).resolve()),
+        seed=args.seed,
+    )
+    log_path = registry.attempt_path / "reports" / "p1_train.log"
     original_stdout = sys.stdout
-    with log_path.open("w", encoding="utf-8") as log_file:
-        sys.stdout = Tee(original_stdout, log_file)  # type: ignore[assignment]
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("w", encoding="utf-8") as log_file:
+            sys.stdout = Tee(original_stdout, log_file)  # type: ignore[assignment]
+            try:
+                run = TrainingRun(args, registry, config=config)
+                exit_code = run.run()
+            finally:
+                sys.stdout = original_stdout
+                log_file.flush()
+                os.fsync(log_file.fileno())
+    except KeyboardInterrupt as error:
         try:
-            return TrainingRun(args).run()
-        finally:
-            sys.stdout = original_stdout
+            registry.finalize_once("ABORTED", detail=str(error))
+        except BaseException as finalization_error:
+            print(
+                f"attempt finalization failed after KeyboardInterrupt: {finalization_error}",
+                file=sys.stderr,
+            )
+        raise
+    except BaseException as error:
+        try:
+            registry.finalize_once(
+                "TECHNICAL_FAILURE", detail=f"{type(error).__name__}: {error}"
+            )
+        except BaseException as finalization_error:
+            print(
+                f"attempt finalization failed after {type(error).__name__}: "
+                f"{finalization_error}",
+                file=sys.stderr,
+            )
+        raise
+    registry.finalize_once(
+        "SUCCEEDED" if exit_code == 0 else "TECHNICAL_FAILURE",
+        exit_code=exit_code,
+    )
+    return exit_code
 
 
 if __name__ == "__main__":

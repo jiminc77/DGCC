@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
@@ -13,9 +12,10 @@ import torch.nn.functional as F
 from torch import nn
 
 from dgcc.phi.dct import Phi_DCT
+from dgcc.rl.selection import CONTACT_WEIGHT_BETA
 from dgcc.rl.td3 import TD3Agent, TD3Config, select_p_star, u_tensor
 
-SprintArm = Literal["bb", "v1", "matched", "random", "v2-dmm", "v2-d1m", "v2-d11", "v2-bgt"]
+SprintArm = Literal["bb", "bb-d2", "v1", "v1-d2", "matched", "random", "v2-dmm", "v2-d1m", "v2-d11", "v2-bgt"]
 MATCHED_PROJECTION_SEED = 20260719
 RANDOM_TARGET_SEED = 20260718
 
@@ -160,6 +160,7 @@ class SprintTD3Agent(TD3Agent):
         feats_before: torch.Tensor | None = None,
     ) -> dict[str, float]:
         """Baseline critic loss plus the V1 DCT-response auxiliary loss."""
+        self._assert_trainable()
         y = self.compute_target(batch, generator=generator)
         feats = (
             self.features(batch["X_before"], batch["goal_curve"], batch.get("flip_before"))
@@ -239,16 +240,15 @@ class SprintTD3Agent(TD3Agent):
         target.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
+                "checkpoint_schema": 1,
+                "checkpoint_type": "evaluation_only",
                 "config": self.config.to_dict(),
+                "length_m": self.length_m,
                 "reward_constants": asdict(self.reward_constants),
                 "td_target_bound": dict(self.td_target_bound),
                 "metadata": self.to_dict(),
-                "update_count": self.update_count,
-                "actor_update_count": self.actor_update_count,
-                "target_update_count": self.target_update_count,
                 "encoder": self.encoder.state_dict(), "critic": self.critic.state_dict(), "actor": self.actor.state_dict(),
                 "encoder_target": self.encoder_target.state_dict(), "critic_target": self.critic_target.state_dict(), "actor_target": self.actor_target.state_dict(),
-                "critic_optimizer": self.critic_optimizer.state_dict(), "actor_optimizer": self.actor_optimizer.state_dict(),
                 "sprint_arm": {
                     **{
                         "schema_version": self.schema_version,
@@ -269,45 +269,78 @@ class SprintTD3Agent(TD3Agent):
         )
         return target
 
-    def load_checkpoint(self, path: Path | str) -> None:
-        payload = torch.load(Path(path), map_location=self.device, weights_only=False)
-        saved_config = payload.get("config")
-        if saved_config is not None and saved_config != self.config.to_dict():
-            import warnings
-
-            drift = {
-                key: (saved_config.get(key), self.config.to_dict().get(key))
-                for key in set(saved_config) | set(self.config.to_dict())
-                if saved_config.get(key) != self.config.to_dict().get(key)
-            }
-            warnings.warn(f"checkpoint config drift (saved, current): {drift}", stacklevel=2)
+    def _load_sprint_checkpoint_payload(
+        self,
+        payload: Any,
+        *,
+        migration_mode: Literal["legacy_response_head_eval"] | None = None,
+    ) -> None:
+        if migration_mode is not None:
+            raise ValueError(
+                "legacy checkpoint migration is not supported for evaluation-only checkpoints"
+            )
+        if not isinstance(payload, dict):
+            raise ValueError("checkpoint payload must be a mapping")
         sprint = payload.get("sprint_arm")
-        if sprint is None:
-            # Legacy BB payload: preserve its optimizer state and retain freshly
-            # initialized V1 parameters, which have no legacy counterpart.
-            legacy = copy.deepcopy(payload)
-            legacy_optimizer = legacy["critic_optimizer"]
-            legacy_optimizer["param_groups"].append(copy.deepcopy(self.critic_optimizer.state_dict()["param_groups"][-1]))
-            payload = legacy
-        else:
-            if sprint.get("schema_version") != self.schema_version or sprint.get("arm") != self.arm:
-                raise ValueError("incompatible sprint checkpoint")
-            self.f_resp.load_state_dict(sprint["f_resp"])
-            self.aux_weight = float(sprint.get("aux_weight", self.aux_weight))
-            if self.arm == "matched":
-                self.projection_seed = int(sprint.get("projection_seed", MATCHED_PROJECTION_SEED))
-                self.matched_projection = _MatchedProjection(self.projection_seed, self.device)
-            if self.arm == "random":
-                self.target_seed = int(sprint.get("target_seed", RANDOM_TARGET_SEED))
-                self.random_target_buffer = _RandomTarget(self.target_seed, self.device)
-        self.update_count = int(payload["update_count"])
-        self.actor_update_count = int(payload.get("actor_update_count", self.update_count))
-        self.target_update_count = int(payload.get("target_update_count", self.update_count))
-        self.encoder.load_state_dict(payload["encoder"]); self.critic.load_state_dict(payload["critic"]); self.actor.load_state_dict(payload["actor"])
-        self.encoder_target.load_state_dict(payload["encoder_target"]); self.critic_target.load_state_dict(payload["critic_target"]); self.actor_target.load_state_dict(payload["actor_target"])
-        self.critic_optimizer.load_state_dict(payload["critic_optimizer"])
-        self.actor_optimizer.load_state_dict(payload["actor_optimizer"])
+        if (
+            not isinstance(sprint, dict)
+            or sprint.get("schema_version") != self.schema_version
+            or sprint.get("arm") != self.arm
+            or "f_resp" not in sprint
+        ):
+            raise ValueError("incompatible sprint evaluation checkpoint")
+        expected_response = self.f_resp.state_dict()
+        saved_response = sprint["f_resp"]
+        if not isinstance(saved_response, dict) or saved_response.keys() != expected_response.keys():
+            raise ValueError("sprint response-head state does not match the evaluation model")
+        if any(
+            not isinstance(value, torch.Tensor) or value.shape != expected_response[key].shape
+            for key, value in saved_response.items()
+        ):
+            raise ValueError("sprint response-head state does not match the evaluation model")
+        aux_weight = sprint.get("aux_weight")
+        if (
+            isinstance(aux_weight, bool)
+            or not isinstance(aux_weight, (int, float))
+            or not np.isfinite(aux_weight)
+            or aux_weight < 0
+        ):
+            raise ValueError("sprint checkpoint has invalid auxiliary-weight contract")
+        if self.arm == "matched" and type(sprint.get("projection_seed")) is not int:
+            raise ValueError("matched sprint checkpoint lacks projection_seed")
+        if self.arm == "random" and type(sprint.get("target_seed")) is not int:
+            raise ValueError("random sprint checkpoint lacks target_seed")
 
+        self._load_evaluation_checkpoint_payload(payload)
+        self.f_resp.load_state_dict(saved_response)
+        self.aux_weight = float(aux_weight)
+        if self.arm == "matched":
+            self.projection_seed = int(sprint["projection_seed"])
+            self.matched_projection = _MatchedProjection(
+                self.projection_seed, self.device
+            )
+        if self.arm == "random":
+            self.target_seed = int(sprint["target_seed"])
+            self.random_target_buffer = _RandomTarget(
+                self.target_seed, self.device
+            )
+
+    def load_checkpoint(
+        self,
+        path: Path | str,
+        *,
+        eval_only: bool = False,
+        migration_mode: Literal["legacy_response_head_eval"] | None = None,
+    ) -> None:
+        """Load an evaluation-only sprint checkpoint."""
+        if not eval_only:
+            raise ValueError(
+                "all checkpoints are evaluation-only; non-eval training continuation is forbidden"
+            )
+        self._load_sprint_checkpoint_payload(
+            self._read_evaluation_checkpoint(path),
+            migration_mode=migration_mode,
+        )
 
 def create_sprint_agent(
     arm: str,
@@ -317,19 +350,25 @@ def create_sprint_agent(
     aux_weight: float = 1.0,
     projection_seed: int = MATCHED_PROJECTION_SEED,
     target_seed: int = RANDOM_TARGET_SEED,
-    beta_contact: float = 0.010,
-    bgt_margin: float | None = None,
-    bgt_onset_transition: int | None = None,
-    bgt_calibration_sha256: str | None = None,
+    beta_contact: float = CONTACT_WEIGHT_BETA,
+    bgt_manifest_path: Path | str | None = None,
+    bgt_expected_manifest_sha256: str | None = None,
+    bgt_checkpoint_sha256: str | None = None,
+    bgt_panel_sha256: str | None = None,
     **kwargs: Any,
 ) -> TD3Agent:
     """Create a sprint or V2 arm from the shared training-driver seam."""
-    if arm == "bb":
+    if arm in {"bb-d2", "v1-d2"} and (
+        config is None or config.policy_delay != 2
+    ):
+        raise ValueError(f"{arm} requires policy_delay == 2")
+    if arm in {"bb", "bb-d2"}:
         return TD3Agent(config, device=device, **kwargs)
-    if arm in {"v1", "matched", "random"}:
+    if arm in {"v1", "v1-d2", "matched", "random"}:
+        sprint_arm: SprintArm = "v1" if arm == "v1-d2" else arm
         return SprintTD3Agent(
             config,
-            arm=arm,
+            arm=sprint_arm,
             aux_weight=aux_weight,
             projection_seed=projection_seed,
             target_seed=target_seed,
@@ -345,9 +384,10 @@ def create_sprint_agent(
             device=device,
             aux_weight=aux_weight,
             beta_contact=beta_contact,
-            bgt_margin=bgt_margin,
-            bgt_onset_transition=bgt_onset_transition,
-            bgt_calibration_sha256=bgt_calibration_sha256,
+            bgt_manifest_path=bgt_manifest_path,
+            bgt_expected_manifest_sha256=bgt_expected_manifest_sha256,
+            bgt_checkpoint_sha256=bgt_checkpoint_sha256,
+            bgt_panel_sha256=bgt_panel_sha256,
             **kwargs,
         )
     raise ValueError(f"unknown sprint arm {arm!r}")

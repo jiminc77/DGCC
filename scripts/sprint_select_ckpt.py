@@ -83,7 +83,7 @@ def main() -> int:
             transitions = int(checkpoint.stem.split("_")[1])
         except (IndexError, ValueError) as exc:
             raise SprintClaimError(f"checkpoint name lacks transition count: {checkpoint.name}") from exc
-        run.agent.load_checkpoint(checkpoint)
+        run.agent.load_checkpoint(checkpoint, eval_only=True)
         started = time.perf_counter()
         result = retro.eval_with_recovery(
             run, episode_index_start=VAL_EPISODE_INDEX_START + transitions // 25_000
