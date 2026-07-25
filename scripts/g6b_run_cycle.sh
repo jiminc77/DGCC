@@ -9,6 +9,14 @@ tag="sprint_t2_${arm}_s${seed}"
 cfg="configs/sprint_t2_${arm}.yaml"
 log="outputs/reports/p1_sprint_train_${tag}.log"
 
+# Campaign hold gate (orchestrator steer 2026-07-25: GPU window for V2 BGT latency measurement).
+# A hold flag defers the START of a new cycle only; a cycle already in flight is never touched,
+# and no GPU work is loaded while waiting.
+while [ -f /tmp/dgcc_ops/HOLD_CAMPAIGN ]; do
+  echo "HOLD_WAIT ${tag} $(date -u +%FT%TZ)"
+  sleep 60
+done
+
 echo "CYCLE_START arm=${arm} seed=${seed} $(date -u +%FT%TZ)"
 # Resume guard: a completed, non-halted training run is never re-trained (protects 11h+ runs
 # from post-train tooling failures; the per-tag gate below still re-verifies it).
