@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "algorithm-package-test-report",
+  "generatedAtUtc": "2026-07-25T20:30:00Z",
+  "repository": "/home/simx2204/v2_research/impl/DGCC",
+  "branch": "v2-dev",
+  "baseHead": "c1a52292bef3d1cd331760109ff011bf7251ac04",
+  "testedTreeSha256": "1d32be2f5cdddad7fe580d863529b537eb597994",
+  "constraints": {
+    "cudaVisibleDevices": "",
+    "gpuUsed": false,
+    "trainingOrEvalRun": false,
+    "heldoutOrProbeContentAccess": false,
+    "liveTreeProductMutation": false,
+    "calibratorRerun": false
+  },
+  "verification": [
+    {
+      "command": "CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pytest tests -q -m 'not gpu' -rsxX",
+      "exitCode": 0,
+      "result": "442 passed, 7 deselected in 13.67s"
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0,
+      "result": "clean"
+    },
+    {
+      "command": "CUDA_VISIBLE_DEVICES='' .venv/bin/python -m compileall -q src scripts tests",
+      "exitCode": 0,
+      "result": "clean"
+    }
+  ],
+  "supersedes": {
+    "priorResult": "393 passed, 7 deselected in 13.33s",
+    "reason": "The definitive pre-commit run includes the final added regression tests."
+  },
+  "betaGuard": {
+    "canonicalJson": "/home/simx2204/v2_research/dossier/V2_neff_guard_beta015363_verified.json",
+    "canonicalJsonSha256": "7a5b517ab108c8b0afa79d7e544e3f3d1eee40d5e56df6371d94a97bbcaedda5",
+    "canonicalNpz": "/home/simx2204/v2_research/dossier/V2_neff_guard_beta015363_verified.npz",
+    "canonicalNpzSha256": "72bc4218e829399d58e88b1604846eb51d9a1d7db42dfdab75b796acb09f7879",
+    "betaContact": 0.015363,
+    "q1PooledMedian": 12.000547577506525,
+    "qminPooledMedian": 13.038685532339265,
+    "limits": [8.0, 20.0],
+    "verdict": "PASS"
+  },
+  "releaseCut": {
+    "orchestratorAccepted": true,
+    "blockingFindings": 0,
+    "purpose": "External re-review input; not a production execution authorization."
+  }
+}
