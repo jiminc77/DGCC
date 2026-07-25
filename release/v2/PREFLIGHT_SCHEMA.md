@@ -2,6 +2,8 @@
 
 `generate_no_training_preflight.py` creates the final arm/seed launch-evidence matrix without starting an agent, using CUDA, training, or evaluation.
 
+The authoritative production `--repo-root` is `/home/simx2204/v2_research/impl/DGCC`. `/home/simx2204/Workspaces/DGCC` is the campaign/original-protocol tree and must never be used or modified by this generator.
+
 ## Required inputs
 
 - Exact isolated release root and approved source commit.
