@@ -2,10 +2,10 @@
   "arm_aggregates": [
     {
       "arm": "v1",
-      "complete": 3,
-      "heldout_results": 3,
+      "complete": 4,
+      "heldout_results": 4,
       "observed": 1,
-      "pending": 3,
+      "pending": 2,
       "runs": 7
     },
     {
@@ -83,6 +83,17 @@
       "seed": 2,
       "status": "complete",
       "success": 0.33
+    },
+    {
+      "arm": "v1",
+      "ckpt": "/home/simx2204/Workspaces/DGCC/outputs/models/sprint_t2_v1_s3/ckpt_0300032.pt",
+      "ckpt_sha256": "e825ef42ab10ff8ddec50537f74ef7d01cb400ac273b3794158f94a120ca9575",
+      "claim_sha256": "b865cd4673abf319e6493fc1eb8457b58692ee95b364387be17beeb4d6eacd16",
+      "result": "outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s3.json",
+      "return": 1.0760298631623224,
+      "seed": 3,
+      "status": "complete",
+      "success": 0.175
     }
   ],
   "runs": [
@@ -145,22 +156,22 @@
     },
     {
       "arm": "v1",
-      "claim": null,
-      "eval_wall_max_s": null,
+      "claim": "outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s3_claim.json",
+      "eval_wall_max_s": 1257.1620644150535,
       "halt_reason": null,
-      "heldout": null,
-      "initial_weights_sha256": null,
+      "heldout": "outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s3.json",
+      "initial_weights_sha256": "b1ee2f73778061694a5bb5977d53c144bd0f3a67eb556083cf9d0a51eb76a910",
       "log": "outputs/reports/p1_sprint_train_sprint_t2_v1_s3.log",
-      "mag": 0,
-      "nan": 0,
-      "rebuilds": 0,
-      "run": null,
+      "mag": 94,
+      "nan": 83,
+      "rebuilds": 1,
+      "run": "outputs/metrics/p1_run_sprint_t2_v1_s3.json",
       "run_tag": "sprint_t2_v1_s3",
       "seed": 3,
-      "selection": null,
-      "status": "observed",
-      "transitions": null,
-      "wall_h": null
+      "selection": "outputs/metrics/sprint_sel_t2_v1_s3.json",
+      "status": "complete",
+      "transitions": 300032,
+      "wall_h": 11.46
     },
     {
       "arm": "v1",
@@ -169,15 +180,15 @@
       "halt_reason": null,
       "heldout": null,
       "initial_weights_sha256": null,
-      "log": null,
-      "mag": null,
-      "nan": null,
-      "rebuilds": null,
+      "log": "outputs/reports/p1_sprint_train_sprint_t2_v1_s4.log",
+      "mag": 0,
+      "nan": 0,
+      "rebuilds": 0,
       "run": null,
       "run_tag": "sprint_t2_v1_s4",
       "seed": 4,
       "selection": null,
-      "status": "pending",
+      "status": "observed",
       "transitions": null,
       "wall_h": null
     },
