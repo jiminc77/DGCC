@@ -1,11 +1,20 @@
 #!/bin/bash
-# G6b serial 17-run campaign: V1 {0,1,2,3,4,6,7} -> matched {0..4} -> random {0..4}.
+# G6b serial campaign: V1 {0..4} -> matched {0..4} -> random {0..4}.
+# V1 s6/s7 are DEFERRED (not cancelled) per orchestrator steer 2026-07-25 / pending AMD-5:
+#   unconditional scheduling deferral — final paired n=7 unchanged; s6/s7 execute unconditionally
+#   after V2 confirmatory, deadline 2026-08-18 23:59 KST, regardless of GNG branch or results.
+#   Reason: schedule-only (early GPU allocation to V2-dev); no V1 s6/s7 results existed at steer time.
 # Crash-class auto-retry per adopted pocket-guard/crash-disposition rules:
 #   TRAIN-stage failure -> archive crash artifacts (MANIFEST.sha256) -> same-seed relaunch, max 3 attempts total.
 #   GATE/SELECT/HELDOUT-stage failure -> hard stop (not crash-class; needs disposition).
 set -u
 cd /home/simx2204/Workspaces/DGCC
-RUNS="v1:0 v1:1 v1:2 v1:3 v1:4 v1:6 v1:7 matched:0 matched:1 matched:2 matched:3 matched:4 random:0 random:1 random:2 random:3 random:4"
+# Lane-idle preflight: never overlap a cycle already in flight (e.g. relaunch while a
+# previous wrapper's child cycle still runs its selection/heldout stages).
+while pgrep -f "g6b_run_cycle.sh|p1_sprint_train.py|sprint_select_ckpt.py|sprint_heldout_eval.py" >/dev/null; do
+  echo "LANE_BUSY_WAIT $(date -u +%FT%TZ)"; sleep 300
+done
+RUNS="v1:0 v1:1 v1:2 v1:3 v1:4 matched:0 matched:1 matched:2 matched:3 matched:4 random:0 random:1 random:2 random:3 random:4"
 for spec in $RUNS; do
   arm="${spec%%:*}"; seed="${spec##*:}"
   tag="sprint_t2_${arm}_s${seed}"
