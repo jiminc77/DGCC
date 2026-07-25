@@ -1,4 +1,4 @@
-# Paired n=7 power and MDE reassessment
+# Paired n=8/n=7/n=5 power and MDE reassessment
 
 ## Purpose and fixed method
 
@@ -10,14 +10,14 @@ AMD-3의 seed 5 전체 제외 후 confirmatory lock 전 첨부하는 **보고 �
 - Success grid: 0 to +20%p in +1%p steps; registered practical benchmark: +10%p.
 - Return grid: 0 to 2.000 (0.010 increments around 0.600--1.200, otherwise 0.050); registered practical benchmark: `0.5 σ_goal = 0.930`, with `σ_goal=1.8605`.
 
-## n=8 → n=7 result
+## n=8 → n=7 → n=5 result
 
-| endpoint | n=8 80% MDE | n=7 80% MDE | MDE increase | registered MDE-point power (n=8 → n=7) | power loss |
-|---|---:|---:|---:|---:|---:|
-| 성공률 | 14%p | 15%p | 1%p | 61.8% → 57.5% | 4.3%p |
-| return | 0.830 | 0.900 | 0.070 | 85.1% → 81.1% | 4.0%p |
+| endpoint | n=8 80% MDE | n=7 80% MDE | n=5 80% MDE | n=8→n=7 MDE increase | registered MDE-point power (n=8 → n=7 → n=5) | n=8→n=7 power loss |
+|---|---:|---:|---:|---:|---:|---:|
+| 성공률 | 14%p | 15%p | 17%p | 1%p | 61.8% → 57.5% → 47.8% | 4.3%p |
+| return | 0.830 | 0.900 | 1.060 | 0.070 | 85.1% → 81.1% → 72.4% | 4.0%p |
 
-`n=7` therefore has lower power at each registered MDE point and requires a larger grid-resolved effect to reach 80% simulated power. These quantities characterize precision only; they do not add an effect-size gate.
+`n=7` and `n=5` therefore have lower power at each registered MDE point and require a larger grid-resolved effect to reach 80% simulated power. These quantities characterize precision only; they do not add an effect-size gate.
 
 ## Variance evidence and proxy
 
@@ -41,6 +41,14 @@ M4 3-seed held-out summaries and the available retro/new BB summaries provide th
 | new_bb_2_seed | 2 | 0.483181 | 0.695112 |
 
 시뮬레이션 paired-effect SD = `sqrt(2) × max(seed SD)` = **0.983037**. 이는 V1과 BB의 seed 변동이 독립이라고 둔 보수적 대용치이며, 실제 V1−BB 상관은 아직 미관측이다.
+
+## n=5 sign-flip informational bound
+
+실측 기지 페어 Δ(V1−BB) = s0 −6.0 / s1 −12.5 / s2 +3.0 (%p) 기준, exact one-sided sign-flip 검정의 최소 달성 p = 4/32 = 0.125 — n=5로는 α=0.05 유의 불가.
+
+계산 근거: 관측 부호 패턴에서 달성 가능한 가장 작은 one-sided exact sign-flip p가 `4/32 = 0.125`이다.
+
+따라서 **n=5 confirmatory 불가는 AMD-5 조항(c)(interim·descriptive only)과 본 산술 양쪽에서 지지됨**.
 
 ## Interpretation limits
 

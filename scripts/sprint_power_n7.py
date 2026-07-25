@@ -19,6 +19,7 @@ REPORT = ROOT / "outputs/reports/sprint_power_n7.md"
 RNG_SEED = 20260721
 REPLICATIONS = 1_000
 BOOTSTRAP_DRAWS = 2_000  # Reduced from the registered 10,000 for simulation only.
+SAMPLE_SIZES = (8, 7, 5)
 EFFECT_GRID = np.arange(0.0, 0.2001, 0.01)
 SUCCESS_REGISTERED_MDE = 0.10
 RETURN_REGISTERED_MDE = 0.930
@@ -76,7 +77,7 @@ def endpoint(name: str, metric: str, grid: np.ndarray, registered_mde: float, st
     effect_sd, sources = variance_proxy(source_values(metric))
     powers = {
         n: np.asarray([power(float(effect), n, effect_sd, stream=stream + index * 10_000) for index, effect in enumerate(grid)])
-        for n in (8, 7)
+        for n in SAMPLE_SIZES
     }
     def mde(n: int) -> float | None:
         qualifying = grid[powers[n] >= 0.80]
@@ -88,10 +89,8 @@ def endpoint(name: str, metric: str, grid: np.ndarray, registered_mde: float, st
         "effect_sd": effect_sd,
         "sources": sources,
         "powers": powers,
-        "mde8": mde(8),
-        "mde7": mde(7),
-        "registered_power8": float(powers[8][registered_index]),
-        "registered_power7": float(powers[7][registered_index]),
+        "mdes": {n: mde(n) for n in SAMPLE_SIZES},
+        "registered_powers": {n: float(powers[n][registered_index]) for n in SAMPLE_SIZES},
         "registered_mde": registered_mde,
     }
 
@@ -108,10 +107,10 @@ def main() -> None:
     rows = []
     source_sections = []
     for result in (success, returned):
-        mde_increase = result["mde7"] - result["mde8"]
-        power_loss = result["registered_power8"] - result["registered_power7"]
+        mde_increase = result["mdes"][7] - result["mdes"][8]
+        power_loss = result["registered_powers"][8] - result["registered_powers"][7]
         rows.append(
-            f"| {result['name']} | {effect_text(result['mde8'], result['unit'])} | {effect_text(result['mde7'], result['unit'])} | {effect_text(mde_increase, result['unit'])} | {result['registered_power8']:.1%} → {result['registered_power7']:.1%} | {power_loss:.1%}p |"
+            f"| {result['name']} | {effect_text(result['mdes'][8], result['unit'])} | {effect_text(result['mdes'][7], result['unit'])} | {effect_text(result['mdes'][5], result['unit'])} | {effect_text(mde_increase, result['unit'])} | {result['registered_powers'][8]:.1%} → {result['registered_powers'][7]:.1%} → {result['registered_powers'][5]:.1%} | {power_loss:.1%}p |"
         )
         source_rows = "\n".join(
             f"| {name} | {n} | {variance:.6f} | {sd:.6f} |" for name, n, variance, sd in result["sources"]
@@ -120,7 +119,7 @@ def main() -> None:
             f"### {result['name']}\n\n| 관측 대용치(공개 summary) | seed 수 | 표본분산(ddof=1) | seed SD |\n|---|---:|---:|---:|\n{source_rows}\n\n"
             f"시뮬레이션 paired-effect SD = `sqrt(2) × max(seed SD)` = **{result['effect_sd']:.6f}**. 이는 V1과 BB의 seed 변동이 독립이라고 둔 보수적 대용치이며, 실제 V1−BB 상관은 아직 미관측이다."
         )
-    report = f"""# Paired n=7 power and MDE reassessment
+    report = f"""# Paired n=8/n=7/n=5 power and MDE reassessment
 
 ## Purpose and fixed method
 
@@ -132,19 +131,27 @@ AMD-3의 seed 5 전체 제외 후 confirmatory lock 전 첨부하는 **보고 �
 - Success grid: 0 to +20%p in +1%p steps; registered practical benchmark: +10%p.
 - Return grid: 0 to 2.000 (0.010 increments around 0.600--1.200, otherwise 0.050); registered practical benchmark: `0.5 σ_goal = 0.930`, with `σ_goal=1.8605`.
 
-## n=8 → n=7 result
+## n=8 → n=7 → n=5 result
 
-| endpoint | n=8 80% MDE | n=7 80% MDE | MDE increase | registered MDE-point power (n=8 → n=7) | power loss |
-|---|---:|---:|---:|---:|---:|
+| endpoint | n=8 80% MDE | n=7 80% MDE | n=5 80% MDE | n=8→n=7 MDE increase | registered MDE-point power (n=8 → n=7 → n=5) | n=8→n=7 power loss |
+|---|---:|---:|---:|---:|---:|---:|
 {chr(10).join(rows)}
 
-`n=7` therefore has lower power at each registered MDE point and requires a larger grid-resolved effect to reach 80% simulated power. These quantities characterize precision only; they do not add an effect-size gate.
+`n=7` and `n=5` therefore have lower power at each registered MDE point and require a larger grid-resolved effect to reach 80% simulated power. These quantities characterize precision only; they do not add an effect-size gate.
 
 ## Variance evidence and proxy
 
 M4 3-seed held-out summaries and the available retro/new BB summaries provide the requested between-seed range. `m4_3_seed_heldout` is the M4 standard held-out series; `retro_bb_3_seed` is its sprint-heldout reuse series; `new_bb_2_seed` is the completed new-BB s3/s4 series. Values are summary fields only.
 
 {chr(10).join(source_sections)}
+
+## n=5 sign-flip informational bound
+
+실측 기지 페어 Δ(V1−BB) = s0 −6.0 / s1 −12.5 / s2 +3.0 (%p) 기준, exact one-sided sign-flip 검정의 최소 달성 p = 4/32 = 0.125 — n=5로는 α=0.05 유의 불가.
+
+계산 근거: 관측 부호 패턴에서 달성 가능한 가장 작은 one-sided exact sign-flip p가 `4/32 = 0.125`이다.
+
+따라서 **n=5 confirmatory 불가는 AMD-5 조항(c)(interim·descriptive only)과 본 산술 양쪽에서 지지됨**.
 
 ## Interpretation limits
 
