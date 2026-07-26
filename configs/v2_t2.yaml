@@ -45,6 +45,18 @@ sim:
 sprint:
   aux_weight: 1.0
   beta_contact: 0.015363
+  # Governed-launch evidence wiring. p1_sprint_train.py resolves these against the
+  # directory of the --config file it was handed, so a governed launch must use the
+  # published per-cell copy of this file at
+  # release/v2/preflight_15_not_admitted/cells/<cell-id>/v2_t2.yaml. That copy is
+  # byte-identical to this file, so one config SHA still covers all 15 cells while
+  # manifest_path still selects each cell's own launch manifest.
+  # Launching straight from configs/ resolves these to nonexistent paths and fails closed.
+  amd5_preflight:
+    manifest_path: launch_manifest.json
+    governance_path: ../../../execution_governance.pending-bgt.json
+    code_manifest_path: ../../../final_code_manifest.json
+    neff_guard_path: /home/simx2204/v2_research/dossier/V2_neff_guard_beta015363_verified.json
   eval:
     wall_guard_k: 5
     record_raw_final: true

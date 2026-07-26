@@ -358,18 +358,84 @@ def launch_manifest(
     return value
 
 
-def build_asset_manifest(assets: list[tuple[Path, str]]) -> dict[str, Any]:
+def build_asset_manifest(assets: list[tuple[Path, Path, str]]) -> dict[str, Any]:
+    """Pin each asset at the path a launcher will see after publication.
+
+    Cell-local assets are written under the staging directory but recorded at
+    their published location. Recording the staging path instead leaves every
+    allowlist pointing at a directory that ceases to exist at the publish
+    rename, which is what blocked the first tournament launch.
+    """
     return {
         "schema_version": 1,
         "assets": [
             {
-                "path": str(path.resolve(strict=True)),
-                "sha256": sha256_file(path),
+                "path": str(published),
+                "sha256": sha256_file(source),
                 "role": role,
             }
-            for path, role in assets
+            for published, source, role in assets
         ],
     }
+
+LAUNCHER_ASSET_ROLES = (
+    "code_manifest",
+    "config",
+    "execution_governance",
+    "neff_guard",
+    "preflight_manifest",
+)
+
+
+def run_launch_dryrun(repo: Path, cell_dir: Path, plan: dict[str, Any]) -> dict[str, Any]:
+    """Drive the real launcher through its asset gate for one published cell.
+
+    Manifest-layer validation cannot observe how the launcher resolves these
+    assets; the first tournament launch failed on exactly that gap. The probe
+    runs scripts/p1_sprint_train.py on production argv and halts at the first
+    side effect past the gate, so no attempt record, agent, GPU context, or
+    training step is created.
+    """
+    receipt_path = cell_dir / "launch_dryrun_receipt.json"
+    environment = dict(os.environ)
+    environment["CUDA_VISIBLE_DEVICES"] = ""
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo / "release" / "v2" / "launch_dryrun_probe.py"),
+            "--repo-root", str(repo),
+            "--launcher", str(repo / "scripts" / "p1_sprint_train.py"),
+            "--config", str(cell_dir / plan["config_name"]),
+            "--arm", plan["arm"],
+            "--seed", str(plan["seed"]),
+            "--asset-manifest", str(cell_dir / "asset_manifest.json"),
+            "--expected-asset-manifest-sha256", plan["asset_manifest_sha256"],
+            "--receipt", str(receipt_path),
+        ],
+        cwd=repo,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if not receipt_path.is_file():
+        raise RuntimeError(
+            f"launch dry-run produced no receipt for {plan['cell_id']}: "
+            f"{completed.stderr.strip()[-2000:]}"
+        )
+    receipt = json.loads(receipt_path.read_bytes())
+    if completed.returncode != 0 or receipt.get("gate_passed") is not True:
+        raise RuntimeError(
+            f"launch dry-run failed for {plan['cell_id']}: {receipt.get('failure')}"
+        )
+    resolved = receipt.get("resolved_roles")
+    if resolved is None or set(LAUNCHER_ASSET_ROLES) - set(resolved):
+        raise RuntimeError(
+            f"launch dry-run for {plan['cell_id']} did not resolve every launcher role"
+        )
+    receipt["receipt_sha256"] = sha256_file(receipt_path)
+    return receipt
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -488,6 +554,7 @@ def main(argv: list[str] | None = None) -> int:
     stage = target.parent / f".{target.name}.{uuid.uuid4().hex}.tmp"
     stage.mkdir(mode=0o700)
     published = False
+    sealed = False
     try:
         r3_r4 = generate_r3_r4_existence_receipt(protected_paths, fresh_paths)
         r3_r4.update(
@@ -501,10 +568,13 @@ def main(argv: list[str] | None = None) -> int:
         r3_r4_path = stage / "r3_r4_existence_receipt.json"
         exclusive_json(r3_r4_path, r3_r4)
         cell_receipts: list[dict[str, Any]] = []
+        cell_plans: list[dict[str, Any]] = []
         first_preflight: dict[str, Any] | None = None
+        published_root = release_root / target.name
         for ordinal, (schedule_arm, arm, mode, seed) in enumerate(cells, start=1):
             cell_id = f"{ordinal:02d}-{schedule_arm.lower()}-s{seed}"
             cell_dir = stage / "cells" / cell_id
+            published_cell_dir = published_root / "cells" / cell_id
             cell_dir.mkdir(parents=True)
             manifest = launch_manifest(
                 schedule_arm,
@@ -517,27 +587,75 @@ def main(argv: list[str] | None = None) -> int:
             )
             manifest_path = cell_dir / "launch_manifest.json"
             exclusive_json(manifest_path, manifest)
-            assets: list[tuple[Path, str]] = [
-                (manifest_path, "preflight_manifest"),
-                (args.governance, "final_execution_governance"),
-                (args.protocol_governance, "protocol_governance"),
-                (args.bgt_not_admitted, "bgt_not_admitted_disposition"),
+            # p1_sprint_train.py resolves sprint.amd5_preflight relative paths
+            # against the directory of the --config it was given. Publishing a
+            # byte-identical config beside each launch manifest is what lets one
+            # config SHA cover all 15 cells while manifest_path still selects the
+            # cell's own manifest.
+            cell_config_path = cell_dir / args.config.name
+            exclusive_bytes(cell_config_path, config_bytes)
+            assets: list[tuple[Path, Path, str]] = [
                 (
+                    published_cell_dir / manifest_path.name,
+                    manifest_path,
+                    "preflight_manifest",
+                ),
+                (
+                    published_cell_dir / cell_config_path.name,
+                    cell_config_path,
+                    "config",
+                ),
+                (
+                    args.config.resolve(strict=True),
+                    args.config,
+                    "canonical_config_source",
+                ),
+                (
+                    args.governance.resolve(strict=True),
+                    args.governance,
+                    "final_execution_governance",
+                ),
+                # p1_sprint_train.py:259-264 resolves this asset under the exact
+                # role name "execution_governance"; any other label fails closed.
+                (
+                    args.protocol_governance.resolve(strict=True),
+                    args.protocol_governance,
+                    "execution_governance",
+                ),
+                (
+                    args.bgt_not_admitted.resolve(strict=True),
+                    args.bgt_not_admitted,
+                    "bgt_not_admitted_disposition",
+                ),
+                (
+                    args.authoritative_r3_r4_receipt.resolve(strict=True),
                     args.authoritative_r3_r4_receipt,
                     "authoritative_r3_r4_receipt",
                 ),
-                (args.code_manifest, "code_manifest"),
-                (args.neff_guard, "neff_guard"),
-                (args.config, "config"),
+                (
+                    args.code_manifest.resolve(strict=True),
+                    args.code_manifest,
+                    "code_manifest",
+                ),
+                (
+                    args.neff_guard.resolve(strict=True),
+                    args.neff_guard,
+                    "neff_guard",
+                ),
             ]
             asset_manifest_path = cell_dir / "asset_manifest.json"
             exclusive_json(asset_manifest_path, build_asset_manifest(assets))
             asset_manifest_sha = sha256_file(asset_manifest_path)
-            audit_path = cell_dir / "protected_access_audit.jsonl"
-            firewall, asset_document = load_launch_asset_manifest(
-                asset_manifest_path, asset_manifest_sha, audit_path
+            cell_plans.append(
+                {
+                    "ordinal": ordinal,
+                    "cell_id": cell_id,
+                    "arm": arm,
+                    "seed": seed,
+                    "asset_manifest_sha256": asset_manifest_sha,
+                    "config_name": cell_config_path.name,
+                }
             )
-            bundle = persist_launch_receipts(cell_dir, asset_document, firewall)
             manifest_bytes = manifest_path.read_bytes()
             receipt = preflight.validate_manifest_bytes(
                 manifest_bytes,
@@ -570,8 +688,9 @@ def main(argv: list[str] | None = None) -> int:
                     "launch_manifest_sha256": sha256_file(manifest_path),
                     "asset_manifest_sha256": asset_manifest_sha,
                     "preflight_receipt_sha256": sha256_file(receipt_path),
-                    "r1_sha256": bundle["r1_sha256"],
-                    "r2_sha256": bundle["r2_sha256"],
+                    "config_path": str(
+                        published_cell_dir / cell_config_path.name
+                    ),
                     "pass": True,
                 }
             )
@@ -625,6 +744,44 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(
                 "generated R3/R4 footprint differs from the authoritative receipt"
             )
+        generated_r3_r4_sha256 = sha256_file(r3_r4_path)
+        smoke_evidence = {
+            "attempt_id": registry.attempt_id,
+            "phases": phases,
+            "records_sha256": sha256_file(
+                registry.attempt_path / "records.jsonl"
+            ),
+            "terminal_anchor_sha256": sha256_file(anchors[0]),
+            "verified": True,
+        }
+
+        # Publish, then seal. R1/R2 and the launcher dry-run have to observe the
+        # allowlist at the paths a launcher will actually use, which is exactly
+        # what pinning staging paths failed to do. Anything that fails during
+        # the seal removes the published tree, so partial evidence never
+        # survives this generator.
+        fsync_dir(stage)
+        os.rename(stage, target)
+        fsync_dir(target.parent)
+        published = True
+
+        for plan, cell_receipt in zip(cell_plans, cell_receipts, strict=True):
+            published_cell = target / "cells" / plan["cell_id"]
+            firewall, asset_document = load_launch_asset_manifest(
+                published_cell / "asset_manifest.json",
+                plan["asset_manifest_sha256"],
+                published_cell / "protected_access_audit.jsonl",
+            )
+            bundle = persist_launch_receipts(
+                published_cell, asset_document, firewall
+            )
+            dryrun = run_launch_dryrun(repo, published_cell, plan)
+            cell_receipt["r1_sha256"] = bundle["r1_sha256"]
+            cell_receipt["r2_sha256"] = bundle["r2_sha256"]
+            cell_receipt["launch_dryrun_receipt_sha256"] = dryrun[
+                "receipt_sha256"
+            ]
+            cell_receipt["launch_dryrun_passed"] = True
         matrix = {
             "schema_version": 1,
             "runtime_source_commit": APPROVED_RUNTIME_COMMIT,
@@ -640,21 +797,28 @@ def main(argv: list[str] | None = None) -> int:
             "config_sha256": config_sha256,
             "neff_guard_sha256": guard_sha256,
             "authoritative_r3_r4_receipt_sha256": authoritative_r3_r4_sha256,
-            "generated_r3_r4_receipt_sha256": sha256_file(r3_r4_path),
+            "generated_r3_r4_receipt_sha256": generated_r3_r4_sha256,
             "r3_pass": (
                 authoritative_r3_r4["R3"]["pass"] and r3_r4["R3"]["pass"]
             ),
             "r4_pass": (
                 authoritative_r3_r4["R4"]["pass"] and r3_r4["R4"]["pass"]
             ),
-            "registry_smoke": {
-                "attempt_id": registry.attempt_id,
-                "phases": phases,
-                "records_sha256": sha256_file(
-                    registry.attempt_path / "records.jsonl"
+            "registry_smoke": smoke_evidence,
+            "launch_dryrun": {
+                "probe": "real-launcher-gate-dry-run",
+                "probe_sha256": sha256_file(
+                    repo / "release" / "v2" / "launch_dryrun_probe.py"
                 ),
-                "terminal_anchor_sha256": sha256_file(anchors[0]),
-                "verified": True,
+                "launcher_sha256": sha256_file(
+                    repo / "scripts" / "p1_sprint_train.py"
+                ),
+                "boundary": "dgcc.logging.attempt_registry.AttemptRegistry.recover",
+                "required_roles": list(LAUNCHER_ASSET_ROLES),
+                "cells_passed": len(cell_plans),
+                "gpu_used": False,
+                "training_started": False,
+                "attempt_registry_written": False,
             },
             "cells": cell_receipts,
             "constraints": {
@@ -666,14 +830,14 @@ def main(argv: list[str] | None = None) -> int:
                 "live_tree_mutated": not isolated_root_validated,
             },
         }
-        exclusive_json(stage / "preflight_matrix.json", matrix)
-        fsync_dir(stage)
-        os.rename(stage, target)
-        fsync_dir(target.parent)
-        published = True
+        exclusive_json(target / "preflight_matrix.json", matrix)
+        fsync_dir(target)
+        sealed = True
     finally:
         if not published and stage.exists():
             shutil.rmtree(stage)
+        elif published and not sealed and target.exists():
+            shutil.rmtree(target)
     print(canonical_json({"output": str(target), "planned_runs": len(cells)}).decode(), end="")
     return 0
 
