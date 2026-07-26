@@ -40,8 +40,8 @@ RUNTIME_PATCHES = (
         "behaviour_change_for_governed_cells": "none",
     },
 )
-EVIDENCE_BASE_COMMIT = "cfb5d8233b300546112167316818af662e9dcc82"
-FINAL_GOVERNANCE_SHA256 = "6882d85515f01d3f76fd48d24af42b1968ab4fb868187a99bae3c2368c9eb10d"
+EVIDENCE_BASE_COMMIT = "8c63ed57a1a63dc0df6ee822bdd0fd17f7648075"
+FINAL_GOVERNANCE_SHA256 = "827bfa490c87bae1cd97f282461911e1fcc27bcb8b79e59b948cc71037e6dc06"
 ISOLATED_REPO_ROOT = Path("/home/simx2204/v2_research/impl/DGCC")
 TRAINING_SANDBOX_ROOT = Path(
     "/home/simx2204/v2_research/runtime/DGCC-v2-12befdac"
@@ -415,7 +415,7 @@ def run_launch_dryrun(repo: Path, cell_dir: Path, plan: dict[str, Any]) -> dict[
     """
     receipt_path = cell_dir / "launch_dryrun_receipt.json"
     environment = dict(os.environ)
-    environment["CUDA_VISIBLE_DEVICES"] = ""
+    environment.pop("CUDA_VISIBLE_DEVICES", None)
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     completed = subprocess.run(
         [
@@ -429,6 +429,8 @@ def run_launch_dryrun(repo: Path, cell_dir: Path, plan: dict[str, Any]) -> dict[
             "--asset-manifest", str(cell_dir / "asset_manifest.json"),
             "--expected-asset-manifest-sha256", plan["asset_manifest_sha256"],
             "--receipt", str(receipt_path),
+            "--device-mode", "gpu",
+            "--runtime-environment", str(plan["runtime_environment_path"]),
         ],
         cwd=repo,
         env=environment,
@@ -451,6 +453,16 @@ def run_launch_dryrun(repo: Path, cell_dir: Path, plan: dict[str, Any]) -> dict[
         raise RuntimeError(
             f"launch dry-run for {plan['cell_id']} did not resolve every launcher role"
         )
+    if (
+        receipt.get("simulator_verified") is not True
+        or not receipt.get("scene")
+        or receipt.get("transitions_executed") != 0
+        or receipt.get("runtime_environment", {}).get("torch_matches_pin") is not True
+    ):
+        raise RuntimeError(
+            f"launch dry-run for {plan['cell_id']} did not build the scene under "
+            "the pinned runtime environment with zero transitions"
+        )
     receipt["receipt_sha256"] = sha256_file(receipt_path)
     return receipt
 
@@ -467,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--neff-guard", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--bgt-not-admitted", type=Path, required=True)
+    parser.add_argument("--runtime-environment", type=Path, required=True)
     parser.add_argument("--protected-path", action="append", default=[])
     parser.add_argument("--fresh-heldout-path", action="append", default=[])
     args = parser.parse_args(argv)
@@ -520,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
     # cannot drift from the path the driver actually opens.
     t2_split_path = default_split_path().resolve(strict=True)
 
+    runtime_environment = json.loads(args.runtime_environment.read_bytes())
     governance_bytes = args.governance.read_bytes()
     if sha256_bytes(governance_bytes) != FINAL_GOVERNANCE_SHA256:
         raise ValueError("final governance bytes do not match the release root-of-trust pin")
@@ -673,6 +687,14 @@ def main(argv: list[str] | None = None) -> int:
                     t2_split_path,
                     "t2_split",
                 ),
+                # The code manifest pins source bytes only. Identical source
+                # under a different accelerator build is a different
+                # experiment, so the environment is pinned beside it.
+                (
+                    args.runtime_environment.resolve(strict=True),
+                    args.runtime_environment,
+                    "runtime_environment",
+                ),
             ]
             asset_manifest_path = cell_dir / "asset_manifest.json"
             exclusive_json(asset_manifest_path, build_asset_manifest(assets))
@@ -685,6 +707,9 @@ def main(argv: list[str] | None = None) -> int:
                     "seed": seed,
                     "asset_manifest_sha256": asset_manifest_sha,
                     "config_name": cell_config_path.name,
+                    "runtime_environment_path": str(
+                        args.runtime_environment.resolve(strict=True)
+                    ),
                 }
             )
             manifest_bytes = manifest_path.read_bytes()
@@ -828,6 +853,15 @@ def main(argv: list[str] | None = None) -> int:
             "protocol_governance_sha256": protocol_governance_sha256,
             "config_sha256": config_sha256,
             "neff_guard_sha256": guard_sha256,
+            "runtime_environment": {
+                "sha256": sha256_file(args.runtime_environment),
+                "torch_version": runtime_environment["accelerator"]["torch_version"],
+                "torch_cuda_build": runtime_environment["accelerator"]["torch_cuda_build"],
+                "device_name": runtime_environment["accelerator"].get("device_name"),
+                "genesis_world_commit": runtime_environment["simulator"]["commit"],
+                "lockfile_digest_sha256": runtime_environment["lockfile_digest_sha256"],
+                "package_count": runtime_environment["package_count"],
+            },
             "authoritative_r3_r4_receipt_sha256": authoritative_r3_r4_sha256,
             "generated_r3_r4_receipt_sha256": generated_r3_r4_sha256,
             "r3_pass": (
@@ -845,16 +879,21 @@ def main(argv: list[str] | None = None) -> int:
                 "launcher_sha256": sha256_file(
                     repo / "scripts" / "p1_sprint_train.py"
                 ),
-                "boundary": "dgcc.logging.attempt_registry.AttemptRegistry.recover",
+                "boundary": "p1_train.TrainingRun.collect_round entry, after build_scene",
+                "simulator_verified": True,
                 "required_roles": list(LAUNCHER_ASSET_ROLES),
                 "cells_passed": len(cell_plans),
-                "gpu_used": False,
+                "gpu_used": True,
                 "training_started": False,
                 "attempt_registry_written": False,
             },
             "cells": cell_receipts,
             "constraints": {
-                "gpu_used": False,
+                "gpu_used": True,
+                "gpu_scope": (
+                    "launch dry-run probes only: agent construction and "
+                    "build_scene, zero transitions, no update, no evaluation"
+                ),
                 "training_run": False,
                 "eval_run": False,
                 "protected_content_opened": False,

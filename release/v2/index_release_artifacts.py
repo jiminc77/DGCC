@@ -77,6 +77,20 @@ def main(argv: list[str] | None = None) -> int:
         },
     )
     known.setdefault(
+        "release/v2/v2_runtime_environment.json",
+        {
+            "path": "release/v2/v2_runtime_environment.json",
+            "role": "prospective-runtime-environment-pin",
+        },
+    )
+    known.setdefault(
+        "release/v2/pin_runtime_environment.py",
+        {
+            "path": "release/v2/pin_runtime_environment.py",
+            "role": "runtime-environment-pin-generator",
+        },
+    )
+    known.setdefault(
         "release/v2/index_release_artifacts.py",
         {
             "path": "release/v2/index_release_artifacts.py",

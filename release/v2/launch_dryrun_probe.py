@@ -9,13 +9,18 @@ could not observe the launcher/factory keyword mismatch that killed run 1 or
 the missing ``t2_split`` allowlist role behind it. Each boundary certified only
 what preceded it.
 
-Boundary now: the launcher runs on the exact production argv until
-``TrainingRun.run`` is entered, and is stopped there before ``build_scene``.
-Everything that precedes it is real: asset-gate resolution, protocol receipt
-binding, config parsing through the firewall, the factory call, agent
-construction, the initial-weights digest, and every allowlist role the driver
-needs to finish ``__init__`` -- including ``t2_split``. Nothing that follows it
-runs: no scene, no environment, no transition, no update, no evaluation.
+Boundary now: ``TrainingRun.collect_round``, the first statement of the
+training loop. Everything before it is real -- asset-gate resolution, protocol
+receipt binding, config parsing through the firewall, the factory call, agent
+construction, the initial-weights digest, every allowlist role the driver needs
+including ``t2_split``, and the entire simulator bring-up in ``build_scene``:
+Genesis init, ``DLOLabEnv`` construction, the first ``env.reset``, the per-env
+grasp-hook check, the batched runner, and the first training episodes. Nothing
+after it runs: no transition, no update, no evaluation.
+
+``--device-mode cpu`` keeps the older pre-simulator boundary for hosts with no
+accelerator and says so in the receipt; it cannot certify the simulator,
+because Genesis initializes with ``backend=gs.gpu`` unconditionally.
 
 Three seams are patched, none of them in the code under test:
 
@@ -29,9 +34,10 @@ Three seams are patched, none of them in the code under test:
 * ``TrainingRun.run`` raises a sentinel on entry. The agent is released
   immediately afterwards.
 
-GPU: callers must set ``CUDA_VISIBLE_DEVICES=""``. The probe refuses to run
-with CUDA visible, so ``--device`` resolves to cpu on the production argv
-without altering it.
+GPU: ``--device-mode cpu`` requires ``CUDA_VISIBLE_DEVICES=""`` so the
+production argv resolves to cpu untouched. ``--device-mode gpu`` requires a
+visible, usable accelerator and is the only mode that reaches the simulator.
+Either way the argv handed to the launcher is the production argv.
 """
 from __future__ import annotations
 
@@ -74,12 +80,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--asset-manifest", type=Path, required=True)
     parser.add_argument("--expected-asset-manifest-sha256", required=True)
     parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument(
+        "--device-mode", choices=("cpu", "gpu"), default="cpu",
+        help="cpu stops before the simulator; gpu runs through build_scene",
+    )
+    parser.add_argument("--runtime-environment", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    if os.environ.get("CUDA_VISIBLE_DEVICES", None) != "":
+    if args.device_mode == "cpu" and os.environ.get("CUDA_VISIBLE_DEVICES", None) != "":
         raise RuntimeError(
-            'launch dry-run requires CUDA_VISIBLE_DEVICES="" so the production '
+            'cpu-mode dry-run requires CUDA_VISIBLE_DEVICES="" so the production '
             "argv resolves to cpu without being modified"
+        )
+    if args.device_mode == "gpu" and os.environ.get("CUDA_VISIBLE_DEVICES") == "":
+        raise RuntimeError(
+            "gpu-mode dry-run requires a visible accelerator; the simulator "
+            "initializes with backend=gs.gpu and cannot run on cpu"
         )
     # Keep the pinned runtime tree byte-identical to the code manifest.
     sys.dont_write_bytecode = True
@@ -89,6 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     firewall_module = importlib.import_module("dgcc.logging.asset_firewall")
     registry_module = importlib.import_module("dgcc.logging.attempt_registry")
     import torch
+
+    if args.device_mode == "gpu" and not torch.cuda.is_available():
+        raise RuntimeError(
+            "gpu-mode dry-run requires torch.cuda.is_available(); this "
+            "environment has no usable accelerator"
+        )
 
     resolved: list[dict[str, Any]] = []
 
@@ -134,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         real_registry_init(self, scratch / "attempts", **kwargs)
 
     agent_evidence: dict[str, Any] = {}
+    scene_evidence: dict[str, Any] = {}
 
     def scratch_recover(cls, root, **kwargs):
         # Called once, after the driver module exists and after
@@ -167,13 +190,34 @@ def main(argv: list[str] | None = None) -> int:
 
         driver.initial_weights_sha256 = capture_digest
 
-        def blocked_run(self):
-            raise AgentConstructed(
-                "agent constructed and driver fully initialized; "
-                "halting before build_scene"
-            )
+        if args.device_mode == "gpu":
+            # First statement of the training loop: build_scene has completed,
+            # no transition has been collected.
+            def blocked_collect(self):
+                scene_evidence.update(
+                    {
+                        "env_class": type(self.env).__name__,
+                        "n_envs": int(self.n_envs),
+                        "runner_class": type(self.runner).__name__,
+                        "device": str(self.device),
+                        "episode_index": int(self.episode_index),
+                        "transitions": int(self.transitions),
+                    }
+                )
+                raise AgentConstructed(
+                    "scene built and first training episodes begun; "
+                    "halting before the first collect_round"
+                )
 
-        driver.TrainingRun.run = blocked_run
+            driver.TrainingRun.collect_round = blocked_collect
+        else:
+            def blocked_run(self):
+                raise AgentConstructed(
+                    "agent constructed and driver fully initialized; "
+                    "halting before build_scene"
+                )
+
+            driver.TrainingRun.run = blocked_run
         return real_recover(scratch / "attempts", **kwargs)
 
     registry_class.__init__ = scratch_init
@@ -194,15 +238,34 @@ def main(argv: list[str] | None = None) -> int:
         "argv": launch_argv,
         "arm": args.arm,
         "seed": args.seed,
-        "boundary": "p1_train.TrainingRun.run entry, before build_scene",
-        "cuda_visible_devices": "",
+        "boundary": (
+            "p1_train.TrainingRun.collect_round entry, after build_scene"
+            if args.device_mode == "gpu"
+            else "p1_train.TrainingRun.run entry, before build_scene"
+        ),
+        "device_mode": args.device_mode,
+        "simulator_verified": args.device_mode == "gpu",
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
         "cuda_available": bool(torch.cuda.is_available()),
+        "torch_version": torch.__version__,
         "attempt_registry_root": "scratch (production registry untouched)",
-        "gpu_used": False,
+        "gpu_used": args.device_mode == "gpu",
         "training_started": False,
         "transitions_executed": 0,
         "attempt_registry_written": False,
     }
+    if args.runtime_environment is not None:
+        pinned = json.loads(args.runtime_environment.read_bytes())
+        receipt["runtime_environment"] = {
+            "sha256": hashlib.sha256(
+                args.runtime_environment.read_bytes()
+            ).hexdigest(),
+            "torch_matches_pin": (
+                torch.__version__ == pinned["accelerator"]["torch_version"]
+            ),
+            "lockfile_digest_sha256": pinned["lockfile_digest_sha256"],
+            "genesis_commit": pinned["simulator"]["commit"],
+        }
     try:
         launcher = load_module(args.launcher, "_v2_launch_dryrun_launcher")
         try:
@@ -229,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
 
     receipt.setdefault("agent_constructed", bool(agent_evidence))
     receipt["agent"] = agent_evidence or None
+    receipt["scene"] = scene_evidence or None
     receipt["resolved_assets"] = resolved
     receipt["resolved_roles"] = sorted({entry["role"] for entry in resolved})
 
