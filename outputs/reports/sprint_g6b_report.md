@@ -10,7 +10,7 @@
 |v1|1|complete|300032|—|86/59/3|18.20|`06912e7d30d471d57834a8504f10648011f58911f04edefc8078e893a9ec36e8`|6277.605|
 |v1|2|complete|300032|—|107/100/2|10.24|`1b619736a4679b318c77533fd78168b218c841ce76328377e8f0fac404fb353f`|529.697|
 |v1|3|complete|300032|—|83/94/1|11.46|`b1ee2f73778061694a5bb5977d53c144bd0f3a67eb556083cf9d0a51eb76a910`|1257.162|
-|v1|4|observed|—|—|0/0/0|—|`—`|—|
+|v1|4|complete|300032|—|59/55/1|10.78|`b31ccdf019d52483020210da9f6e647b945d0b25e3552a7eb86c23f21203311e`|942.761|
 |v1|6|pending|—|—|—/—/—|—|`—`|—|
 |v1|7|pending|—|—|—/—/—|—|`—`|—|
 |matched|0|pending|—|—|—/—/—|—|`—`|—|
@@ -32,12 +32,13 @@
 |v1|1|complete|0.120|0.962135|`/home/simx2204/Workspaces/DGCC/outputs/models/sprint_t2_v1_s1/ckpt_0225280.pt` / `cb4a8f514a968c12cc983980db783ce62e5bbda829eec65f4577776ce2eb4805`|`6eea2b4833653a47b3ac07f91b488087a129eeabab3112bb9ed33af8e7063511`|`outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s1.json`|
 |v1|2|complete|0.330|2.243659|`/home/simx2204/Workspaces/DGCC/outputs/models/sprint_t2_v1_s2/ckpt_0300032.pt` / `f78fe7bddb0702d86ee1509340629de1c24ca2657f1d44984932b2f2cc937c69`|`40c497f8ebbab68e067993ea2b3ff24e53836ff714b1d5c8bd13d5e87778eaf8`|`outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s2.json`|
 |v1|3|complete|0.175|1.076030|`/home/simx2204/Workspaces/DGCC/outputs/models/sprint_t2_v1_s3/ckpt_0300032.pt` / `e825ef42ab10ff8ddec50537f74ef7d01cb400ac273b3794158f94a120ca9575`|`b865cd4673abf319e6493fc1eb8457b58692ee95b364387be17beeb4d6eacd16`|`outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s3.json`|
+|v1|4|complete|0.355|2.378532|`/home/simx2204/Workspaces/DGCC/outputs/models/sprint_t2_v1_s4/ckpt_0300032.pt` / `19d3c0929b79b076d38eff9b8cb0daddd59b084db763dd6bbf9002a2fddf91c2`|`55ea69261c8abb1a3a397c3264face79bd96a2dba5c7411bd27c835299fdb333`|`outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s4.json`|
 
 ## Arm별 사실 집계
 
 |arm|grid runs|complete|observed|pending|heldout results|
 |---|--:|--:|--:|--:|--:|
-|v1|7|4|1|2|4|
+|v1|7|5|0|2|5|
 |matched|5|0|0|5|0|
 |random|5|0|0|5|0|
 
