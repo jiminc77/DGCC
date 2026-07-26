@@ -1,0 +1,62 @@
+# V2-DEV common configuration: fresh BB-D2, V1-D2, and D candidates.
+task: t2
+run:
+  total_transitions: 300000
+  seeds: [0, 1, 2]
+  n_envs: 1024
+  eval_every_transitions: 25000
+  checkpoint_every_transitions: 25000
+eval:
+  t1_episodes_per_task: 100
+  t2_val_goals: 50
+  t2_episodes_per_goal: 2
+  selection_panel_states: 300
+td3:
+  gamma: 0.95
+  tau: 0.005
+  lr: 3.0e-4
+  batch_size: 256
+  replay_capacity: 500000
+  utd: 1
+  policy_delay: 2
+  warmup_transitions: 10240
+  grad_clip: 10.0
+  policy_noise: 0.05
+  noise_clip: 0.1
+  exploration_u_sigma: 0.03
+  eps_p_start: 1.0
+  eps_p_end: 0.1
+  eps_p_fraction: 0.3
+reward:
+  alpha: 10.0
+  c_step: 0.1
+  r_succ: 5.0
+her: false
+sim:
+  dt: 0.001
+  substeps: 5
+  rod_damping: 10.0
+  rod_angular_damping: 5.0
+  initial_settle_steps: 0
+  reset_settle_max_steps: 10000
+  move_step_size: 0.03
+  move_hold_steps: 0
+  grasp_realism: true
+sprint:
+  aux_weight: 1.0
+  beta_contact: 0.015363
+  # Governed-launch evidence wiring. p1_sprint_train.py resolves these against the
+  # directory of the --config file it was handed, so a governed launch must use the
+  # published per-cell copy of this file at
+  # release/v2/preflight_15_not_admitted/cells/<cell-id>/v2_t2.yaml. That copy is
+  # byte-identical to this file, so one config SHA still covers all 15 cells while
+  # manifest_path still selects each cell's own launch manifest.
+  # Launching straight from configs/ resolves these to nonexistent paths and fails closed.
+  amd5_preflight:
+    manifest_path: launch_manifest.json
+    governance_path: ../../../execution_governance.pending-bgt.json
+    code_manifest_path: ../../../final_code_manifest.json
+    neff_guard_path: /home/simx2204/v2_research/dossier/V2_neff_guard_beta015363_verified.json
+  eval:
+    wall_guard_k: 5
+    record_raw_final: true

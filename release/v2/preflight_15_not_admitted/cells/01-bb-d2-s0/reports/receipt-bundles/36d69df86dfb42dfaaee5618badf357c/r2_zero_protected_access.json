@@ -1,0 +1,11 @@
+{
+ "audit_head_sha256": "0fec8a3a30f11068d115a488c0910c62b5ab969ed3d6842ccd153a36f5652497",
+ "bundle_id": "36d69df86dfb42dfaaee5618badf357c",
+ "limitation": "Best-effort application control only; it is not OS-isolated.",
+ "peer_receipt": "r1_launch_allowlist.json",
+ "protected_access_allowed": 0,
+ "protected_access_attempts": 0,
+ "schema_version": 1,
+ "session_id": "61f51a77294c4b22887fa03adc52a0ed",
+ "zero_access": true
+}
