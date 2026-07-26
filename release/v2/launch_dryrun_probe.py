@@ -60,6 +60,82 @@ class AgentConstructed(BaseException):
     """Raised on entry to TrainingRun.run; not an error."""
 
 
+# Charter section 9 mandatory per-validation diagnostics, grouped as the charter
+# enumerates them. Grounded in what a completed 300k run actually emitted, not
+# invented from the prose.
+MANDATORY_SELECTION_DIAGNOSTICS = {
+    "weight_entropy": ("contact_weight_entropy",),
+    "n_eff": ("contact_weight_neff",),
+    "top1_mass": ("contact_weight_top1_mass",),
+    "argmax_agreement": ("q1_qmin_argmax_agreement",),
+    "rank_tau": ("q1_qmin_rank_tau",),
+    "margin": ("q1_top1_top2_margin", "qmin_top1_top2_margin"),
+    "churn": (
+        "hard_q1_churn",
+        "hard_qmin_churn",
+        "soft_weight_cosine_to_previous_checkpoint",
+        "soft_weight_js_to_previous_checkpoint",
+        "top8_contact_overlap",
+    ),
+    "lift": (
+        "lift_flip_rate_under_plusminus_002",
+        "lift_near_threshold_all_045_055",
+        "lift_near_threshold_selected_045_055",
+        "q_at_lift_1_minus_q_at_lift_0",
+        "q_continuous_lift_minus_q_hard_lift",
+        "selected_lift_entropy",
+    ),
+}
+# Churn is defined against the previous checkpoint, so it is legitimately
+# undefined at the first validation of a run. Every other group must be present
+# and non-null at every validation.
+FIRST_VALIDATION_EXEMPT = ("churn",)
+
+
+def audit_section_9(summary: dict[str, Any]) -> dict[str, Any]:
+    """Check that a completed run actually emitted every mandated diagnostic.
+
+    B6 was invisible to every earlier boundary because the probe stopped at
+    "training runs" and never asked "did the mandated diagnostics get written".
+    A run can be numerically perfect and still be charter-noncompliant.
+    """
+    findings: list[dict[str, Any]] = []
+    evals = summary.get("evals") or []
+    for index, record in enumerate(evals):
+        diagnostics = record.get("selection_diagnostics") or {}
+        histogram_bins = sum(1 for key in diagnostics if "histogram" in key)
+        if histogram_bins == 0:
+            findings.append(
+                {"validation": record.get("transitions"), "group": "histogram",
+                 "missing": ["contact_histogram_count_*"]}
+            )
+        for group, keys in MANDATORY_SELECTION_DIAGNOSTICS.items():
+            if index == 0 and group in FIRST_VALIDATION_EXEMPT:
+                continue
+            missing = [
+                key for key in keys
+                if key not in diagnostics or diagnostics[key] is None
+            ]
+            if missing:
+                findings.append(
+                    {"validation": record.get("transitions"), "group": group,
+                     "missing": missing}
+                )
+    counterfactual = summary.get("counterfactual_diagnostic") or {}
+    return {
+        "validations_observed": len(evals),
+        "selection_diagnostics_complete": not findings,
+        "selection_diagnostic_gaps": findings,
+        "counterfactual_status": counterfactual.get("status"),
+        "counterfactual_error": counterfactual.get("error"),
+        "v2_downstream_ready": summary.get("v2_downstream_ready"),
+        "section_9_4_passed": (
+            counterfactual.get("status") == "ok"
+            and summary.get("v2_downstream_ready") is True
+        ),
+    }
+
+
 def load_module(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -85,6 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         help="cpu stops before the simulator; gpu runs through build_scene",
     )
     parser.add_argument("--runtime-environment", type=Path, default=None)
+    parser.add_argument(
+        "--verify-diagnostics", type=int, default=None, metavar="TRANSITIONS",
+        help=(
+            "run the governed launch to completion at this transition budget in "
+            "a scratch registry and assert every charter section 9 diagnostic "
+            "was actually written; the post-loop final eval guarantees exactly "
+            "one validation at any budget"
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.device_mode == "cpu" and os.environ.get("CUDA_VISIBLE_DEVICES", None) != "":
@@ -190,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
 
         driver.initial_weights_sha256 = capture_digest
 
-        if args.device_mode == "gpu":
+        if args.device_mode == "gpu" and args.verify_diagnostics is None:
             # First statement of the training loop: build_scene has completed,
             # no transition has been collected.
             def blocked_collect(self):
@@ -230,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
         "--asset-manifest", str(args.asset_manifest),
         "--expected-asset-manifest-sha256", args.expected_asset_manifest_sha256,
     ]
+    if args.verify_diagnostics is not None:
+        launch_argv += ["--total-override", str(args.verify_diagnostics)]
     receipt: dict[str, Any] = {
         "schema_version": 2,
         "probe": "real-launcher-agent-construction-dry-run",
@@ -282,8 +369,46 @@ def main(argv: list[str] | None = None) -> int:
             receipt["failure"] = f"{type(error).__name__}: {error}"
             receipt["traceback"] = traceback.format_exc()
         else:
-            receipt["gate_passed"] = False
-            receipt["failure"] = "launcher returned without reaching the boundary"
+            if args.verify_diagnostics is None:
+                receipt["gate_passed"] = False
+                receipt["failure"] = (
+                    "launcher returned without reaching the boundary"
+                )
+            else:
+                # Completion is the expected outcome in diagnostics mode. The
+                # run must be read out of the scratch registry before cleanup.
+                summaries = sorted(
+                    (scratch / "attempts").glob("*/metrics/run_summary.json")
+                )
+                if len(summaries) != 1:
+                    receipt["gate_passed"] = False
+                    receipt["failure"] = (
+                        f"expected exactly one scratch run summary, found "
+                        f"{len(summaries)}"
+                    )
+                else:
+                    summary = json.loads(summaries[0].read_bytes())
+                    audit = audit_section_9(summary)
+                    attempt_dir = summaries[0].parent.parent
+                    audit["counterfactual_artifacts"] = len(
+                        list((attempt_dir / "diagnostics").glob("*.npz"))
+                    )
+                    audit["transitions"] = summary.get("transitions")
+                    receipt["section_9_audit"] = audit
+                    receipt["training_started"] = True
+                    receipt["transitions_executed"] = summary.get("transitions")
+                    passed = (
+                        audit["section_9_4_passed"]
+                        and audit["selection_diagnostics_complete"]
+                        and audit["counterfactual_artifacts"] >= 1
+                        and audit["validations_observed"] >= 1
+                    )
+                    receipt["gate_passed"] = passed
+                    receipt["failure"] = None if passed else (
+                        "charter section 9 diagnostics incomplete: "
+                        f"9.4={audit['counterfactual_status']}, "
+                        f"gaps={audit['selection_diagnostic_gaps']}"
+                    )
     finally:
         # Release the agent and every driver object as soon as the boundary is
         # reached; nothing constructed here outlives the probe.

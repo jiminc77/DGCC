@@ -6,7 +6,14 @@ import hashlib
 from io import BytesIO
 import json
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# The counterfactual agent is deliberately CPU-only (see device="cpu" below), but
+# the 9.4 diagnostic mandates environment rollouts and DLO-Lab initializes with
+# backend=gs.gpu unconditionally. Masking the accelerator forced Genesis onto a
+# CPU rod solver that segfaults, so no rollout could ever have run even after the
+# request comparison was fixed. The simulator keeps the accelerator; the agent is
+# still built on CPU, so the diagnostic remains numerically CPU-deterministic.
+if os.environ.get("DGCC_COUNTERFACTUAL_CPU_ONLY") == "1":
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import random
 import sys
 import tempfile
@@ -97,7 +104,11 @@ def validation_batches(
     config: dict[str, Any], n_envs: int, val_pairs: list[tuple[str, Any]]
 ) -> list[list[tuple[str, Any]]]:
     per_goal = int(config.get("eval", {}).get("t2_episodes_per_goal", 2))
-    goals = [(goal_id, goal) for goal_id, goal in val_pairs for _ in range(per_goal)]
+    # The split yields goal objects, not id strings. Everything downstream --
+    # row_hashes, the goal_ids array, and the request comparison -- treats a
+    # goal id as a str, so canonicalize once, here, at the only point where
+    # goals enter the worker's rollout.
+    goals = [(str(goal_id), goal) for goal_id, goal in val_pairs for _ in range(per_goal)]
     if not goals:
         raise RuntimeError("T2 validation split is empty")
     return [goals[i:i + n_envs] for i in range(0, len(goals), n_envs)]
@@ -125,6 +136,18 @@ def execute_branch(
     for batch_number, batch in enumerate(validation_batches(config, n_envs, val_pairs)):
         ids, goals = zip(*batch)
         env = env_factory(**env_kwargs(config, len(goals)))
+        # p1_train.build_scene resets the env before constructing its runner;
+        # this path never did, so every branch died in begin_episodes with
+        # "DLOLabEnv.reset must be called first". It was unreachable until the
+        # goal-sequence comparison above stopped rejecting every request. The
+        # seed mirrors the driver's first scene build (full_rebuilds == 0) and
+        # is selector-independent, so both branches start from byte-identical
+        # states -- which the provenance assertion below then enforces.
+        env.reset(
+            p1_rope_params(),
+            init_shape="straight",
+            seed=int(request["seed"]) + 10_000,
+        )
         runner = runner_factory(env, p1_rope_params(), EpisodeConfig(
             reward=RewardConstants(**config.get("reward", {}))))
         start = int(request["development_episode_index_start"]) + batch_number
@@ -201,7 +224,12 @@ def run_counterfactual(
     val_pairs = load_t2_split_payload("val", split_payload)
     expected_goal_ids = [str(goal_id) for goal_id, _ in val_pairs for _ in range(
         int(config.get("eval", {}).get("t2_episodes_per_goal", 2)))]
-    if request["validation_goal_ids"] != expected_goal_ids:
+    # p1_train writes the raw goal objects; execute_branch and p1_train's own
+    # readback both canonicalize goal ids as str. Comparing the raw request
+    # against stringified expectations made every position differ while content
+    # and order were identical, so no validation ever produced its 9.4
+    # diagnostic. Stringify both sides.
+    if [str(goal_id) for goal_id in request["validation_goal_ids"]] != expected_goal_ids:
         raise RuntimeError("counterfactual request validation goal sequence mismatch")
     if str(config.get("task")) != "t2":
         raise RuntimeError("counterfactual diagnostic requires T2 validation goals")
