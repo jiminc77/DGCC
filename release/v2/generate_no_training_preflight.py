@@ -23,8 +23,25 @@ ARM_SPECS = (
     ("D11", "v2-d11", "v2_live"),
 )
 APPROVED_RUNTIME_COMMIT = "12befdac5cc9d2af448373de81fcce9d86768701"
-EVIDENCE_BASE_COMMIT = "bf086fd75e1424da84ccd2a58811334fd290b876"
-FINAL_GOVERNANCE_SHA256 = "8e08f063178335a5148ebc23bc9364d1f73b6bb18df2c57847a8ebe4319c1ea9"
+# The runtime is APPROVED_RUNTIME_COMMIT plus the repairs listed here. The
+# byte-exact binding is always the code manifest; this list exists so the
+# commit label is never read as "unmodified".
+RUNTIME_PATCHES = (
+    {
+        "id": "B4",
+        "file": "src/dgcc/rl/sprint_arms.py",
+        "change": (
+            "create_sprint_agent now declares bgt_manifest_bytes and "
+            "bgt_code_manifest_sha256, the vocabulary create_v2_agent already "
+            "used, so BGT keywords stop falling through **kwargs into "
+            "TD3Agent.__init__ and killing every non-V2 arm"
+        ),
+        "arms_unblocked": ["bb-d2", "v1-d2"],
+        "behaviour_change_for_governed_cells": "none",
+    },
+)
+EVIDENCE_BASE_COMMIT = "cfb5d8233b300546112167316818af662e9dcc82"
+FINAL_GOVERNANCE_SHA256 = "6882d85515f01d3f76fd48d24af42b1968ab4fb868187a99bae3c2368c9eb10d"
 ISOLATED_REPO_ROOT = Path("/home/simx2204/v2_research/impl/DGCC")
 TRAINING_SANDBOX_ROOT = Path(
     "/home/simx2204/v2_research/runtime/DGCC-v2-12befdac"
@@ -497,6 +514,11 @@ def main(argv: list[str] | None = None) -> int:
         persist_launch_receipts,
     )
     from dgcc.logging.attempt_registry import AttemptRegistry
+    from dgcc.tasks.t2 import default_split_path
+
+    # Resolved the way p1_train resolves it, not hardcoded, so the allowlist
+    # cannot drift from the path the driver actually opens.
+    t2_split_path = default_split_path().resolve(strict=True)
 
     governance_bytes = args.governance.read_bytes()
     if sha256_bytes(governance_bytes) != FINAL_GOVERNANCE_SHA256:
@@ -642,6 +664,15 @@ def main(argv: list[str] | None = None) -> int:
                     args.neff_guard,
                     "neff_guard",
                 ),
+                # p1_train.TrainingRun.__init__ reads the development T2 split
+                # through the firewall under role "t2_split" right after agent
+                # construction. Omitting it fails every governed run after the
+                # agent exists but before the first transition.
+                (
+                    t2_split_path,
+                    t2_split_path,
+                    "t2_split",
+                ),
             ]
             asset_manifest_path = cell_dir / "asset_manifest.json"
             exclusive_json(asset_manifest_path, build_asset_manifest(assets))
@@ -785,6 +816,7 @@ def main(argv: list[str] | None = None) -> int:
         matrix = {
             "schema_version": 1,
             "runtime_source_commit": APPROVED_RUNTIME_COMMIT,
+            "runtime_patches": [dict(patch) for patch in RUNTIME_PATCHES],
             "evidence_base_commit": current_commit,
             "schedule_disposition": disposition_evidence,
             "planned_runs": len(cells),

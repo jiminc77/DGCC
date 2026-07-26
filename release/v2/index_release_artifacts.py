@@ -91,9 +91,14 @@ def main(argv: list[str] | None = None) -> int:
     artifacts["artifacts"] = [known[key] for key in sorted(known)]
     disposition = json.loads((release / "bgt_not_admitted.json").read_bytes())
     artifacts["bgt"]["disposition_sha256"] = disposition["disposition_sha256"]
-    artifacts["runtime_code_manifest_sha256"] = json.loads(
+    matrix = json.loads(
         (release / "preflight_15_not_admitted" / "preflight_matrix.json").read_bytes()
-    )["code_manifest"]["code_manifest_sha256"]
+    )
+    artifacts["runtime_code_manifest_sha256"] = matrix["code_manifest"][
+        "code_manifest_sha256"
+    ]
+    # source_commit alone would read as "runtime is exactly that commit".
+    artifacts["runtime_patches"] = matrix["runtime_patches"]
     artifacts_sha = write_json(artifacts_path, artifacts)
 
     print(

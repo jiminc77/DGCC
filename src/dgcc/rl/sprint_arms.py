@@ -351,10 +351,16 @@ def create_sprint_agent(
     projection_seed: int = MATCHED_PROJECTION_SEED,
     target_seed: int = RANDOM_TARGET_SEED,
     beta_contact: float = CONTACT_WEIGHT_BETA,
+    # The BGT vocabulary must match create_v2_agent exactly. Anything the
+    # training driver sends that is not declared here falls through **kwargs
+    # into TD3Agent.__init__, which takes no **kwargs, and every non-V2 arm
+    # dies with a TypeError before its agent exists.
+    bgt_manifest_bytes: bytes | None = None,
     bgt_manifest_path: Path | str | None = None,
     bgt_expected_manifest_sha256: str | None = None,
     bgt_checkpoint_sha256: str | None = None,
     bgt_panel_sha256: str | None = None,
+    bgt_code_manifest_sha256: str | None = None,
     **kwargs: Any,
 ) -> TD3Agent:
     """Create a sprint or V2 arm from the shared training-driver seam."""
@@ -385,9 +391,11 @@ def create_sprint_agent(
             aux_weight=aux_weight,
             beta_contact=beta_contact,
             bgt_manifest_path=bgt_manifest_path,
+            bgt_manifest_bytes=bgt_manifest_bytes,
             bgt_expected_manifest_sha256=bgt_expected_manifest_sha256,
             bgt_checkpoint_sha256=bgt_checkpoint_sha256,
             bgt_panel_sha256=bgt_panel_sha256,
+            bgt_code_manifest_sha256=bgt_code_manifest_sha256,
             **kwargs,
         )
     raise ValueError(f"unknown sprint arm {arm!r}")
