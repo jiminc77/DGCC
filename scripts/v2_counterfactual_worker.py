@@ -187,7 +187,25 @@ def select_panel(
 def run_counterfactual(
     request: dict[str, Any], *, agent_factory: Callable[..., TD3Agent] = TD3Agent,
     env_factory: Callable[..., Any] = DLOLabEnv, runner_factory: Callable[..., Any] = BatchedEpisodeRunner,
+    include_rollout: bool = False,
 ) -> dict[str, object]:
+    """Compare the Q1 and Qmin selectors over the authenticated frozen panel.
+
+    Charter amendment 3 separates two things the original charter text had
+    merged into a single per-validation requirement:
+
+    1. Per validation: selector agreement, the Q1/Qmin values at the selected
+       contact points, margins, and the disagreement fraction. These need no
+       environment rollout, and the section 3 diagnostic set already computes
+       the metric forms of them, so this costs nothing extra.
+    2. After the winner is fixed: a development-only realized-progress rollout
+       comparison, gating registration of the argmax-Qmin extension.
+
+    Only (1) runs by default. The rollout is opt-in via include_rollout, and its
+    open design questions -- per-branch process isolation to obtain
+    byte-identical starting states, and a measured timeout -- belong to that
+    post-winner experiment rather than to every validation.
+    """
     required = {"config_snapshot", "config_sha256", "checkpoint", "checkpoint_sha256", "panel",
                 "panel_sha256", "panel_artifact_sha256", "panel_metadata",
                 "panel_metadata_sha256", "development_split_path",
@@ -252,50 +270,64 @@ def run_counterfactual(
             getattr(agent, module_name).eval()
         model_before = model_digest(agent)
         panel_q1, panel_qmin, panel_order = select_panel(agent, panel_arrays, request)
-        q1_p, q1_progress, q1_starts, q1_goal_ids, q1_hashes = execute_branch(
-            "q1", agent, config, request, val_pairs, env_factory, runner_factory)
-        qmin_p, qmin_progress, qmin_starts, qmin_goal_ids, qmin_hashes = execute_branch(
-            "qmin", agent, config, request, val_pairs, env_factory, runner_factory)
-        model_after = model_digest(agent)
-        if model_before != model_after:
-            raise RuntimeError("counterfactual worker mutated online model state")
-        if not (np.array_equal(q1_starts, qmin_starts) and np.array_equal(q1_goal_ids, qmin_goal_ids)
-                and np.array_equal(q1_hashes, qmin_hashes)):
-            raise RuntimeError("selector branches did not use identical initial-state provenance")
-        if not (np.isfinite(q1_progress).all() and np.isfinite(qmin_progress).all()):
-            raise RuntimeError("counterfactual branch produced non-finite progress")
-        return {
-            "panel_sha256": panel.canonical_sha256, "checkpoint_sha256": request["checkpoint_sha256"],
-            "model_sha256_before": model_before, "model_sha256_after": model_after,
-            "panel_selector_agreement": float(np.mean(panel_q1 == panel_qmin)),
-            "panel_q1_selected": panel_q1, "panel_qmin_selected": panel_qmin,
+        agreement = float(np.mean(panel_q1 == panel_qmin))
+        payload: dict[str, object] = {
+            "panel_sha256": panel.canonical_sha256,
+            "checkpoint_sha256": request["checkpoint_sha256"],
+            "model_sha256_before": model_before,
+            "panel_selector_agreement": agreement,
+            "panel_disagreement_fraction": 1.0 - agreement,
+            "panel_q1_selected": panel_q1,
+            "panel_qmin_selected": panel_qmin,
             "panel_order": panel_order,
-            "rollout_realized_progress_difference_mean": float(np.mean(q1_progress - qmin_progress)),
-            "rollout_q1_realized_progress_mean": float(np.mean(q1_progress)),
-            "rollout_qmin_realized_progress_mean": float(np.mean(qmin_progress)),
-            "rollout_q1_selected": q1_p, "rollout_qmin_selected": qmin_p,
-            "rollout_validation_goal_ids": q1_goal_ids,
-            "rollout_episode_starts": q1_starts,
-            "rollout_seed": np.int64(request["seed"]),
-            "rollout_config_sha256": request["config_sha256"],
-            "rollout_development_episode_index_start": np.int64(
-                request["development_episode_index_start"]),
-            "rollout_initial_state_sha256": q1_hashes,
-            "rollout_provenance_sha256": np.asarray([
-                hashlib.sha256((goal_id + ":" + str(start)).encode()).hexdigest()
-                for goal_id, start in zip(q1_goal_ids, q1_starts)
-            ], dtype=str),
             "development_split_path": str(split_path.resolve()),
             "development_split_sha256": request["development_split_sha256"],
             "development_split_role": request["development_split_role"],
-            "rollout_checkpoint_sha256": request["checkpoint_sha256"],
-            "rollout_panel_sha256": request["panel_sha256"],
-            "rollout_transition": np.int64(request["transition"]),
-            "rollout_eval_ordinal": np.int64(request["eval_ordinal"]),
-            "rollout_total_budget": np.int64(request["total_budget"]),
             "panel_artifact_sha256": request["panel_artifact_sha256"],
             "panel_metadata_sha256": request["panel_metadata_sha256"],
         }
+        if include_rollout:
+            # Charter amendment 3 part 2: the realized-progress rollout is a
+            # post-winner, development-only comparison, not a per-validation
+            # requirement. It is opt-in and its open design questions (branch
+            # process isolation for byte-identical starts, measured timeout)
+            # belong to that experiment.
+            q1_p, q1_progress, q1_starts, q1_goal_ids, q1_hashes = execute_branch(
+                "q1", agent, config, request, val_pairs, env_factory, runner_factory)
+            qmin_p, qmin_progress, qmin_starts, qmin_goal_ids, qmin_hashes = execute_branch(
+                "qmin", agent, config, request, val_pairs, env_factory, runner_factory)
+            if not (np.array_equal(q1_starts, qmin_starts) and np.array_equal(q1_goal_ids, qmin_goal_ids)
+                    and np.array_equal(q1_hashes, qmin_hashes)):
+                raise RuntimeError("selector branches did not use identical initial-state provenance")
+            if not (np.isfinite(q1_progress).all() and np.isfinite(qmin_progress).all()):
+                raise RuntimeError("counterfactual branch produced non-finite progress")
+            payload.update({
+                "rollout_realized_progress_difference_mean": float(np.mean(q1_progress - qmin_progress)),
+                "rollout_q1_realized_progress_mean": float(np.mean(q1_progress)),
+                "rollout_qmin_realized_progress_mean": float(np.mean(qmin_progress)),
+                "rollout_q1_selected": q1_p, "rollout_qmin_selected": qmin_p,
+                "rollout_validation_goal_ids": q1_goal_ids,
+                "rollout_episode_starts": q1_starts,
+                "rollout_seed": np.int64(request["seed"]),
+                "rollout_config_sha256": request["config_sha256"],
+                "rollout_development_episode_index_start": np.int64(
+                    request["development_episode_index_start"]),
+                "rollout_initial_state_sha256": q1_hashes,
+                "rollout_provenance_sha256": np.asarray([
+                    hashlib.sha256((goal_id + ":" + str(start)).encode()).hexdigest()
+                    for goal_id, start in zip(q1_goal_ids, q1_starts)
+                ], dtype=str),
+                "rollout_checkpoint_sha256": request["checkpoint_sha256"],
+                "rollout_panel_sha256": request["panel_sha256"],
+                "rollout_transition": np.int64(request["transition"]),
+                "rollout_eval_ordinal": np.int64(request["eval_ordinal"]),
+                "rollout_total_budget": np.int64(request["total_budget"]),
+            })
+        model_after = model_digest(agent)
+        if model_before != model_after:
+            raise RuntimeError("counterfactual worker mutated online model state")
+        payload["model_sha256_after"] = model_after
+        return payload
     finally:
         random.setstate(py_state)
         np.random.set_state(np_state)
@@ -314,7 +346,8 @@ def main(request_path: str, expected_request_sha256: str) -> int:
     if digest_bytes(request_bytes) != expected_request_sha256:
         raise RuntimeError("counterfactual request hash mismatch")
     request = json.loads(request_bytes)
-    payload = run_counterfactual(request)
+    include_rollout = os.environ.get("DGCC_COUNTERFACTUAL_ROLLOUT") == "1"
+    payload = run_counterfactual(request, include_rollout=include_rollout)
     payload.update(
         transition=np.int64(request["transition"]),
         eval_ordinal=np.int64(request.get("eval_ordinal", -1)),

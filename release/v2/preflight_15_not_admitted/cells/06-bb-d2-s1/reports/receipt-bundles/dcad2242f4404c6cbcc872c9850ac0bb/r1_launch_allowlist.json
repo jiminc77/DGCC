@@ -1,0 +1,65 @@
+{
+ "assets": [
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/preflight_15_not_admitted/cells/06-bb-d2-s1/launch_manifest.json",
+   "role": "preflight_manifest",
+   "sha256": "6b3431d62ccf257be3a22f16bb959b6ff336da564ab2e95495775da6a9c94390"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/preflight_15_not_admitted/cells/06-bb-d2-s1/v2_t2.yaml",
+   "role": "config",
+   "sha256": "b528cb6631d08bf7a2b866dbb9bdc5a2bffbc277ce29d421b0173f3dde33e5b7"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/configs/v2_t2.yaml",
+   "role": "canonical_config_source",
+   "sha256": "b528cb6631d08bf7a2b866dbb9bdc5a2bffbc277ce29d421b0173f3dde33e5b7"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/execution_governance.not-admitted.json",
+   "role": "final_execution_governance",
+   "sha256": "cbfda64c51ee576b3005786f8104be756b4e128373491b68708ca01417b082ac"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/execution_governance.pending-bgt.json",
+   "role": "execution_governance",
+   "sha256": "982999fadfe0d9ec7946e0e83a9ac02599c5bf8b17249c39ea658b946e69f4cb"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/bgt_not_admitted.json",
+   "role": "bgt_not_admitted_disposition",
+   "sha256": "9837d3bb5a0e834ddaa147329a6d26d9822dddb71537fb6909249394984fe162"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/r3_r4_training_sandbox_receipt.json",
+   "role": "authoritative_r3_r4_receipt",
+   "sha256": "58f365b45d9f0d62d2e165f8bfd3e34414b9f16142a5faa2f9809e7713648c71"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/final_code_manifest.json",
+   "role": "code_manifest",
+   "sha256": "a73af0ad2d545bd3febf0ae57652ceb2e329e83992efcb67e83ed135709eeef5"
+  },
+  {
+   "path": "/home/simx2204/v2_research/dossier/V2_neff_guard_beta015363_verified.json",
+   "role": "neff_guard",
+   "sha256": "7a5b517ab108c8b0afa79d7e544e3f3d1eee40d5e56df6371d94a97bbcaedda5"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/src/dgcc/tasks/splits/t2_v1.json",
+   "role": "t2_split",
+   "sha256": "8d197bd4f48b75dd9af62ee260c2e59c1c5e30e0dcd5f0f36dbfae42315d59c0"
+  },
+  {
+   "path": "/home/simx2204/v2_research/impl/DGCC/release/v2/v2_runtime_environment.json",
+   "role": "runtime_environment",
+   "sha256": "19f5bf22b1c05c937d88f16cbeb7035e2680a188982aa753e9c948bc0e010f9c"
+  }
+ ],
+ "bundle_id": "dcad2242f4404c6cbcc872c9850ac0bb",
+ "limitation": "Best-effort application control only; it is not OS-isolated.",
+ "manifest_path": "/home/simx2204/v2_research/impl/DGCC/release/v2/preflight_15_not_admitted/cells/06-bb-d2-s1/asset_manifest.json",
+ "manifest_sha256": "00c6320c60662ef5577d19869c6e3fe5a5f8f0551b389a156d5804a1929b59a5",
+ "peer_receipt": "r2_zero_protected_access.json",
+ "schema_version": 1
+}

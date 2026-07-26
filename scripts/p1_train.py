@@ -410,54 +410,59 @@ class TrainingRun:
             os.close(directory)
 
     def _validate_counterfactual_output(self, output: Path, request: dict[str, object]) -> None:
+        # Charter amendment 3: the per-validation 9.4 requirement is the
+        # rollout-free selector comparison over the frozen panel. The
+        # realized-progress rollout is a post-winner, development-only
+        # experiment, so its fields are validated only when present.
         required = {
-            "panel_selector_agreement", "panel_q1_selected", "panel_qmin_selected", "panel_order",
+            "panel_selector_agreement", "panel_disagreement_fraction",
+            "panel_q1_selected", "panel_qmin_selected", "panel_order",
+            "development_split_path", "development_split_sha256",
+            "development_split_role", "panel_sha256", "panel_artifact_sha256",
+            "panel_metadata_sha256", "request_sha256", "checkpoint_sha256",
+            "model_sha256_before", "model_sha256_after", "transition", "eval_ordinal",
+        }
+        rollout_required = {
             "rollout_realized_progress_difference_mean", "rollout_q1_realized_progress_mean",
             "rollout_qmin_realized_progress_mean", "rollout_q1_selected", "rollout_qmin_selected",
             "rollout_validation_goal_ids", "rollout_episode_starts", "rollout_initial_state_sha256",
             "rollout_provenance_sha256", "rollout_seed", "rollout_config_sha256",
-            "rollout_development_episode_index_start", "development_split_path",
-            "development_split_sha256", "development_split_role", "rollout_checkpoint_sha256",
+            "rollout_development_episode_index_start", "rollout_checkpoint_sha256",
             "rollout_panel_sha256", "rollout_transition", "rollout_eval_ordinal",
-            "rollout_total_budget", "panel_sha256", "panel_artifact_sha256",
-            "panel_metadata_sha256", "request_sha256",
-            "model_sha256_before", "model_sha256_after", "transition", "eval_ordinal",
+            "rollout_total_budget",
         }
         try:
             with np.load(output, allow_pickle=False) as data:
-                if set(data.files) != required:
+                present = set(data.files)
+                has_rollout = bool(present & rollout_required)
+                closed = required | rollout_required if has_rollout else required
+                if present != closed:
                     raise RuntimeError("counterfactual output fields are not closed")
                 for name in data.files:
                     value = data[name]
                     if np.issubdtype(value.dtype, np.number) and not np.isfinite(value).all():
                         raise RuntimeError(f"counterfactual output has non-finite {name}")
-                row_names = ("rollout_q1_selected", "rollout_qmin_selected",
-                    "rollout_validation_goal_ids", "rollout_episode_starts",
-                    "rollout_initial_state_sha256", "rollout_provenance_sha256")
-                cardinality = len(data["rollout_validation_goal_ids"])
-                if cardinality < 1 or any(len(data[name]) != cardinality for name in row_names):
-                    raise RuntimeError("counterfactual output row cardinalities differ")
+                if has_rollout:
+                    row_names = ("rollout_q1_selected", "rollout_qmin_selected",
+                        "rollout_validation_goal_ids", "rollout_episode_starts",
+                        "rollout_initial_state_sha256", "rollout_provenance_sha256")
+                    cardinality = len(data["rollout_validation_goal_ids"])
+                    if cardinality < 1 or any(len(data[name]) != cardinality for name in row_names):
+                        raise RuntimeError("counterfactual output row cardinalities differ")
+                    if not np.array_equal(data["rollout_validation_goal_ids"],
+                                          np.asarray(request["validation_goal_ids"], dtype=str)):
+                        raise RuntimeError("counterfactual output goal sequence mismatch")
+                    if not np.array_equal(data["rollout_episode_starts"], np.sort(data["rollout_episode_starts"])):
+                        raise RuntimeError("counterfactual output episode starts are not ordered")
                 if data["panel_q1_selected"].shape != data["panel_qmin_selected"].shape:
                     raise RuntimeError("counterfactual panel selector cardinalities differ")
-                if not np.array_equal(data["rollout_validation_goal_ids"],
-                                      np.asarray(request["validation_goal_ids"], dtype=str)):
-                    raise RuntimeError("counterfactual output goal sequence mismatch")
-                if not np.array_equal(data["rollout_episode_starts"], np.sort(data["rollout_episode_starts"])):
-                    raise RuntimeError("counterfactual output episode starts are not ordered")
                 if not np.array_equal(np.sort(data["panel_order"]), np.arange(len(data["panel_order"]))):
                     raise RuntimeError("counterfactual output panel order is not a permutation")
                 expected = {
-                    "rollout_seed": int(request["seed"]),
-                    "rollout_config_sha256": request["config_sha256"],
-                    "rollout_development_episode_index_start": int(request["development_episode_index_start"]),
                     "development_split_path": str(Path(request["development_split_path"]).resolve()),
                     "development_split_sha256": request["development_split_sha256"],
                     "development_split_role": request["development_split_role"],
-                    "rollout_checkpoint_sha256": request["checkpoint_sha256"],
-                    "rollout_panel_sha256": request["panel_sha256"],
-                    "rollout_transition": int(request["transition"]),
-                    "rollout_eval_ordinal": int(request["eval_ordinal"]),
-                    "rollout_total_budget": int(request["total_budget"]),
+                    "checkpoint_sha256": request["checkpoint_sha256"],
                     "panel_sha256": request["panel_sha256"],
                     "panel_artifact_sha256": request["panel_artifact_sha256"],
                     "panel_metadata_sha256": request["panel_metadata_sha256"],
@@ -465,6 +470,18 @@ class TrainingRun:
                     "transition": int(request["transition"]),
                     "eval_ordinal": int(request["eval_ordinal"]),
                 }
+                if has_rollout:
+                    expected.update({
+                        "rollout_seed": int(request["seed"]),
+                        "rollout_config_sha256": request["config_sha256"],
+                        "rollout_development_episode_index_start": int(
+                            request["development_episode_index_start"]),
+                        "rollout_checkpoint_sha256": request["checkpoint_sha256"],
+                        "rollout_panel_sha256": request["panel_sha256"],
+                        "rollout_transition": int(request["transition"]),
+                        "rollout_eval_ordinal": int(request["eval_ordinal"]),
+                        "rollout_total_budget": int(request["total_budget"]),
+                    })
                 for name, expected_value in expected.items():
                     value = data[name]
                     actual = value.item() if value.ndim == 0 else str(value)

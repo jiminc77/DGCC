@@ -39,9 +39,29 @@ RUNTIME_PATCHES = (
         "arms_unblocked": ["bb-d2", "v1-d2"],
         "behaviour_change_for_governed_cells": "none",
     },
+    {
+        "id": "B6/B7/B8 + charter amendment 3",
+        "file": "scripts/v2_counterfactual_worker.py, scripts/p1_train.py",
+        "change": (
+            "the 9.4 counterfactual path had never executed end to end: the "
+            "request comparison was str vs dict, execute_branch never reset the "
+            "env, and the worker masked the accelerator so Genesis fell back to "
+            "a CPU rod solver that segfaults. Amendment 3 then separated the "
+            "per-validation selector comparison, which needs no rollout, from "
+            "the post-winner realized-progress rollout, which is now opt-in"
+        ),
+        "charter_authority": (
+            "https://github.com/jiminc77/research-dashboard/issues/44"
+            "#issuecomment-5085218848"
+        ),
+        "behaviour_change_for_governed_cells": (
+            "per-validation 9.4 now produces its artifact instead of failing; "
+            "training, metrics and panel freeze are unaffected"
+        ),
+    },
 )
-EVIDENCE_BASE_COMMIT = "8c63ed57a1a63dc0df6ee822bdd0fd17f7648075"
-FINAL_GOVERNANCE_SHA256 = "827bfa490c87bae1cd97f282461911e1fcc27bcb8b79e59b948cc71037e6dc06"
+EVIDENCE_BASE_COMMIT = "92b654e6f1bfaa4638a006e3b016bb96fc794b17"
+FINAL_GOVERNANCE_SHA256 = "cbfda64c51ee576b3005786f8104be756b4e128373491b68708ca01417b082ac"
 ISOLATED_REPO_ROOT = Path("/home/simx2204/v2_research/impl/DGCC")
 TRAINING_SANDBOX_ROOT = Path(
     "/home/simx2204/v2_research/runtime/DGCC-v2-12befdac"
