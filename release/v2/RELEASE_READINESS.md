@@ -4,7 +4,7 @@
 
 **READY FOR ORCHESTRATOR LAUNCH AUTHORIZATION ON THE LOCKED 15-RUN SCHEDULE.** Runtime algorithms at source commit `12befdac5cc9d2af448373de81fcce9d86768701` are externally approved with operational fixes. BGT is formally not admitted to this tournament, and all 15 R1/R2/no-training preflight cells pass.
 
-No GPU, training, evaluation, heldout/probe content read, or live-tree mutation was performed while preparing this package. Production training has not started.
+Production training has not started and no tournament run has executed. Heldout/probe content was never read and the live tree was never mutated. GPU **was** used while preparing this package, under the orchestrator's one-time authorization, for exactly two purposes: the 15 launch dry-run probes (agent construction plus `build_scene`, zero transitions) and one non-production technical smoke (`bb-d2` seed 0, 12,288 transitions, 3,072 gradient updates, attempt `e6e420bf-845d-4ada-884f-3db15c222452`). The smoke is excluded from every tournament statistic and its artifacts are isolated under `outputs/smoke/v2-technical-smoke-20260726/`, outside the production attempt registry, so `latest-success.json` does not resolve to a non-production run.
 
 ## Round-8 blocking procedures
 
@@ -64,4 +64,18 @@ No guard artifact was deleted. Only the verified pair is authoritative for launc
 
 ## Remaining launch authority
 
-Only the orchestrator's explicit tournament-start authorization remains. The committed package does not start training, evaluation, or a GPU process.
+Only the orchestrator's explicit tournament-start authorization remains. Committing or checking out this package does not start training, evaluation, or a GPU process.
+
+## Runtime environment: pinned at preflight, verified operationally
+
+The environment is pinned prospectively in `v2_runtime_environment.json` (torch build, simulator revision, and the resolved package closure under one digest) and every cell allowlists it under role `runtime_environment`, so the pin is hash-bound to each launch manifest.
+
+**The launcher does not itself verify that the running environment matches that pin.** Per-run verification is operational, not launcher-enforced: exec runs
+
+```
+uv run python release/v2/env_digest.py --repo-root . --pin release/v2/v2_runtime_environment.json
+```
+
+immediately before each governed launch and records the emitted one-line digest in the ledger. It recomputes the package-closure digest the same way the pin generator did, so `matches_pin` is a genuine comparison, and it exits non-zero on drift so it can gate a launch script.
+
+Known limitation: this cannot detect drift introduced after the digest is taken and before the training process starts. That window is small — same session, same host, same venv, seconds apart — but it is not zero. Launcher-level enforcement was deliberately deferred to post-tournament rather than trigger another code-manifest cascade and re-pin cycle immediately before run 1.

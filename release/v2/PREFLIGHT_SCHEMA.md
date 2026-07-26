@@ -29,7 +29,7 @@ R1/R2 remain application-level controls. They are not OS-level WORM or OS isolat
 
 The output directory is staged and renamed atomically; an existing authoritative output is never replaced. Cell assets are written under the staging directory but pinned at their published paths, and the R1/R2 receipt bundles plus the launcher dry-run run after the rename so they observe the allowlist a launcher will actually resolve. A failure during that seal deletes the published tree, so partial evidence never survives.
 
-- `preflight_matrix.json`: separately labeled runtime/evidence commits, formal BGT disposition, exactly 15 cells, final and protocol governance hashes, authoritative and fresh R3/R4 hashes, and no-GPU/no-training/no-eval/live-tree attestations derived from validated roots.
+- `preflight_matrix.json`: separately labeled runtime/evidence commits, formal BGT disposition, exactly 15 cells, final and protocol governance hashes, authoritative and fresh R3/R4 hashes, and no-training/no-eval/live-tree attestations derived from validated roots. `constraints.gpu_used` is true with `gpu_scope` naming exactly what ran — dry-run probes only, zero transitions — rather than a false `false`.
 - `schedule_disposition` embeds the formal not-admitted artifact SHA, self-digest, exact rationale, and future-extension clause.
 - `r3_r4_existence_receipt.json`: fresh `lstat`-only footprint whose records match the authoritative sparse-sandbox receipt.
 - `cells/<ordinal-arm-seed>/launch_manifest.json`: exact protocol cell.

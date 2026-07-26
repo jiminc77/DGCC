@@ -84,6 +84,13 @@ def main(argv: list[str] | None = None) -> int:
         },
     )
     known.setdefault(
+        "release/v2/env_digest.py",
+        {
+            "path": "release/v2/env_digest.py",
+            "role": "operational-per-run-environment-digest",
+        },
+    )
+    known.setdefault(
         "release/v2/pin_runtime_environment.py",
         {
             "path": "release/v2/pin_runtime_environment.py",
