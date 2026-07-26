@@ -14,6 +14,13 @@
    "sha256": "2487bdaa5a41eaf7ebca109dd85a68e04eb2647a53db865be6bcb2c7ff6aa07b",
    "size": 4114040
   },
+  "3dd7f8f3f5fdbddf9abfc7a5755a5410b4021ae7e3373998cabf1623d107ce1c": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s2.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_v1_s2",
+   "sha256": "3dd7f8f3f5fdbddf9abfc7a5755a5410b4021ae7e3373998cabf1623d107ce1c",
+   "size": 3806880
+  },
   "4e39f6d53261a20f1f558fc34b4beffa220ec8fe2a6d87cb0a38fe89b9c3f850": {
    "kind": "legacy_raw_no_probe",
    "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
@@ -29,6 +36,13 @@
    "sha256": "6875098d288b6d0655870073de88976f442c0ab1cb36b8c4ac7e9cfe39c16a0b",
    "size": 4073360
   },
+  "76e8c5e72c18b98d2ffbdd3372a78a100ddb886ab052c51ce712c68dd2651df5": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s0.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_v1_s0",
+   "sha256": "76e8c5e72c18b98d2ffbdd3372a78a100ddb886ab052c51ce712c68dd2651df5",
+   "size": 3916336
+  },
   "7fa21a937b3a9b14c4eb17182ba2255b10e3af42ac93b5770eff8676297fa520": {
    "kind": "legacy_raw_no_probe",
    "note": "pre-hardening retro raw - per-step (p,u)/goal curve absent; excluded from probe-consuming patching, included in performance endpoints.",
@@ -36,6 +50,20 @@
    "production_goal": "G009",
    "sha256": "7fa21a937b3a9b14c4eb17182ba2255b10e3af42ac93b5770eff8676297fa520",
    "size": 1429391
+  },
+  "9edc4e9f74a8ba5b6dae925275aa88c983c194f0c9d25e77c29a6362b15a7976": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s3.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_v1_s3",
+   "sha256": "9edc4e9f74a8ba5b6dae925275aa88c983c194f0c9d25e77c29a6362b15a7976",
+   "size": 3991120
+  },
+  "9fe751b0a92eb2296ff6edf8b2287c68a97f21431c010a207c99a55e63a7c9eb": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s1.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_v1_s1",
+   "sha256": "9fe751b0a92eb2296ff6edf8b2287c68a97f21431c010a207c99a55e63a7c9eb",
+   "size": 4005208
   },
   "a5fdc68e02b7e14cf4991de47dca72c00204564e57f5f4c50164fec306a899a4": {
    "kind": "legacy_raw_no_probe",
@@ -51,6 +79,13 @@
    "run_tag": "sprint_t2_bb_s6",
    "sha256": "c0f3e8f7f651d56fe21439bdbd457bcd98c7df83ea1f324606133cafe5826941",
    "size": 4181120
+  },
+  "ce7978d7955d1eb8c336feabea8b6d4bd29889d45e6fc0ff236687af367f9857": {
+   "path": "/home/simx2204/Workspaces/DGCC/outputs/metrics/p1_v1_sprint_heldout_sprint_t2_v1_s4.probe.h5",
+   "production_goal": "G-EV",
+   "run_tag": "sprint_t2_v1_s4",
+   "sha256": "ce7978d7955d1eb8c336feabea8b6d4bd29889d45e6fc0ff236687af367f9857",
+   "size": 3772696
   }
  },
  "schema_version": 1
