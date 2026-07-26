@@ -21,8 +21,15 @@ ARM_SPECS = (
     ("DMM", "v2-dmm", "v2_live"),
     ("D1M", "v2-d1m", "v2_live"),
     ("D11", "v2-d11", "v2_live"),
-    ("BGT", "v2-bgt", "v2_live"),
 )
+APPROVED_RUNTIME_COMMIT = "12befdac5cc9d2af448373de81fcce9d86768701"
+EVIDENCE_BASE_COMMIT = "228d0f77bc8decbddb6bfe7c86924100fbf8b031"
+FINAL_GOVERNANCE_SHA256 = "87053627c0a01f07b158f481b8308e19320b04d95ac9dbbf5cbb3aa2da817408"
+ISOLATED_REPO_ROOT = Path("/home/simx2204/v2_research/impl/DGCC")
+TRAINING_SANDBOX_ROOT = Path(
+    "/home/simx2204/v2_research/runtime/DGCC-v2-12befdac"
+)
+FORBIDDEN_LIVE_ROOT = Path("/home/simx2204/Workspaces/DGCC")
 SHA256 = frozenset("0123456789abcdef")
 
 
@@ -90,7 +97,7 @@ def resolve_host_paths(root: Path, values: list[str], label: str) -> list[Path]:
     for value in values:
         path = Path(value).expanduser()
         candidate = path if path.is_absolute() else host_root / path
-        candidate = candidate.absolute()
+        candidate = candidate.resolve(strict=False)
         try:
             candidate.relative_to(host_root)
         except ValueError as error:
@@ -101,110 +108,225 @@ def resolve_host_paths(root: Path, values: list[str], label: str) -> list[Path]:
     return resolved
 
 
-def validate_not_admitted_state(
+def validate_not_admitted_disposition(
     path: Path,
     *,
     code_manifest_sha256: str,
     config_sha256: str,
+    guard_sha256: str,
 ) -> dict[str, Any]:
-    state = json.loads(path.read_bytes())
-    if not isinstance(state, dict) or set(state) != {
+    disposition = json.loads(path.read_bytes())
+    required_keys = {
         "schema_version",
         "status",
-        "identities",
-        "state_sha256",
-    }:
-        raise ValueError("BGT cutoff state has invalid schema")
-    body = {key: value for key, value in state.items() if key != "state_sha256"}
-    expected_state_sha = sha256_bytes(
-        json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        "tournament_scope",
+        "decision_authority",
+        "decision_at_utc",
+        "reason",
+        "future_status",
+        "schedule",
+        "r5_rank_calibration_executed",
+        "gpu_latency_gate_executed",
+        "charter_amendment_2_url",
+        "code_manifest_sha256",
+        "config_sha256",
+        "neff_guard_sha256",
+        "irreversible_for_tournament",
+        "disposition_sha256",
+    }
+    expected_reason = (
+        "BGT admission requires an R5 rank calibration whose input provenance "
+        "(checkpoint and panel paths with SHA-256, transitions, state-row "
+        "selection and cardinality, rank-input producer) was never preregistered "
+        "in the V2-DEV charter. Retroactively selecting those assets immediately "
+        "before the first production run would constitute arbitrary evidence "
+        "selection. BGT is therefore not admitted to this tournament."
     )
-    identities = state.get("identities")
+    expected_future_status = (
+        "BGT remains a post-winner exploratory extension candidate. Its code is "
+        "retained in an inactive state. Any future admission requires a separately "
+        "preregistered R5 protocol (assets, transitions, state selection, and "
+        "producer pinned before execution) and the synchronized GPU latency gate."
+    )
+    expected_schedule = {
+        "planned_runs": 15,
+        "redistribute_bgt_runs": False,
+        "seed_block_interleaving": True,
+        "arms": {
+            "BB-D2": [0, 1, 2],
+            "V1-D2": [0, 1, 2],
+            "DMM": [0, 1, 2],
+            "D1M": [0, 1, 2],
+            "D11": [0, 1, 2],
+        },
+    }
+    if not isinstance(disposition, dict) or set(disposition) != required_keys:
+        raise ValueError("BGT not-admitted disposition has invalid schema")
+    body = {
+        key: value
+        for key, value in disposition.items()
+        if key != "disposition_sha256"
+    }
     if (
-        state.get("schema_version") != 1
-        or state.get("status") != "not-admitted"
-        or state.get("state_sha256") != expected_state_sha
-        or not isinstance(identities, dict)
-        or set(identities)
-        != {
-            "manifest_sha256",
-            "code_final_sha256",
-            "checkpoint_sha256",
-            "panel_sha256",
-            "config_sha256",
-        }
-        or identities.get("code_final_sha256") != code_manifest_sha256
-        or identities.get("config_sha256") != config_sha256
-        or any(not require_digest(value, key) for key, value in identities.items())
+        disposition["schema_version"] != 1
+        or disposition["status"] != "not-admitted"
+        or disposition["tournament_scope"] != "V2-DEV discovery tournament"
+        or disposition["decision_authority"] != "owner via orchestrator"
+        or not isinstance(disposition["decision_at_utc"], str)
+        or not disposition["decision_at_utc"].endswith("Z")
+        or disposition["reason"] != expected_reason
+        or disposition["future_status"] != expected_future_status
+        or disposition["schedule"] != expected_schedule
+        or disposition["r5_rank_calibration_executed"] is not False
+        or disposition["gpu_latency_gate_executed"] is not False
+        or disposition["charter_amendment_2_url"]
+        != "https://github.com/jiminc77/research-dashboard/issues/44#issuecomment-5079492158"
+        or disposition["code_manifest_sha256"] != code_manifest_sha256
+        or disposition["config_sha256"] != config_sha256
+        or disposition["neff_guard_sha256"] != guard_sha256
+        or disposition["irreversible_for_tournament"] is not True
+        or disposition["disposition_sha256"] != sha256_bytes(canonical_json(body))
     ):
-        raise ValueError("BGT cutoff state does not bind the final release identities")
-    return state
+        raise ValueError(
+            "BGT not-admitted disposition does not bind the final 15-run release"
+        )
+    return disposition
+
+
+def validate_final_governance(
+    governance: dict[str, Any],
+    *,
+    code_manifest_sha256: str,
+    guard_sha256: str,
+    disposition_artifact_sha256: str,
+    protocol_governance_sha256: str,
+    authoritative_r3_r4_sha256: str,
+) -> None:
+    required_keys = {
+        "schema_version",
+        "purpose",
+        "runtime_source_commit",
+        "evidence_base_commit",
+        "binding_beta",
+        "v2_launch_code_manifest_sha256",
+        "neff_guard_sha256",
+        "bgt_admitted_manifest_sha256",
+        "bgt_not_admitted_artifact_sha256",
+        "protocol_governance_sha256",
+        "authoritative_r3_r4_receipt_sha256",
+        "original_worktree_head_sha256",
+        "original_config_sha256",
+        "seeds",
+        "arm_seeds",
+        "algo_abort",
+        "pocket_kill",
+        "tournament_schedule",
+    }
+    expected_arms = {name: [0, 1, 2] for name, _, _ in ARM_SPECS}
+    expected_schedule = {
+        "status": "final_not_admitted",
+        "amendment_url": (
+            "https://github.com/jiminc77/research-dashboard/issues/44"
+            "#issuecomment-5079492158"
+        ),
+        "planned_runs": 15,
+        "arms": expected_arms,
+        "redistribute_runs": False,
+        "seed_block_interleaving": True,
+    }
+    if not isinstance(governance, dict) or set(governance) != required_keys:
+        raise ValueError("final execution governance has invalid schema")
+    if (
+        governance["schema_version"] != 3
+        or governance["purpose"]
+        != "Final owner-pinned V2 launch governance. BGT is irreversibly not admitted to this tournament; only the 15 non-BGT cells are authorized and no removed run is redistributed."
+        or governance["runtime_source_commit"] != APPROVED_RUNTIME_COMMIT
+        or governance["evidence_base_commit"] != EVIDENCE_BASE_COMMIT
+        or governance["binding_beta"] != 0.015363
+        or governance["v2_launch_code_manifest_sha256"] != code_manifest_sha256
+        or governance["neff_guard_sha256"] != guard_sha256
+        or governance["bgt_admitted_manifest_sha256"] is not None
+        or governance["bgt_not_admitted_artifact_sha256"]
+        != disposition_artifact_sha256
+        or governance["protocol_governance_sha256"] != protocol_governance_sha256
+        or governance["authoritative_r3_r4_receipt_sha256"]
+        != authoritative_r3_r4_sha256
+        or governance["original_worktree_head_sha256"] is not None
+        or governance["original_config_sha256"] is not None
+        or governance["seeds"]
+        != {
+            "discovery": [0, 1, 2],
+            "backup": [3, 4],
+            "confirmatory": [8, 9, 10],
+            "confirmatory_backup": [11, 12, 13],
+        }
+        or governance["arm_seeds"] != expected_arms
+        or governance["algo_abort"]
+        != {
+            "primary_paired_metric": "excluded",
+            "retry": False,
+            "worst_seed_guard": "worst_equivalent",
+        }
+        or governance["pocket_kill"]
+        != {
+            "after_hours": 3,
+            "disposition": "algo_abort",
+            "progress": 0,
+            "restart": False,
+        }
+        or governance["tournament_schedule"] != expected_schedule
+    ):
+        raise ValueError("final governance does not lock the exact 15-run schedule")
+
+
+def validate_authoritative_r3_r4(
+    path: Path, *, expected_sha256: str, training_host: Path
+) -> dict[str, Any]:
+    if sha256_file(path) != expected_sha256:
+        raise ValueError("authoritative R3/R4 receipt does not match governance pin")
+    receipt = json.loads(path.read_bytes())
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("content_opened") is not False
+        or receipt.get("training_sandbox_root") != str(training_host)
+        or receipt.get("R3", {}).get("pass") is not True
+        or receipt.get("R4", {}).get("pass") is not True
+        or receipt.get("same_uid_limitation")
+        != "Sparse runtime sandbox and application controls; not OS, mount-namespace, ACL, or kernel isolation."
+    ):
+        raise ValueError("authoritative R3/R4 receipt is not the accepted sparse-sandbox evidence")
+    return receipt
 
 
 def derive_cells(
     governance: dict[str, Any],
-    disposition: str,
+    not_admitted_disposition: Path,
     *,
-    admitted_manifest: Path | None,
-    cutoff_state: Path | None,
     code_manifest_sha256: str,
     config_sha256: str,
 ) -> tuple[list[tuple[str, str, str, int]], dict[str, Any]]:
-    schedule = governance.get("tournament_schedule")
-    if not isinstance(schedule, dict):
-        raise ValueError("governance lacks tournament schedule")
-    if (
-        schedule.get("planned_runs") != 18
-        or schedule.get("bgt_not_admitted")
-        != {"runs": 15, "redistribute_runs": False}
-    ):
-        raise ValueError("governance must permit exactly 18 or 15 runs; never 14")
-    arm_map = schedule.get("arms")
-    expected = {name: [0, 1, 2] for name, _, _ in ARM_SPECS}
-    if arm_map != expected:
-        raise ValueError("governance schedule cells do not match the balanced seed lock")
-
-    bgt_pin = governance.get("bgt_admitted_manifest_sha256")
-    if disposition == "admitted":
-        pin = require_digest(bgt_pin, "BGT admission governance pin")
-        if admitted_manifest is None or cutoff_state is not None:
-            raise ValueError("admitted disposition requires exactly one BGT manifest")
-        if sha256_file(admitted_manifest) != pin:
-            raise ValueError("BGT admission manifest does not match governance pin")
-        included = ARM_SPECS
-        disposition_evidence = {
-            "status": "admitted",
-            "manifest_path": str(admitted_manifest.resolve(strict=True)),
-            "manifest_sha256": pin,
-        }
-    else:
-        if bgt_pin is not None:
-            raise ValueError("not-admitted disposition requires a null admission pin")
-        if cutoff_state is None or admitted_manifest is not None:
-            raise ValueError("not-admitted disposition requires exactly one cutoff state")
-        state = validate_not_admitted_state(
-            cutoff_state,
-            code_manifest_sha256=code_manifest_sha256,
-            config_sha256=config_sha256,
-        )
-        included = ARM_SPECS[:-1]
-        disposition_evidence = {
-            "status": "not-admitted",
-            "cutoff_state_path": str(cutoff_state.resolve(strict=True)),
-            "cutoff_state_sha256": sha256_file(cutoff_state),
-            "cutoff_state_digest": state["state_sha256"],
-            "redistributed": False,
-        }
-
+    final_disposition = validate_not_admitted_disposition(
+        not_admitted_disposition,
+        code_manifest_sha256=code_manifest_sha256,
+        config_sha256=config_sha256,
+        guard_sha256=governance["neff_guard_sha256"],
+    )
     cells = [
         (schedule_arm, arm, mode, seed)
         for seed in (0, 1, 2)
-        for schedule_arm, arm, mode in included
+        for schedule_arm, arm, mode in ARM_SPECS
     ]
-    expected_count = 18 if disposition == "admitted" else 15
-    if len(cells) != expected_count or len(set(cells)) != expected_count:
-        raise ValueError("final schedule is not exactly 18 admitted or 15 not-admitted")
-    return cells, disposition_evidence
+    if len(cells) != 15 or len(set(cells)) != 15:
+        raise ValueError("final schedule is not exactly 15 unique non-BGT cells")
+    return cells, {
+        "status": "not-admitted",
+        "artifact_path": str(not_admitted_disposition.resolve(strict=True)),
+        "artifact_sha256": sha256_file(not_admitted_disposition),
+        "disposition_sha256": final_disposition["disposition_sha256"],
+        "reason": final_disposition["reason"],
+        "future_status": final_disposition["future_status"],
+        "redistributed": False,
+    }
 
 
 def launch_manifest(
@@ -216,7 +338,6 @@ def launch_manifest(
     config_sha256: str,
     code_manifest_sha256: str,
     guard_sha256: str,
-    admitted_manifest_sha256: str | None,
 ) -> dict[str, Any]:
     value: dict[str, Any] = {
         "arm": arm,
@@ -234,8 +355,6 @@ def launch_manifest(
     }
     if arm in {"bb-d2", "v1-d2"}:
         value["d2_lineage"] = arm
-    if arm == "v2-bgt":
-        value["admitted_manifest_sha256"] = admitted_manifest_sha256
     return value
 
 
@@ -259,27 +378,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--training-host-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--governance", type=Path, required=True)
+    parser.add_argument("--protocol-governance", type=Path, required=True)
+    parser.add_argument("--authoritative-r3-r4-receipt", type=Path, required=True)
     parser.add_argument("--code-manifest", type=Path, required=True)
     parser.add_argument("--neff-guard", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--bgt-disposition", choices=("admitted", "not-admitted"), required=True)
-    parser.add_argument("--bgt-admission", type=Path)
-    parser.add_argument("--bgt-cutoff-state", type=Path)
+    parser.add_argument("--bgt-not-admitted", type=Path, required=True)
     parser.add_argument("--protected-path", action="append", default=[])
     parser.add_argument("--fresh-heldout-path", action="append", default=[])
-    parser.add_argument(
-        "--expected-source-commit",
-        default="12befdac5cc9d2af448373de81fcce9d86768701",
-    )
     args = parser.parse_args(argv)
 
     repo = args.repo_root.resolve(strict=True)
+    expected_repo = ISOLATED_REPO_ROOT.resolve(strict=True)
+    live_root = FORBIDDEN_LIVE_ROOT.resolve(strict=True)
     training_host = args.training_host_root.resolve(strict=True)
+    expected_training_host = TRAINING_SANDBOX_ROOT.resolve(strict=True)
     target = args.output.absolute()
+    release_root = (repo / "release" / "v2").resolve(strict=True)
+    if repo != expected_repo or repo == live_root:
+        raise ValueError("repo root is not the owner-pinned isolated V2 worktree")
+    if training_host != expected_training_host:
+        raise ValueError("training host root is not the accepted sparse V2 sandbox")
+    if target.parent.resolve(strict=True) != release_root:
+        raise ValueError("output must be created directly under the isolated release root")
+    if target.name != "preflight_15_not_admitted":
+        raise ValueError("authoritative output name is fixed by the final disposition")
+    try:
+        target.relative_to(live_root)
+    except ValueError:
+        isolated_root_validated = True
+    else:
+        raise ValueError("output path enters the forbidden live tree")
     if target.exists():
         raise FileExistsError(f"authoritative output already exists: {target}")
-    if target.parent.resolve(strict=True) != target.parent:
-        raise ValueError("output parent must be a canonical existing directory")
     current_commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=repo,
@@ -287,11 +418,13 @@ def main(argv: list[str] | None = None) -> int:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    if current_commit != args.expected_source_commit:
-        raise ValueError("isolated release tree is not the approved source commit")
+    if current_commit != EVIDENCE_BASE_COMMIT:
+        raise ValueError("isolated release tree is not the pinned evidence-base commit")
 
     sys.path.insert(0, str(repo / "src"))
-    preflight = load_module(repo / "scripts/v2_protocol_preflight.py", "v2_release_preflight")
+    preflight = load_module(
+        repo / "scripts/v2_protocol_preflight.py", "v2_release_preflight"
+    )
     from dgcc.logging.asset_firewall import (
         generate_r3_r4_existence_receipt,
         load_launch_asset_manifest,
@@ -300,27 +433,48 @@ def main(argv: list[str] | None = None) -> int:
     from dgcc.logging.attempt_registry import AttemptRegistry
 
     governance_bytes = args.governance.read_bytes()
+    if sha256_bytes(governance_bytes) != FINAL_GOVERNANCE_SHA256:
+        raise ValueError("final governance bytes do not match the release root-of-trust pin")
     governance = json.loads(governance_bytes)
+    protocol_governance_bytes = args.protocol_governance.read_bytes()
+    protocol_governance = json.loads(protocol_governance_bytes)
     code_manifest_bytes = args.code_manifest.read_bytes()
     guard_bytes = args.neff_guard.read_bytes()
     config_bytes = args.config.read_bytes()
     code_manifest_sha256 = sha256_bytes(code_manifest_bytes)
     config_sha256 = sha256_bytes(config_bytes)
     guard_sha256 = sha256_bytes(guard_bytes)
-    preflight._validate_governance(governance)
+    disposition_artifact_sha256 = sha256_file(args.bgt_not_admitted)
+    protocol_governance_sha256 = sha256_bytes(protocol_governance_bytes)
+    authoritative_r3_r4_sha256 = sha256_file(args.authoritative_r3_r4_receipt)
+    validate_final_governance(
+        governance,
+        code_manifest_sha256=code_manifest_sha256,
+        guard_sha256=guard_sha256,
+        disposition_artifact_sha256=disposition_artifact_sha256,
+        protocol_governance_sha256=protocol_governance_sha256,
+        authoritative_r3_r4_sha256=authoritative_r3_r4_sha256,
+    )
+    preflight._validate_governance(protocol_governance)
+    authoritative_r3_r4 = validate_authoritative_r3_r4(
+        args.authoritative_r3_r4_receipt,
+        expected_sha256=authoritative_r3_r4_sha256,
+        training_host=training_host,
+    )
     code_receipt = preflight.validate_code_manifest_bytes(
         code_manifest_bytes, runtime_root=repo
     )
-    if code_receipt["code_manifest_sha256"] != governance["v2_launch_code_manifest_sha256"]:
-        raise ValueError("governance does not independently pin current code-manifest bytes")
+    if (
+        code_receipt["code_manifest_sha256"]
+        != governance["v2_launch_code_manifest_sha256"]
+    ):
+        raise ValueError("governance does not pin current code-manifest bytes")
     if guard_sha256 != governance["neff_guard_sha256"]:
         raise ValueError("governance does not pin the supplied canonical N_eff guard")
 
     cells, disposition_evidence = derive_cells(
         governance,
-        args.bgt_disposition,
-        admitted_manifest=args.bgt_admission,
-        cutoff_state=args.bgt_cutoff_state,
+        args.bgt_not_admitted,
         code_manifest_sha256=code_manifest_sha256,
         config_sha256=config_sha256,
     )
@@ -348,7 +502,6 @@ def main(argv: list[str] | None = None) -> int:
         exclusive_json(r3_r4_path, r3_r4)
         cell_receipts: list[dict[str, Any]] = []
         first_preflight: dict[str, Any] | None = None
-        admitted_sha = governance.get("bgt_admitted_manifest_sha256")
         for ordinal, (schedule_arm, arm, mode, seed) in enumerate(cells, start=1):
             cell_id = f"{ordinal:02d}-{schedule_arm.lower()}-s{seed}"
             cell_dir = stage / "cells" / cell_id
@@ -361,21 +514,22 @@ def main(argv: list[str] | None = None) -> int:
                 config_sha256=config_sha256,
                 code_manifest_sha256=code_manifest_sha256,
                 guard_sha256=guard_sha256,
-                admitted_manifest_sha256=admitted_sha,
             )
             manifest_path = cell_dir / "launch_manifest.json"
             exclusive_json(manifest_path, manifest)
             assets: list[tuple[Path, str]] = [
                 (manifest_path, "preflight_manifest"),
-                (args.governance, "execution_governance"),
+                (args.governance, "final_execution_governance"),
+                (args.protocol_governance, "protocol_governance"),
+                (args.bgt_not_admitted, "bgt_not_admitted_disposition"),
+                (
+                    args.authoritative_r3_r4_receipt,
+                    "authoritative_r3_r4_receipt",
+                ),
                 (args.code_manifest, "code_manifest"),
                 (args.neff_guard, "neff_guard"),
                 (args.config, "config"),
             ]
-            if arm == "v2-bgt":
-                if args.bgt_admission is None:
-                    raise ValueError("BGT cell lacks admitted manifest")
-                assets.append((args.bgt_admission, "bgt_admission_manifest"))
             asset_manifest_path = cell_dir / "asset_manifest.json"
             exclusive_json(asset_manifest_path, build_asset_manifest(assets))
             asset_manifest_sha = sha256_file(asset_manifest_path)
@@ -387,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
             manifest_bytes = manifest_path.read_bytes()
             receipt = preflight.validate_manifest_bytes(
                 manifest_bytes,
-                governance_bytes,
+                protocol_governance_bytes,
                 expected_arm=arm,
                 expected_seed=seed,
                 expected_config_sha256=config_sha256,
@@ -453,25 +607,52 @@ def main(argv: list[str] | None = None) -> int:
         if phases != ["PREPARING", "INITIALIZED", "TERMINAL"]:
             raise RuntimeError("registry smoke lifecycle is incomplete")
 
+        generated_records = {
+            section: [
+                (record["path"], record["exists"])
+                for record in r3_r4[section]["records"]
+            ]
+            for section in ("R3", "R4")
+        }
+        authoritative_records = {
+            section: [
+                (record["path"], record["exists"])
+                for record in authoritative_r3_r4[section]["records"]
+            ]
+            for section in ("R3", "R4")
+        }
+        if generated_records != authoritative_records:
+            raise ValueError(
+                "generated R3/R4 footprint differs from the authoritative receipt"
+            )
         matrix = {
             "schema_version": 1,
-            "source_commit": current_commit,
+            "runtime_source_commit": APPROVED_RUNTIME_COMMIT,
+            "evidence_base_commit": current_commit,
             "schedule_disposition": disposition_evidence,
             "planned_runs": len(cells),
-            "allowed_run_counts": [15, 18],
+            "allowed_run_counts": [15],
             "fourteen_run_plan_present": False,
             "redistributed": False,
             "code_manifest": code_receipt,
             "governance_sha256": sha256_bytes(governance_bytes),
+            "protocol_governance_sha256": protocol_governance_sha256,
             "config_sha256": config_sha256,
             "neff_guard_sha256": guard_sha256,
-            "r3_r4_receipt_sha256": sha256_file(r3_r4_path),
-            "r3_pass": r3_r4["R3"]["pass"],
-            "r4_pass": r3_r4["R4"]["pass"],
+            "authoritative_r3_r4_receipt_sha256": authoritative_r3_r4_sha256,
+            "generated_r3_r4_receipt_sha256": sha256_file(r3_r4_path),
+            "r3_pass": (
+                authoritative_r3_r4["R3"]["pass"] and r3_r4["R3"]["pass"]
+            ),
+            "r4_pass": (
+                authoritative_r3_r4["R4"]["pass"] and r3_r4["R4"]["pass"]
+            ),
             "registry_smoke": {
                 "attempt_id": registry.attempt_id,
                 "phases": phases,
-                "records_sha256": sha256_file(registry.attempt_path / "records.jsonl"),
+                "records_sha256": sha256_file(
+                    registry.attempt_path / "records.jsonl"
+                ),
                 "terminal_anchor_sha256": sha256_file(anchors[0]),
                 "verified": True,
             },
@@ -481,7 +662,8 @@ def main(argv: list[str] | None = None) -> int:
                 "training_run": False,
                 "eval_run": False,
                 "protected_content_opened": False,
-                "live_tree_mutated": False,
+                "isolated_release_root_validated": isolated_root_validated,
+                "live_tree_mutated": not isolated_root_validated,
             },
         }
         exclusive_json(stage / "preflight_matrix.json", matrix)
