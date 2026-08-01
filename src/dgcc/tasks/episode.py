@@ -638,6 +638,23 @@ class BatchedEpisodeRunner:
                     vel_threshold=self.config.vel_threshold,
                     max_steps=self.config.settle_max_steps,
                 )
+            # D3 (env-correction Rev 2 §1.4) covenant re-check at the caller:
+            # every light_reset must leave the solver-side attachment table
+            # empty.  The adapter raises on its own; this guard also covers
+            # duck-typed envs that expose the mask but skip the internal
+            # assert, and keeps the reason string ("constraint covenant")
+            # distinct from the nonfinite/magnitude census.
+            mask_reader = getattr(self.env, "_vertex_constrained_mask", None)
+            if mask_reader is not None:
+                constrained_mask = np.asarray(mask_reader(), dtype=bool)
+                if constrained_mask.any():
+                    leftover = [
+                        (int(e), int(v)) for e, v in zip(*np.nonzero(constrained_mask))
+                    ]
+                    raise RuntimeError(
+                        "constraint covenant: residual vertex constraints "
+                        f"after light_reset ({reason}): {leftover}"
+                    )
             raw = np.asarray(self.env.get_centerline_raw_batch(), dtype=float)
             centerlines = np.asarray(self.env.get_centerline_batch(), dtype=float)
             nonfinite_rows, magnitude_rows, max_norm_by_row = self._classify_invalid_rows(

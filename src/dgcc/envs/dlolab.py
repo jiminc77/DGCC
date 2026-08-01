@@ -130,6 +130,15 @@ class DLOLabUnavailableError(RuntimeError):
     """Raised when the DLO-Lab Genesis package is unavailable."""
 
 
+class ConstraintCovenantError(RuntimeError):
+    """D3 constraint covenant: residual vertex constraints after a reset.
+
+    Raised fail-closed when any ``vertex_constraints.constrained`` slot
+    survives a ``light_reset``.  The message starts with
+    ``"constraint covenant"`` so log scanners can census it separately from
+    the nonfinite/magnitude covenant kinds.
+    """
+
 def ensure_genesis_initialized(seed: int | None = None):
     """Import and initialize Genesis for headless GPU DLO-Lab runs."""
 
@@ -232,6 +241,8 @@ class DLOLabEnv(DLOEnvBase):
         self.last_settle_steps_batch: np.ndarray | None = None
         self.last_settle_converged_batch: np.ndarray | None = None
         self._batched_active_nodes: np.ndarray | None = None
+        self.detach_escalation_total = 0
+        self.last_detach_residuals = 0
 
     def reset(self, params: RopeParams, init_shape: str, seed: int) -> dict[str, Any]:
         self._validate_params(params)
@@ -255,6 +266,8 @@ class DLOLabEnv(DLOEnvBase):
         self.last_settle_steps_batch = None
         self.last_settle_converged_batch = None
         self._batched_active_nodes = None
+        self.detach_escalation_total = 0
+        self.last_detach_residuals = 0
 
         mapped = mapped_parameters(params)
         length = float(params.length_m)
@@ -429,6 +442,17 @@ class DLOLabEnv(DLOEnvBase):
             vel_threshold=vel_threshold,
             max_steps=max_steps,
         )
+        # D3 (env-correction Rev 2 §1.4): constraint covenant.  After every
+        # light reset the solver-side attachment table must be empty for ALL
+        # envs; a survivor means D1/D2 regressed or the upstream kernel
+        # changed behavior — fail closed instead of absorbing the
+        # contamination into training/eval state.
+        constrained_mask = self._vertex_constrained_mask()
+        if constrained_mask.any():
+            leftover = [(int(e), int(v)) for e, v in zip(*np.nonzero(constrained_mask))]
+            raise ConstraintCovenantError(
+                f"constraint covenant: residual vertex constraints after light_reset: {leftover}"
+            )
         return {
             "settle_converged": converged,
             "settle_steps": settle_steps,
@@ -698,10 +722,11 @@ class DLOLabEnv(DLOEnvBase):
 
         target = self._move_prepared_batch(delta_clamped, lift_values)
 
-        for env_idx, node in enumerate(self._batched_active_nodes):
-            if int(node) < 0:
-                continue
-            self.rod_entity.detach_from_rigid_link_with_envs_idx([int(node)], int(env_idx))
+        # D2 (env-correction Rev 2 §1.4): verified detach against solver truth.
+        # `_batched_active_nodes` is only released after verification succeeds —
+        # discarding it first (the previous behavior) threw away the sole
+        # record of which slot leaked.
+        detach_residuals, detach_escalations = self._verified_detach_batch()
         self._batched_active_nodes = None
         self._step_scene()
 
@@ -723,7 +748,19 @@ class DLOLabEnv(DLOEnvBase):
             restoration_drift_max = float(failed_drift.max()) if failed_drift.size else 0.0
             restoration_drift_mean = float(failed_drift.mean()) if failed_drift.size else 0.0
             raw_after[~grasp_success] = raw_before[~grasp_success]
-            self.place_rod_vertices_batch(raw_after)
+            # D4 (env-correction Rev 2 §1.5, strengthened to satisfy AT-17):
+            # restore ONLY the failed envs through the scoped solver state
+            # kernel.  The design's literal one-liner
+            # (`place_rod_vertices_batch(raw_after, reinit_env_indices=failed)`)
+            # still zeroes every env's velocities, re-parks every gripper and
+            # inserts an extra scene step, which measurably perturbs the
+            # successful envs' theta/omega/twist and breaks AT-17's
+            # bit-identity requirement.  The scoped restore below writes
+            # nothing outside the failed envs and steps nothing, so
+            # successful envs stay bit-identical to a no-failure run while
+            # failed envs get the specified restoration contract
+            # (pos = raw_before, vel = 0, frames rebuilt, twist reset).
+            self._restore_failed_grasp_envs(raw_after, np.flatnonzero(~grasp_success))
             X_after = self.get_centerline_batch()
             X_after[~grasp_success] = X_before[~grasp_success]
             settle_steps = settle_steps.copy()
@@ -760,6 +797,8 @@ class DLOLabEnv(DLOEnvBase):
                 "grasp_mode": "per-env",
                 "restoration_drift_max_m": restoration_drift_max,
                 "restoration_drift_mean_m": restoration_drift_mean,
+                "detach_residuals": int(detach_residuals),
+                "detach_escalations": int(detach_escalations),
             },
         }
 
@@ -872,6 +911,13 @@ class DLOLabEnv(DLOEnvBase):
         safe_gripper = np.zeros((self.n_envs, 3), dtype=float)
         safe_gripper[:, 2] = LIFT_HEIGHTS["high"]
         self._set_gripper_positions(safe_gripper)
+        # D1 (env-correction Rev 2 §1.4): unconditionally clear every vertex
+        # constraint of the scoped envs at reset placement, BEFORE the state
+        # rewrite.  Python-side attachment records are deliberately not
+        # consulted — trusting them is the original defect (the upstream
+        # detach kernel leaks and `_detach_existing_attachments` only clears
+        # what Python remembers).
+        self._clear_vertex_constraints(env_indices=reinit_env_indices)
         self._reinitialize_edge_state(batched, env_indices=reinit_env_indices)
         self._step_scene()
 
@@ -1001,6 +1047,113 @@ class DLOLabEnv(DLOEnvBase):
                 else:
                     self.rod_entity.detach_from_rigid_link([int(node)])
             self._batched_active_nodes = None
+
+    def _vertex_constrained_mask(self) -> np.ndarray:
+        """Solver-truth attachment table snapshot, shape ``(n_envs, V)`` bool.
+
+        Reads ``rod_solver.vertex_constraints.constrained`` directly; never
+        derives from Python-side records (D1/D2 rationale).
+        """
+        assert self.rod_entity is not None
+        solver = self.rod_entity._solver
+        return np.asarray(
+            solver.vertex_constraints.constrained.to_numpy(), dtype=bool
+        ).T.copy()
+
+    def _clear_vertex_constraints(self, env_indices: np.ndarray | None = None) -> None:
+        """D1: force ``constrained=False`` on all vertices of the scoped envs.
+
+        Uses the frozen upstream detach kernels only (no upstream edits):
+        the all-envs kernel when unscoped, the per-env kernel otherwise.
+        """
+        assert self.rod_entity is not None
+        solver = self.rod_entity._solver
+        n_vertices = self._n_vertices()
+        if env_indices is None:
+            for i_v in range(n_vertices):
+                solver._kernel_detach_vertex(int(i_v))
+            return
+        scoped = np.asarray(env_indices, dtype=int).reshape(-1)
+        for env_idx in scoped:
+            for i_v in range(n_vertices):
+                solver._kernel_detach_vertex_with_envs_idx(int(i_v), int(env_idx))
+
+    def _verified_detach_batch(self) -> tuple[int, int]:
+        """D2: detach every batched attachment, then verify against solver truth.
+
+        Returns ``(residual_after_first_pass, escalations)``.  The retry pass
+        re-issues the entity-level detach for residual slots that match the
+        recorded node; the escalation pass force-clears any survivor with the
+        solver kernel and counts it (AT-16 exposes the counter — a nonzero
+        count means the upstream kernel is still flaky and D2 is doing real
+        work).  A slot that survives escalation raises fail-closed.
+        """
+        assert self.rod_entity is not None
+        solver = self.rod_entity._solver
+        recorded = self._batched_active_nodes
+        if recorded is not None:
+            for env_idx, node in enumerate(recorded):
+                if int(node) < 0:
+                    continue
+                self.rod_entity.detach_from_rigid_link_with_envs_idx(
+                    [int(node)], int(env_idx)
+                )
+        mask = self._vertex_constrained_mask()
+        residual_first = int(mask.sum())
+        if residual_first:
+            # Retry once through the entity API for recorded slots; residual
+            # vertices that Python never recorded go straight to escalation.
+            for env_idx, node_idx in zip(*np.nonzero(mask)):
+                if recorded is not None and int(recorded[int(env_idx)]) == int(node_idx):
+                    self.rod_entity.detach_from_rigid_link_with_envs_idx(
+                        [int(node_idx)], int(env_idx)
+                    )
+            mask = self._vertex_constrained_mask()
+        escalations = 0
+        if mask.any():
+            for env_idx, node_idx in zip(*np.nonzero(mask)):
+                solver._kernel_detach_vertex_with_envs_idx(int(node_idx), int(env_idx))
+                escalations += 1
+            mask = self._vertex_constrained_mask()
+            if mask.any():
+                leftover = [
+                    (int(e), int(v)) for e, v in zip(*np.nonzero(mask))
+                ]
+                raise ConstraintCovenantError(
+                    "constraint covenant: vertex constraints survived forced "
+                    f"clear after detach: {leftover}"
+                )
+        self.last_detach_residuals = residual_first
+        self.detach_escalation_total += escalations
+        return residual_first, escalations
+
+    def _restore_failed_grasp_envs(
+        self, batched_positions: np.ndarray, failed_env_indices: np.ndarray
+    ) -> None:
+        """D4: scoped failed-grasp restoration with zero successful-env impact.
+
+        Validates the full batch, clears the failed envs' constraint slots
+        (D1 defense-in-depth) and rewrites their full solver state through the
+        scoped `_kernel_set_state` path.  No entity-level full-batch write, no
+        gripper re-park and no extra scene step happen, so envs outside the
+        scope remain bit-identical to an execution without any grasp failure
+        (AT-17).  The failed envs get the documented restoration contract:
+        positions restored, velocities zeroed, frames rebuilt, twist reset.
+        """
+        scoped = np.asarray(failed_env_indices, dtype=int).reshape(-1)
+        if scoped.size == 0:
+            return
+        verts = np.asarray(batched_positions, dtype=float)
+        n_vertices = self._n_vertices()
+        if verts.shape != (self.n_envs, n_vertices, 3):
+            raise ValueError(
+                "vertices must have shape "
+                f"({self.n_envs}, {n_vertices}, 3), got {verts.shape}"
+            )
+        if not np.all(np.isfinite(verts[scoped])):
+            raise ValueError("vertices contain non-finite values")
+        self._clear_vertex_constraints(env_indices=scoped)
+        self._reinitialize_edge_state(verts, env_indices=scoped)
 
     def _place_rod_vertices(self, vertices: np.ndarray) -> None:
         self._require_reset()
