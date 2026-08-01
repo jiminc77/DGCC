@@ -36,6 +36,10 @@ GRIPPER_PARK_Z = 0.03
 PILE_NEIGHBOR_RADIUS_M = 0.065
 PILE_CLEARANCE_M = 0.010
 LOWER_STRAIN_ABORT = 0.005
+# Tension-guard slack-resolution budget (Rev 3, owner-approved 2026-08-02):
+# a paused lift/translate env waits at most this many steps for its strain
+# to relax before it is frozen for the rest of the walk.
+TENSION_PAUSE_MAX_STEPS = 500
 # Realized hold-quiescence threshold (orchestrator directive 2026-08-02 item
 # 4): "quiescent" for hold-before-release means the release-speed acceptance
 # criterion (AT-3, 0.05 m/s), not the 1e-3 settle threshold.
@@ -286,6 +290,8 @@ class DLOLabEnv(DLOEnvBase):
         self.last_waypoint_steps: list[int] = []
         self.last_lower_strain_aborts = 0
         self.last_lower_z: np.ndarray | None = None
+        self.last_tension_pause_steps = 0
+        self.last_tension_freezes = 0
 
         self.gs: Any | None = None
         self.scene: Any | None = None
@@ -665,17 +671,61 @@ class DLOLabEnv(DLOEnvBase):
         self.last_waypoint_steps = []
         self.last_lower_strain_aborts = 0
         self.last_lower_z = None
+        self.last_tension_pause_steps = 0
+        self.last_tension_freezes = 0
 
         walk_waypoints = [lifted, target]
+        walk_frozen = np.zeros(self.n_envs, dtype=bool)
         for waypoint in walk_waypoints:
             max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
             n_steps = max(20, int(ceil(max_distance / self._move_step)))
             self.last_waypoint_steps.append(int(n_steps))
-            for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
-                pos = (1.0 - alpha) * current + alpha * waypoint
+            if not self.quasi_static:
+                for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
+                    pos = (1.0 - alpha) * current + alpha * waypoint
+                    self._set_gripper_positions(pos)
+                    self._step_scene()
+                current = waypoint.copy()
+                continue
+            # Tension guard (Rev 3, owner-approved 2026-08-02): during the
+            # lift/translate legs, an env whose max edge strain exceeds the
+            # P9 strain threshold PAUSES its own progress (gripper holds its
+            # current commanded pose) until the slack resolves, then resumes
+            # — the analogue of a real robot's force-limited pull.  An env
+            # whose tension never resolves within TENSION_PAUSE_MAX_STEPS is
+            # frozen for the rest of the walk (same fail-safe semantics as
+            # the approved lowering guard) and released from wherever it
+            # stopped.  This closes the residual lift-leg tension-snap mode
+            # (4/600 AT-1H violations in the stratified remeasurement).
+            progress = np.zeros(self.n_envs, dtype=int)
+            paused = np.zeros(self.n_envs, dtype=int)
+            pos = current.copy()
+            start = current.copy()
+            while True:
+                pending = (~walk_frozen) & (progress < n_steps)
+                if not pending.any():
+                    break
+                strain = self._max_edge_strain_batch()
+                strained = strain > LOWER_STRAIN_ABORT
+                advance = pending & ~strained
+                pause = pending & strained
+                if pause.any():
+                    paused[pause] += 1
+                    self.last_tension_pause_steps += int(pause.sum())
+                    overdue = pause & (paused > TENSION_PAUSE_MAX_STEPS)
+                    if overdue.any():
+                        walk_frozen |= overdue
+                        self.last_tension_freezes += int(overdue.sum())
+                progress[advance] += 1
+                alpha = (progress / n_steps)[:, None]
+                step_pos = (1.0 - alpha) * start + alpha * waypoint
+                keep = walk_frozen | ~ (advance | pause)
+                step_pos[keep] = pos[keep]
+                step_pos[pause & ~walk_frozen] = pos[pause & ~walk_frozen]
+                pos = step_pos
                 self._set_gripper_positions(pos)
                 self._step_scene()
-            current = waypoint.copy()
+            current = pos.copy()
 
         final = target
         if self.quasi_static:
@@ -685,7 +735,9 @@ class DLOLabEnv(DLOEnvBase):
             max_distance = float(np.max(np.linalg.norm(lowered - current, axis=1)))
             n_steps = max(20, int(ceil(max_distance / self._move_step)))
             self.last_waypoint_steps.append(int(n_steps))
-            frozen = np.zeros(self.n_envs, dtype=bool)
+            # Walk-frozen envs (unresolved tension) stay frozen through the
+            # lowering leg as well.
+            frozen = walk_frozen.copy()
             pos = current.copy()
             for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
                 step_pos = (1.0 - alpha) * current + alpha * lowered
@@ -1002,6 +1054,8 @@ class DLOLabEnv(DLOEnvBase):
                 "quasi_static": bool(self.quasi_static),
                 "n_waypoint_steps": list(self.last_waypoint_steps),
                 "lower_strain_aborts": int(self.last_lower_strain_aborts),
+                "tension_pause_steps": int(self.last_tension_pause_steps),
+                "tension_freezes": int(self.last_tension_freezes),
                 "lower_z": None if self.last_lower_z is None else [float(v) for v in self.last_lower_z],
             },
         }
