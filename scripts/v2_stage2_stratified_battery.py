@@ -345,22 +345,50 @@ def main() -> int:
         for stratum in per_stratum.values()
         for test in stratum["rev2"].values()
     )
+
+    # O2/O4 gate composition (owner-approved judgement principle): PHYSICAL
+    # VALIDITY criteria gate at zero tolerance — AT-1H plus the Rev 2
+    # integrity set AT-3/5/8/9 — together with the O3-approved distribution
+    # criteria AT-6'/AT-7a/AT-7b, in BOTH lift strata. The Rev 2 quality
+    # thresholds AT-1/2/4 are provisional and reported per stratum as the
+    # recalibration input; their verdicts do not gate this remeasurement.
+    def stratum_gate(data: dict[str, Any]) -> bool:
+        rev2 = data["rev2"]
+        adjudicated = data["adjudication"]
+        physical = all(rev2[key]["pass"] for key in ("AT-3", "AT-5", "AT-8", "AT-9"))
+        return physical and all(test["pass"] for test in adjudicated.values())
+
+    result["gate_per_stratum"] = {
+        stratum: stratum_gate(data) for stratum, data in per_stratum.items()
+    }
+    result["recalibration_input"] = {
+        stratum: {
+            key: {
+                "rev2_threshold": data["rev2"][key]["criterion"],
+                "max": data["rev2"][key]["max"],
+                "violations": data["rev2"][key]["violations"],
+                "provisional_pass": data["rev2"][key]["pass"],
+            }
+            for key in ("AT-1", "AT-2", "AT-4")
+        }
+        for stratum, data in per_stratum.items()
+    }
+    result["pass"] = all(result["gate_per_stratum"].values())
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(
         json.dumps(
             {
-                "per_stratum_pass": {
-                    stratum: all(test["pass"] for test in data["rev2"].values())
-                    for stratum, data in per_stratum.items()
-                },
+                "gate_per_stratum": result["gate_per_stratum"],
+                "recalibration_input": result["recalibration_input"],
                 "overall_adjudication": overall_adjudication,
                 "pass_rev2_both_strata": result["pass_rev2_both_strata"],
+                "pass": result["pass"],
             },
             indent=2, default=str,
         )
     )
-    return 0 if result["pass_rev2_both_strata"] else 1
+    return 0 if result["pass"] else 1
 
 
 if __name__ == "__main__":
