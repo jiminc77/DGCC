@@ -30,6 +30,16 @@ LIFT_HEIGHTS = {"low": 0.02, "high": 0.15}
 # Historical artifact scans must keep using the OLD constant 0.15
 # (= LIFT_HEIGHTS["high"]) — design §5.6 note 9.
 GRIPPER_PARK_Z = 0.03
+# P9 Rev 3 pile-aware lowering constants (adjudication §3.3, owner pin O1):
+# neighborhood radius ≈ 2 segment intervals, clearance ε above the pile, and
+# the strain fail-safe trigger at half the AT-4 threshold.
+PILE_NEIGHBOR_RADIUS_M = 0.065
+PILE_CLEARANCE_M = 0.010
+LOWER_STRAIN_ABORT = 0.005
+# Realized hold-quiescence threshold (orchestrator directive 2026-08-02 item
+# 4): "quiescent" for hold-before-release means the release-speed acceptance
+# criterion (AT-3, 0.05 m/s), not the 1e-3 settle threshold.
+HOLD_QUIESCENT_VEL = 0.05
 GRASP_FAILURE_PROB = 0.05
 GRASP_NOISE_CHOICES = (-1, 0, 1)
 VALID_INIT_SHAPES = frozenset({"straight", "u_bend", "s_curve", "random_smooth"})
@@ -260,18 +270,22 @@ class DLOLabEnv(DLOEnvBase):
                     "forbids the hold=0 divergence precondition (design §1.2)"
                 )
             self.move_hold_max_steps = hold_cap
+            self.move_hold_vel_threshold = HOLD_QUIESCENT_VEL
         else:
             if move_hold_max_steps is not None:
                 raise ValueError("move_hold_max_steps requires move_v_max")
             self.move_v_max = None
             self._move_step = float(move_step_size)
             self.move_hold_max_steps = None
+            self.move_hold_vel_threshold = HOLD_QUIESCENT_VEL
         self.move_step_size = float(move_step_size)
         self.move_hold_steps = int(move_hold_steps)
         self.grasp_realism = bool(grasp_realism)
         self.last_hold_steps_used = 0
         self.last_hold_converged: bool | None = None
         self.last_waypoint_steps: list[int] = []
+        self.last_lower_strain_aborts = 0
+        self.last_lower_z: np.ndarray | None = None
 
         self.gs: Any | None = None
         self.scene: Any | None = None
@@ -587,6 +601,40 @@ class DLOLabEnv(DLOEnvBase):
             target[:, 2] = np.maximum(target[:, 2], floor)
         return target
 
+    def _max_edge_strain_batch(self) -> np.ndarray:
+        """Per-env maximum |edge length / rest length − 1| from raw vertices."""
+        assert self.params is not None
+        raw = np.asarray(self._raw_batch(), dtype=float)
+        edges = np.linalg.norm(raw[:, 1:, :] - raw[:, :-1, :], axis=-1)
+        rest = float(self.params.length_m) / (raw.shape[1] - 1)
+        return np.abs(edges / rest - 1.0).max(axis=1)
+
+    def _pile_aware_lower_z(self, target: np.ndarray) -> np.ndarray:
+        """P9 Rev 3 (adjudication §3.3, owner pin O1): pile-aware lower height.
+
+        z_target_lower = max(z_floor, z_pile + ε), where z_pile is the highest
+        non-grasped node inside the r_nb neighborhood of the xy target
+        (z_floor when the neighborhood is empty).  Pure deterministic function
+        of the current state via the public raw-vertex getter; no solver or
+        upstream modification.
+        """
+        floor = self._gripper_z_floor()
+        raw = np.asarray(self._raw_batch(), dtype=float)
+        dist_xy = np.linalg.norm(raw[:, :, :2] - target[:, None, :2], axis=-1)
+        neighborhood = dist_xy < PILE_NEIGHBOR_RADIUS_M
+        if self._batched_active_nodes is not None:
+            for env_idx, node in enumerate(self._batched_active_nodes):
+                if int(node) >= 0:
+                    neighborhood[env_idx, int(node)] = False
+        elif self.active_node is not None:
+            neighborhood[:, int(self.active_node)] = False
+        z = raw[:, :, 2]
+        z_masked = np.where(neighborhood, z, -np.inf)
+        z_pile = np.where(
+            neighborhood.any(axis=1), z_masked.max(axis=1), floor
+        )
+        return np.maximum(floor, z_pile + PILE_CLEARANCE_M)
+
     def _execute_move(
         self, lifted: np.ndarray, target: np.ndarray, vel_threshold: float
     ) -> np.ndarray:
@@ -594,25 +642,27 @@ class DLOLabEnv(DLOEnvBase):
 
         Legacy mode: (lift, translate) waypoints and a fixed hold count —
         byte-compatible with the historical behavior.  Quasi-static mode adds
-        the R3 lowering waypoint (release at rest height instead of transit
-        height) and replaces the fixed hold with R2 hold-until-quiescent:
-        hold the final target until every node speed drops below
-        ``vel_threshold``, bounded by ``move_hold_max_steps``; convergence is
-        recorded in ``last_hold_converged`` (AT-3 becomes structural).
+        the R3 lowering waypoint with the P9 Rev 3 pile-aware SET (owner pin
+        O1; the two guards are indivisible like D1-D3):
+          (c) geometric guard — the lower target is z_pile + ε, never a
+              commanded descent through an existing pile;
+          (d) strain fail-safe — during the lower leg any env whose max edge
+              strain exceeds LOWER_STRAIN_ABORT freezes its descent at the
+              current height and transitions to hold there (covers grasped-
+              node-in-pile geometries the neighborhood test cannot see).
+        The hold is R2 hold-until-quiescent with the REALIZED quiescence
+        threshold (orchestrator directive item 4): quiescent means the
+        release-speed acceptance criterion (0.05 m/s, AT-3), not the settle
+        threshold — this makes AT-3 structural in fact and removes the
+        hold-cap exhaustion mode (14% at the 1e-3 threshold).
         """
-        waypoints = [lifted, target]
-        if self.quasi_static:
-            lowered = target.copy()
-            lowered[:, 2] = self._gripper_z_floor()
-            waypoints.append(lowered)
-
         current = self._gripper_positions()
-        # T2 instrumentation (Stage 2 adjudication §1.8-1): per-waypoint step
-        # counts so acceptance peaks can be attributed to the lift/translate/
-        # lower leg directly from the artifact (design §5.5 required
-        # n_waypoint_steps[3] and Stage 2 shipped without it).
         self.last_waypoint_steps = []
-        for waypoint in waypoints:
+        self.last_lower_strain_aborts = 0
+        self.last_lower_z = None
+
+        walk_waypoints = [lifted, target]
+        for waypoint in walk_waypoints:
             max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
             n_steps = max(20, int(ceil(max_distance / self._move_step)))
             self.last_waypoint_steps.append(int(n_steps))
@@ -622,10 +672,33 @@ class DLOLabEnv(DLOEnvBase):
                 self._step_scene()
             current = waypoint.copy()
 
-        final = waypoints[-1]
+        final = target
+        if self.quasi_static:
+            lowered = target.copy()
+            lowered[:, 2] = self._pile_aware_lower_z(target)
+            self.last_lower_z = lowered[:, 2].copy()
+            max_distance = float(np.max(np.linalg.norm(lowered - current, axis=1)))
+            n_steps = max(20, int(ceil(max_distance / self._move_step)))
+            self.last_waypoint_steps.append(int(n_steps))
+            frozen = np.zeros(self.n_envs, dtype=bool)
+            pos = current.copy()
+            for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
+                step_pos = (1.0 - alpha) * current + alpha * lowered
+                step_pos[frozen] = pos[frozen]
+                pos = step_pos
+                self._set_gripper_positions(pos)
+                self._step_scene()
+                if not frozen.all():
+                    strained = self._max_edge_strain_batch() > LOWER_STRAIN_ABORT
+                    newly = strained & ~frozen
+                    if newly.any():
+                        frozen |= newly
+            self.last_lower_strain_aborts = int(frozen.sum())
+            final = pos
+
         if self.quasi_static:
             hold_steps = 0
-            threshold = float(vel_threshold)
+            threshold = float(self.move_hold_vel_threshold)
             while (
                 hold_steps < self.move_hold_max_steps
                 and float(np.max(self.max_node_speed_batch())) >= threshold
@@ -923,6 +996,8 @@ class DLOLabEnv(DLOEnvBase):
                 "hold_converged": self.last_hold_converged,
                 "quasi_static": bool(self.quasi_static),
                 "n_waypoint_steps": list(self.last_waypoint_steps),
+                "lower_strain_aborts": int(self.last_lower_strain_aborts),
+                "lower_z": None if self.last_lower_z is None else [float(v) for v in self.last_lower_z],
             },
         }
 
