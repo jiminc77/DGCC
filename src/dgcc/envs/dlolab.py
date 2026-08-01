@@ -358,6 +358,11 @@ class DLOLabEnv(DLOEnvBase):
                 G=mapped["twisting_stiffness_G"],
                 static_friction=mapped["mu_s"],
                 kinetic_friction=mapped["mu_k"],
+                # R9 (env-correction Rev 2 P12): DO NOT CHANGE. Switching the
+                # constitutive model is a separate major change; with the
+                # quasi-static bundle the measured strain stays <= 1%, so
+                # inextensibility is unnecessary. Revisit only if AT-4 fails
+                # repeatedly after the P9 pile-aware repair.
                 use_inextensible=False,
             ),
             morph=gs.morphs.ParameterizedRod(
