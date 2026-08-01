@@ -360,6 +360,7 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
         covenant = {
             "nan_incidents": int(runner.nan_incidents),
             "magnitude_incidents": int(runner.magnitude_incidents),
+            "arclength_incidents": int(getattr(runner, "arclength_incidents", 0)),
         }
         primitives[-1]["episode_covenant"] = covenant
         del runner
@@ -386,9 +387,16 @@ def judge(primitives: list[dict[str, Any]]) -> dict[str, Any]:
     magnitude_events = sum(
         p.get("episode_covenant", {}).get("magnitude_incidents", 0) for p in primitives
     )
+    # Production R7 covenant firings (post-settle, MAX_ARCLEN_REL_DEV=0.02)
+    # plus the probe-side transient threshold check retained for continuity
+    # with the Rev 2 measurement (0.05 on arclen_peak).
+    arclength_covenant_incidents = sum(
+        p.get("episode_covenant", {}).get("arclength_incidents", 0)
+        for p in primitives
+    )
     arclen_covenant_events = int(
         (arclen_peak_rel > AT_THRESHOLDS["at8_arclen_covenant"]).sum()
-    )
+    ) + int(arclength_covenant_incidents)
 
     tests = {
         "AT-1": {
@@ -430,6 +438,7 @@ def judge(primitives: list[dict[str, Any]]) -> dict[str, Any]:
             "nan_incidents": int(nan_events),
             "magnitude_incidents": int(magnitude_events),
             "arclen_covenant_events": arclen_covenant_events,
+            "arclength_covenant_incidents_r7": int(arclength_covenant_incidents),
             "violations": int(nan_events + magnitude_events + arclen_covenant_events),
         },
         "AT-9": {

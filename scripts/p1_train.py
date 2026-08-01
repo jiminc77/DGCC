@@ -173,7 +173,7 @@ def utc_now() -> str:
 
 def env_kwargs(config: dict[str, Any], n_envs: int) -> dict[str, Any]:
     sim = config.get("sim", {})
-    return {
+    kwargs = {
         "n_envs": int(n_envs),
         "dt": float(sim.get("dt", 1.0e-3)),
         "substeps": int(sim.get("substeps", 5)),
@@ -181,10 +181,17 @@ def env_kwargs(config: dict[str, Any], n_envs: int) -> dict[str, Any]:
         "rod_angular_damping": float(sim.get("rod_angular_damping", 5.0)),
         "initial_settle_steps": int(sim.get("initial_settle_steps", 0)),
         "reset_settle_max_steps": int(sim.get("reset_settle_max_steps", SETTLE_MAX_STEPS)),
-        "move_step_size": float(sim.get("move_step_size", 0.03)),
-        "move_hold_steps": int(sim.get("move_hold_steps", 0)),
         "grasp_realism": bool(sim.get("grasp_realism", True)),
     }
+    if "move_v_max" in sim:
+        # R8 (env-correction Rev 3): quasi-static primitive configuration.
+        kwargs["move_v_max"] = float(sim["move_v_max"])
+        kwargs["move_hold_max_steps"] = int(sim.get("move_hold_max_steps", 2000))
+    else:
+        # Deprecated legacy keys (one release; pre-correction semantics).
+        kwargs["move_step_size"] = float(sim.get("move_step_size", 0.03))
+        kwargs["move_hold_steps"] = int(sim.get("move_hold_steps", 0))
+    return kwargs
 
 
 class TrainingRun:

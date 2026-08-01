@@ -14,8 +14,10 @@ Implements the Stage 2 adjudication's battery specification
     SHA-256 is registered in the artifact (Amendment 5 pin target);
   - AT verdicts are reported PER LIFT STRATUM and the gate requires both
     strata to pass;
-  - additionally computes the adjudication's proposed criteria, clearly
-    labelled as pending owner pins O2/O3:
+  - additionally computes the adjudication's criteria, APPROVED by owner
+    pins O2/O3 (orchestrator reply 2026-08-02); quality thresholds AT-1/2/4
+    remain provisional Rev 2 values reported per stratum as recalibration
+    input:
       AT-1H  peak v <= 2.0 m/s AND strain <= 0.02 AND KE/PE <= 1.0, 0 events
       AT-6'  median(settle:move) <= 2.0 and p95 <= 5.0 (distribution basis)
       AT-7a  budget exhaustion with dirty terminal state (arclen_dev > 1e-3):
@@ -181,6 +183,7 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
         primitives[-1]["episode_covenant"] = {
             "nan_incidents": int(runner.nan_incidents),
             "magnitude_incidents": int(runner.magnitude_incidents),
+            "arclength_incidents": int(getattr(runner, "arclength_incidents", 0)),
         }
         del runner
         del env
@@ -188,7 +191,7 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
 
 
 def adjudication_criteria(primitives: list[dict[str, Any]]) -> dict[str, Any]:
-    """Proposed AT-1H / AT-6' / AT-7a/b verdicts (pending owner pins O2/O3)."""
+    """AT-1H / AT-6' / AT-7a/b verdicts (owner pins O2/O3 approved 2026-08-02)."""
     v = np.asarray([p["v_peak_total"] for p in primitives], dtype=float)
     strain = np.asarray([p["strain_peak"] for p in primitives], dtype=float)
     kepe = np.asarray([p["ke_over_pe"] for p in primitives], dtype=float)
@@ -203,12 +206,12 @@ def adjudication_criteria(primitives: list[dict[str, Any]]) -> dict[str, Any]:
     at7a = int((exhausted & (arclen_dev > 1.0e-3)).sum())
     at7b = int((exhausted & (arclen_dev <= 1.0e-3)).sum())
     return {
-        "AT-1H (pending O2)": {
+        "AT-1H (O2 approved)": {
             "criterion": "v <= 2.0 AND strain <= 0.02 AND KE/PE <= 1.0; 0 events",
             "violations": at1h_violations,
             "pass": at1h_violations == 0,
         },
-        "AT-6-revised (pending O3)": {
+        "AT-6-revised (O3 approved)": {
             "criterion": "median(settle:move) <= 2.0 and p95 <= 5.0",
             "median": float(np.median(ratio)),
             "p95": float(np.percentile(ratio, 95)),
@@ -217,12 +220,12 @@ def adjudication_criteria(primitives: list[dict[str, Any]]) -> dict[str, Any]:
                 and np.percentile(ratio, 95) <= AT6_REVISED["p95"]
             ),
         },
-        "AT-7a-divergence (pending O3)": {
+        "AT-7a-divergence (O3 approved)": {
             "criterion": "budget exhaustion with arclen_dev > 1e-3; 0 events",
             "violations": at7a,
             "pass": at7a == 0,
         },
-        "AT-7b-creep (pending O3)": {
+        "AT-7b-creep (O3 approved)": {
             "criterion": "budget exhaustion with clean terminal; <= 1% reported",
             "events": at7b,
             "rate": round(at7b / len(primitives), 4),

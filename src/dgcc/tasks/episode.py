@@ -49,6 +49,12 @@ GoalFn = Callable[[int, np.ndarray, np.random.Generator], DualGoal]
 #: Max reseed retries before a non-finite state becomes a hard failure.
 MAX_RESEED_ATTEMPTS = 3
 MAX_COORD_NORM_M = 3.0
+#: R7 (env-correction Rev 3): arc-length covenant threshold |L/L0 - 1|.
+#: The Rev 2 spec proposed 0.05, but the Stage 2 battery measured a worst
+#: TRANSIENT arclen of 1.0396 right under it (adjudication §1.8-3), so the
+#: guard is strengthened to 0.02 (orchestrator technical item T3).  Clean
+#: post-settle states measure <= 3.0e-4, a 60x margin.
+MAX_ARCLEN_REL_DEV = 0.02
 GOAL_NODE_NORM_BOUND_M = 4.0
 
 
@@ -138,6 +144,7 @@ class BatchedEpisodeRunner:
         self.d_at_done = np.full(self.n_envs, np.nan, dtype=float)
         self.nan_incidents = 0
         self.magnitude_incidents = 0
+        self.arclength_incidents = 0
         self.incident_log: list[dict[str, Any]] = []
         self._base_seed = 0
         self._reseed_counter = 0
@@ -286,6 +293,22 @@ class BatchedEpisodeRunner:
                 reason="magnitude covenant: coord norm > 3 m",
                 bad_envs=np.flatnonzero(mag_bad_rows),
                 bad_kind="magnitude",
+            )
+        arclen_after = np.linalg.norm(
+            x_after[:, 1:, :] - x_after[:, :-1, :], axis=-1
+        ).sum(axis=1)
+        arclen_bad_rows = (
+            np.abs(arclen_after / self.length_m - 1.0) > MAX_ARCLEN_REL_DEV
+        )
+        if arclen_bad_rows.any():
+            # R7: arc-length covenant — the coord-norm guard passes states
+            # whose arc length has blown up (forensics §5.2: norm 1.30 m at
+            # 4.67 L), so deformation itself is guarded here.
+            return self._handle_nan_incident(
+                active_before,
+                reason=f"arclength covenant: |L/L0-1| > {MAX_ARCLEN_REL_DEV}",
+                bad_envs=np.flatnonzero(arclen_bad_rows),
+                bad_kind="arclength",
             )
 
         d_after = np.empty(self.n_envs, dtype=float)
@@ -440,12 +463,22 @@ class BatchedEpisodeRunner:
             out = np.where(replace, row_max, out)
         return out
 
+    def _arclength_bad_rows(self, *arrays: np.ndarray) -> np.ndarray:
+        rows = np.zeros(np.asarray(arrays[0], dtype=float).shape[0], dtype=bool)
+        for array in arrays:
+            a = np.asarray(array, dtype=float)
+            arclen = np.linalg.norm(a[:, 1:, :] - a[:, :-1, :], axis=-1).sum(axis=1)
+            deviation = np.abs(arclen / self.length_m - 1.0)
+            rows |= np.where(np.isfinite(deviation), deviation, 0.0) > MAX_ARCLEN_REL_DEV
+        return rows
+
     def _classify_invalid_rows(
         self, *arrays: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         nonfinite = self._nonfinite_rows(*arrays)
         magnitude = self._magnitude_bad_rows(*arrays) & ~nonfinite
-        return nonfinite, magnitude, self._max_coord_norm_by_row(*arrays)
+        arclength = self._arclength_bad_rows(*arrays) & ~nonfinite & ~magnitude
+        return nonfinite, magnitude, arclength, self._max_coord_norm_by_row(*arrays)
 
     def _record_incidents(
         self,
@@ -458,15 +491,17 @@ class BatchedEpisodeRunner:
         envs = np.asarray(bad_envs, dtype=int)
         row_kinds = np.asarray(kinds, dtype=object)
         row_max_norms = np.asarray(max_coord_norms, dtype=float)
-        for kind in ("nonfinite", "magnitude"):
+        for kind in ("nonfinite", "magnitude", "arclength"):
             mask = row_kinds == kind
             if not bool(mask.any()):
                 continue
             env_list = [int(i) for i in envs[mask]]
             if kind == "nonfinite":
                 self.nan_incidents += len(env_list)
-            else:
+            elif kind == "magnitude":
                 self.magnitude_incidents += len(env_list)
+            else:
+                self.arclength_incidents += len(env_list)
             finite_maxes = row_max_norms[mask]
             finite_maxes = finite_maxes[~np.isnan(finite_maxes)]
             max_coord_norm = float(finite_maxes.max()) if finite_maxes.size else float("nan")
@@ -485,12 +520,15 @@ class BatchedEpisodeRunner:
         env_idx: int,
         nonfinite: np.ndarray,
         magnitude: np.ndarray,
+        arclength: np.ndarray,
         fallback_kind: str,
     ) -> str:
         if bool(nonfinite[env_idx]):
             return "nonfinite"
         if bool(magnitude[env_idx]):
             return "magnitude"
+        if bool(arclength[env_idx]):
+            return "arclength"
         return fallback_kind
 
     def _handle_nan_incident(
@@ -502,10 +540,12 @@ class BatchedEpisodeRunner:
         bad_kind: str | None = None,
     ) -> dict[str, Any]:
         raw = np.asarray(self.env.get_centerline_raw_batch(), dtype=float)
-        nonfinite_rows, magnitude_rows, max_norm_by_row = self._classify_invalid_rows(raw)
+        nonfinite_rows, magnitude_rows, arclength_rows, max_norm_by_row = (
+            self._classify_invalid_rows(raw)
+        )
         fallback_kind = bad_kind or ("magnitude" if "magnitude covenant" in reason else "nonfinite")
         if bad_envs is None:
-            bad_mask = nonfinite_rows | magnitude_rows
+            bad_mask = nonfinite_rows | magnitude_rows | arclength_rows
             bad_envs = np.flatnonzero(bad_mask)
             if bad_envs.size == 0:
                 # The env raised but every row reads finite now; treat every
@@ -518,7 +558,7 @@ class BatchedEpisodeRunner:
         for env_idx in bad_envs:
             i = int(env_idx)
             kind_by_env[i] = bad_kind or self._kind_from_masks(
-                i, nonfinite_rows, magnitude_rows, fallback_kind
+                i, nonfinite_rows, magnitude_rows, arclength_rows, fallback_kind
             )
             max_norm_by_env[i] = float(max_norm_by_row[i])
 
@@ -526,12 +566,17 @@ class BatchedEpisodeRunner:
         for env_idx in bad_envs:
             replacement[int(env_idx)] = self._fresh_init_curve(int(env_idx))
 
-        extra_nonfinite, extra_magnitude, extra_max_norm = self._classify_invalid_rows(replacement)
-        extra = np.flatnonzero(extra_nonfinite | extra_magnitude)
+        extra_nonfinite, extra_magnitude, extra_arclength, extra_max_norm = (
+            self._classify_invalid_rows(replacement)
+        )
+        extra = np.flatnonzero(extra_nonfinite | extra_magnitude | extra_arclength)
         for env_idx in extra:
             i = int(env_idx)
             kind_by_env.setdefault(
-                i, self._kind_from_masks(i, extra_nonfinite, extra_magnitude, fallback_kind)
+                i,
+                self._kind_from_masks(
+                    i, extra_nonfinite, extra_magnitude, extra_arclength, fallback_kind
+                ),
             )
             max_norm_by_env.setdefault(i, float(extra_max_norm[i]))
             replacement[i] = self._fresh_init_curve(i)
@@ -657,10 +702,12 @@ class BatchedEpisodeRunner:
                     )
             raw = np.asarray(self.env.get_centerline_raw_batch(), dtype=float)
             centerlines = np.asarray(self.env.get_centerline_batch(), dtype=float)
-            nonfinite_rows, magnitude_rows, max_norm_by_row = self._classify_invalid_rows(
-                raw, centerlines
+            nonfinite_rows, magnitude_rows, arclength_rows, max_norm_by_row = (
+                self._classify_invalid_rows(raw, centerlines)
             )
-            bad_indices = np.flatnonzero(nonfinite_rows | magnitude_rows)
+            bad_indices = np.flatnonzero(
+                nonfinite_rows | magnitude_rows | arclength_rows
+            )
             if bad_indices.size == 0:
                 if reseeded:
                     reseeded_envs = np.asarray(sorted(reseeded), dtype=int)
@@ -679,7 +726,9 @@ class BatchedEpisodeRunner:
             current = raw.copy()
             for env_idx in bad_indices:
                 i = int(env_idx)
-                kind = self._kind_from_masks(i, nonfinite_rows, magnitude_rows, "nonfinite")
+                kind = self._kind_from_masks(
+                    i, nonfinite_rows, magnitude_rows, arclength_rows, "nonfinite"
+                )
                 if i in kind_by_env and kind_by_env[i] == "magnitude" and kind == "nonfinite":
                     kind_by_env[i] = "nonfinite"
                 else:
@@ -697,6 +746,7 @@ __all__ = [
     "EpisodeConfig",
     "GOAL_NODE_NORM_BOUND_M",
     "MAX_COORD_NORM_M",
+    "MAX_ARCLEN_REL_DEV",
     "build_batch_init_vertices",
     "random_policy_actions",
 ]
