@@ -114,6 +114,13 @@ def evaluate_episodes(
         probe_x_after: list[list[np.ndarray]] = [[] for _ in range(n_envs)]
         discard_exposure = np.zeros(n_envs, dtype=int)
         guarded = np.zeros(n_envs, dtype=bool)
+        # B1/B2 (env-correction Rev 2 §1.6.1-2): per-slot restart bookkeeping.
+        # `slot_step` replaces the global step counter as the discount
+        # exponent so a restarted episode discounts from its own t=0, and
+        # `restart_steps` records WHEN each restart happened (auditable even
+        # after B1 resets the accumulators).
+        restart_steps: list[list[int]] = [[] for _ in range(n_envs)]
+        slot_step = np.zeros(n_envs, dtype=int)
         step_index = 0
         while not runner.all_done() and step_index < 2 * runner.config.horizon:
             unfinished = ~np.asarray(runner.done, dtype=bool)
@@ -131,6 +138,27 @@ def evaluate_episodes(
                 discard_exposure[bad] += 1
                 if wall_guard_k is not None:
                     guarded |= discard_exposure > int(wall_guard_k)
+                # B1: restarted slots begin a fresh attempt — their partial
+                # accumulators would otherwise concatenate the aborted and
+                # restarted attempts (returns summed across attempts, traces
+                # glued together, wrong discount exponents).
+                restarted = np.asarray(
+                    record.get("restart_envs", bad), dtype=int
+                )
+                restarted = restarted[restarted < n_envs]
+                for slot in restarted:
+                    i = int(slot)
+                    restart_steps[i].append(int(step_index))  # B2
+                    returns[i] = 0.0
+                    discounted[i] = 0.0
+                    slot_step[i] = 0
+                    d_step_traces[i] = []
+                    raw_traces[i] = []
+                    x_terminal[i] = None
+                    probe_p[i] = []
+                    probe_u[i] = []
+                    probe_x_before[i] = []
+                    probe_x_after[i] = []
                 continue
             active = record["active"]
             for slot in np.flatnonzero(active):
@@ -146,7 +174,10 @@ def evaluate_episodes(
                     probe_x_before[int(slot)].append(np.asarray(X[int(slot)]).copy())
                     probe_x_after[int(slot)].append(np.asarray(record["X_after"][int(slot)]).copy())
             returns += np.where(active, record["reward"], 0.0)
-            discounted += np.where(active, (gamma**step_index) * record["reward"], 0.0)
+            discounted += np.where(
+                active, (gamma ** slot_step) * record["reward"], 0.0
+            )
+            slot_step += np.asarray(active, dtype=int)
             step_index += 1
 
         for slot in range(n_envs):
@@ -198,6 +229,11 @@ def evaluate_episodes(
                 "q_first": None if np.isnan(q_first[slot]) else float(q_first[slot]),
                 "eval_wall_guard": ep_guarded,
                 "discard_exposure": int(discard_exposure[slot]),
+                # B2 (env-correction Rev 2 §1.6.2): restart audit — kept even
+                # with B1 applied, because THAT a restart happened is itself
+                # audit material and enables post-hoc trajectory splitting.
+                "restart_steps": [int(v) for v in restart_steps[slot]],
+                "restart_count": int(len(restart_steps[slot])),
                 # L2 (env-correction Rev 2 §1.7): per-env reset-settle length
                 # so the settle_batch coupling magnitude is auditable post hoc
                 # (settle_batch logic itself is UNCHANGED — documented limit).

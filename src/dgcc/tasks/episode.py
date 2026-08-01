@@ -631,6 +631,10 @@ class BatchedEpisodeRunner:
             "active": active_before,
             "reason": reason,
             "bad_envs": all_reseeded.copy(),
+            # B1 (env-correction Rev 2 §1.6.1): the slots whose EPISODE was
+            # restarted (active reseeded envs) so eval accumulators can be
+            # reset; done envs may be re-placed physically but keep metrics.
+            "restart_envs": restart_envs.copy(),
             "nan_incidents": self.nan_incidents,
             "magnitude_incidents": self.magnitude_incidents,
         }
