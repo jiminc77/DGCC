@@ -261,11 +261,6 @@ def evaluate_episodes(
                     row["step_index"] = list(range(len(probe_p[slot])))
             episodes.append(row)
 
-    settle_at_begin = [
-        int(ep["settle_steps_at_begin"])
-        for ep in episodes
-        if int(ep["settle_steps_at_begin"]) >= 0
-    ]
     result = summarize_episodes(episodes) | {
         "episodes": episodes,
         "nan_incidents_during_eval": runner.nan_incidents - incidents_before,
@@ -274,10 +269,6 @@ def evaluate_episodes(
         "eval_wall_guard_rate": (
             float(np.mean([ep["eval_wall_guard"] for ep in episodes])) if episodes else None
         ),
-        # L2: per-eval settle-at-begin aggregate for the run summary.
-        "settle_steps_at_begin_min": int(np.min(settle_at_begin)) if settle_at_begin else None,
-        "settle_steps_at_begin_median": float(np.median(settle_at_begin)) if settle_at_begin else None,
-        "settle_steps_at_begin_max": int(np.max(settle_at_begin)) if settle_at_begin else None,
     }
     if record_probe:
         result["record_probe"] = True

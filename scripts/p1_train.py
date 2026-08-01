@@ -1061,6 +1061,23 @@ class TrainingRun:
         result["eval_episode_index_start"] = eval_index_start
         result["wall_s"] = time.perf_counter() - start
         result["transitions"] = self.transitions
+        # L2 (env-correction Rev 2 §1.7): per-eval settle-at-begin aggregates
+        # for the run summary (per-slot values live in the episode rows; the
+        # -1 sentinel marks duck-typed runners without the field).
+        settle_at_begin = [
+            int(ep.get("settle_steps_at_begin", -1))
+            for ep in result["episodes"]
+            if int(ep.get("settle_steps_at_begin", -1)) >= 0
+        ]
+        result["settle_steps_at_begin_min"] = (
+            int(np.min(settle_at_begin)) if settle_at_begin else None
+        )
+        result["settle_steps_at_begin_median"] = (
+            float(np.median(settle_at_begin)) if settle_at_begin else None
+        )
+        result["settle_steps_at_begin_max"] = (
+            int(np.max(settle_at_begin)) if settle_at_begin else None
+        )
         if record_raw:
             # Preserve raw trajectories in a separate gz artifact; strip the
             # bulky fields from the in-memory history so run JSONs stay lean.

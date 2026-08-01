@@ -198,10 +198,6 @@ _SECTION_5_GUARD_METADATA_KEYS = {
     "wall_guard_k",
     "record_raw",
     "eval_wall_guard_rate",
-    # L2 (env-correction): per-eval settle-at-begin aggregates.
-    "settle_steps_at_begin_min",
-    "settle_steps_at_begin_median",
-    "settle_steps_at_begin_max",
 }
 
 
