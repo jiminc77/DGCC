@@ -2,7 +2,7 @@
 """Constraint-integrity acceptance battery: AT-14 / AT-15 / AT-16 / AT-17.
 
 Verifies the D1-D4 defect-(c)/(c') corrections of V2_env_correction_design.md
-Rev 2 (SHA 658b671d...) on CPU:
+Rev 2 (SHA 658b671d...):
 
   AT-14  stuck-signature zero: after every light_reset of the battery,
          vertex_constraints.constrained.sum() == 0 AND no settled initial
@@ -10,7 +10,8 @@ Rev 2 (SHA 658b671d...) on CPU:
   AT-15  single-episode isolation reproducibility: one stored x_initial
          placed into (i) a fresh env and (ii) an env that already executed
          N in {0, 10, 50, 100} primitives yields |delta d_initial| <= 1.44e-5
-         (the placement perturbation sensitivity floor).
+         (the placement perturbation sensitivity floor).  CPU-pinned
+         (boundary amendment item 3: determinism contrast).
   AT-16  detach completeness: zero residual constraints after every verified
          detach of the battery; D2 escalation invocations are reported
          separately (informational — nonzero means the upstream kernel is
@@ -18,11 +19,19 @@ Rev 2 (SHA 658b671d...) on CPU:
   AT-17  grasp-failure restoration scope: after a primitive with forced
          grasp failures, the theta/omega/twist/kappa_rest state of the
          SUCCESSFUL envs is bit-identical to a no-failure control run.
+         CPU-pinned (bit-compare).
 
 Standard battery: 5 T2 goal families x 4 init shapes x 3 seeds = 60 episodes,
 10 primitives each (600 primitives), n_envs=1, fresh env instance per episode
 (design section 4.5), validation split goals only, deterministic seeded random
-actions.  CPU-only; heldout paths are rejected; artifacts go to the dossier.
+actions.  The battery backend is selectable (--backend, default gpu per the
+2026-08-01 boundary amendment) and every artifact row records its backend.
+
+Execution is PROCESS-ISOLATED: the driver spawns one subprocess per battery
+slice (and per AT-15/AT-17 section) because Genesis/Quadrants accumulates
+kernel recompilations across repeated in-process scene builds and reliably
+segfaults near the ~50th fresh env (SIGSEGV reproduced twice on this
+closure).  Slice results are merged into one fail-closed artifact.
 
 Exit code 0 only when every AT above passes (fail-closed).
 """
@@ -32,12 +41,12 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
-
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import numpy as np
 
@@ -48,6 +57,7 @@ AT15_THRESHOLD = 1.44e-5
 AT14_PARKING_TOLERANCE_M = 2.0e-3
 BATTERY_SEEDS = (0, 1, 2)
 BATTERY_PRIMITIVES = 10
+BATTERY_SLICE_EPISODES = 10
 AT15_HISTORY = (0, 10, 50, 100)
 
 
@@ -68,17 +78,32 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def init_cpu_genesis() -> None:
+def init_genesis(backend: str) -> dict[str, Any]:
+    """Initialize Genesis on the requested backend before any env import."""
     import torch
 
-    if torch.cuda.is_available():
-        raise RuntimeError("CPU-only integrity check unexpectedly sees a CUDA device")
-    import genesis as gs
+    if backend == "cpu":
+        if torch.cuda.is_available():
+            raise RuntimeError("CPU-pinned section unexpectedly sees a CUDA device")
+        import genesis as gs
 
-    if not getattr(gs, "_initialized", False):
-        gs.init(seed=0, precision="32", logging_level="warning", backend=gs.cpu)
-    if getattr(gs, "backend", None) != gs.cpu:
-        raise RuntimeError(f"Genesis backend is not CPU: {getattr(gs, 'backend', 'unknown')!r}")
+        if not getattr(gs, "_initialized", False):
+            gs.init(seed=0, precision="32", logging_level="warning", backend=gs.cpu)
+        if getattr(gs, "backend", None) != gs.cpu:
+            raise RuntimeError(f"Genesis backend is not CPU: {getattr(gs, 'backend', 'unknown')!r}")
+        return {"backend": "cpu", "device": "cpu"}
+    if backend == "gpu":
+        if not torch.cuda.is_available():
+            raise RuntimeError("GPU battery requested but no CUDA device is visible")
+        import genesis as gs
+
+        if not getattr(gs, "_initialized", False):
+            gs.init(seed=0, precision="32", logging_level="warning", backend=gs.gpu)
+        return {
+            "backend": "gpu",
+            "device": torch.cuda.get_device_name(0),
+        }
+    raise ValueError(f"unknown backend {backend!r}")
 
 
 def make_env(n_envs: int):
@@ -114,6 +139,29 @@ def family_goals() -> list[tuple[str, str, Any]]:
     return chosen
 
 
+def battery_episode_plan() -> list[dict[str, Any]]:
+    """Deterministic global episode enumeration (slice-invariant)."""
+    from dgcc.tasks.episode import INIT_SHAPES
+
+    plan: list[dict[str, Any]] = []
+    ordinal = 0
+    for family_index, (family, goal_id, _goal) in enumerate(family_goals()):
+        for shape in INIT_SHAPES:
+            for seed in BATTERY_SEEDS:
+                ordinal += 1
+                plan.append(
+                    {
+                        "episode": ordinal,
+                        "family_index": family_index,
+                        "family": family,
+                        "goal_id": goal_id,
+                        "init_shape": shape,
+                        "seed": int(seed),
+                    }
+                )
+    return plan
+
+
 def episode_actions(rng: np.random.Generator, n_envs: int) -> tuple[np.ndarray, np.ndarray, list[str]]:
     p = rng.integers(0, 32, n_envs)
     delta = rng.normal(0.0, 0.06, (n_envs, 3))
@@ -121,99 +169,66 @@ def episode_actions(rng: np.random.Generator, n_envs: int) -> tuple[np.ndarray, 
     return p, delta, lift
 
 
-def run_battery(args: argparse.Namespace) -> dict[str, Any]:
-    """AT-14 + AT-16 over the standard battery (fresh env per episode)."""
+def run_battery_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, Any]:
+    """AT-14 + AT-16 over battery episodes with ordinal in [first, last]."""
     from dgcc.envs.dlolab import LIFT_HEIGHTS
     from dgcc.tasks.domain import p1_rope_params
-    from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, INIT_SHAPES
+    from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
 
     params = p1_rope_params()
     parking_z = float(LIFT_HEIGHTS["high"])
     goals = family_goals()
 
     episodes: list[dict[str, Any]] = []
-    light_reset_checks = 0
-    light_reset_violations = 0
-    parking_node_hits = 0
-    detach_residual_total = 0
-    detach_escalation_total = 0
-    post_detach_leftover_total = 0
-    primitives = 0
-    episode_ordinal = 0
-    for family, goal_id, goal in goals:
-        for shape in INIT_SHAPES:
-            for seed in BATTERY_SEEDS:
-                episode_ordinal += 1
-                env = make_env(1)
-                env.reset(params, init_shape=shape, seed=1_000 + episode_ordinal)
-                runner = BatchedEpisodeRunner(env, params, EpisodeConfig())
-                begin = runner.begin_episodes(
-                    seed=seed,
-                    episode_index=episode_ordinal,
-                    init_shapes=[shape],
-                    goals=[goal],
-                )
-                # AT-14: the begin_episodes path runs light_reset internally;
-                # D3 raises on residuals, and we independently re-read here.
-                mask = env._vertex_constrained_mask()
-                light_reset_checks += 1
-                if mask.any():
-                    light_reset_violations += 1
-                z = np.asarray(env.get_centerline_batch(), dtype=float)[..., 2]
-                parking_hits = int(np.sum(np.abs(z - parking_z) <= AT14_PARKING_TOLERANCE_M))
-                parking_node_hits += parking_hits
+    for entry in battery_episode_plan():
+        if not (first <= entry["episode"] <= last):
+            continue
+        _family, _goal_id, goal = goals[entry["family_index"]]
+        episode_ordinal = entry["episode"]
+        env = make_env(1)
+        env.reset(params, init_shape=entry["init_shape"], seed=1_000 + episode_ordinal)
+        runner = BatchedEpisodeRunner(env, params, EpisodeConfig())
+        begin = runner.begin_episodes(
+            seed=entry["seed"],
+            episode_index=episode_ordinal,
+            init_shapes=[entry["init_shape"]],
+            goals=[goal],
+        )
+        mask = env._vertex_constrained_mask()
+        light_reset_violation = bool(mask.any())
+        z = np.asarray(env.get_centerline_batch(), dtype=float)[..., 2]
+        parking_hits = int(np.sum(np.abs(z - parking_z) <= AT14_PARKING_TOLERANCE_M))
 
-                action_rng = np.random.default_rng([9_000, episode_ordinal, seed])
-                episode_residuals = 0
-                episode_escalations = 0
-                for _ in range(BATTERY_PRIMITIVES):
-                    p, delta, lift = episode_actions(action_rng, 1)
-                    out = runner.step(p, delta, lift, rng=action_rng)
-                    info = out["info"]
-                    primitives += 1
-                    episode_residuals += int(info["detach_residuals"])
-                    episode_escalations += int(info["detach_escalations"])
-                    # AT-16: post-verified-detach solver truth must be empty.
-                    post_detach_leftover_total += int(env._vertex_constrained_mask().sum())
-                detach_residual_total += episode_residuals
-                detach_escalation_total += episode_escalations
-                episodes.append(
-                    {
-                        "episode": episode_ordinal,
-                        "family": family,
-                        "goal_id": goal_id,
-                        "init_shape": shape,
-                        "seed": int(seed),
-                        "d_initial": float(begin["d_initial"][0]),
-                        "reset_settle_steps": int(begin["reset_settle_steps"][0]),
-                        "parking_node_hits": parking_hits,
-                        "detach_residuals": episode_residuals,
-                        "detach_escalations": episode_escalations,
-                    }
-                )
-                del runner
-                del env
-
-    return {
-        "episodes": episodes,
-        "primitives": primitives,
-        "at14": {
-            "light_reset_checks": light_reset_checks,
-            "light_reset_residual_violations": light_reset_violations,
-            "parking_node_hits": parking_node_hits,
-            "parking_z_m": parking_z,
-            "pass": light_reset_violations == 0 and parking_node_hits == 0,
-        },
-        "at16": {
-            "detach_residuals_first_pass": detach_residual_total,
-            "detach_escalations": detach_escalation_total,
-            "post_detach_leftover": post_detach_leftover_total,
-            "pass": post_detach_leftover_total == 0,
-        },
-    }
+        action_rng = np.random.default_rng([9_000, episode_ordinal, entry["seed"]])
+        episode_residuals = 0
+        episode_escalations = 0
+        post_detach_leftover = 0
+        for _ in range(BATTERY_PRIMITIVES):
+            p, delta, lift = episode_actions(action_rng, 1)
+            out = runner.step(p, delta, lift, rng=action_rng)
+            info = out["info"]
+            episode_residuals += int(info["detach_residuals"])
+            episode_escalations += int(info["detach_escalations"])
+            post_detach_leftover += int(env._vertex_constrained_mask().sum())
+        episodes.append(
+            {
+                **{k: entry[k] for k in ("episode", "family", "goal_id", "init_shape", "seed")},
+                "backend": backend_info["backend"],
+                "d_initial": float(begin["d_initial"][0]),
+                "reset_settle_steps": int(begin["reset_settle_steps"][0]),
+                "light_reset_residual_violation": light_reset_violation,
+                "parking_node_hits": parking_hits,
+                "detach_residuals": episode_residuals,
+                "detach_escalations": episode_escalations,
+                "post_detach_leftover": post_detach_leftover,
+            }
+        )
+        del runner
+        del env
+    return {"episodes": episodes, "backend_info": backend_info}
 
 
-def run_at15(args: argparse.Namespace) -> dict[str, Any]:
+def run_at15(backend_info: dict[str, Any]) -> dict[str, Any]:
     from dgcc.goals.distance import D as distance_to_goal
     from dgcc.tasks.domain import p1_rope_params
     from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
@@ -221,7 +236,6 @@ def run_at15(args: argparse.Namespace) -> dict[str, Any]:
     params = p1_rope_params()
     family, goal_id, goal = family_goals()[0]
 
-    # Stored x_initial from a dedicated fresh env.
     env = make_env(1)
     env.reset(params, init_shape="s_curve", seed=4_242)
     runner = BatchedEpisodeRunner(env, params, EpisodeConfig())
@@ -270,6 +284,7 @@ def run_at15(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "goal_id": goal_id,
         "family": family,
+        "backend": backend_info["backend"],
         "d_initial_reference": d_reference,
         "threshold": AT15_THRESHOLD,
         "rows": rows,
@@ -278,7 +293,7 @@ def run_at15(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def run_at17(args: argparse.Namespace) -> dict[str, Any]:
+def run_at17(backend_info: dict[str, Any]) -> dict[str, Any]:
     import dgcc.envs.dlolab as dlolab_module
     from dgcc.tasks.domain import p1_rope_params
     from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
@@ -362,8 +377,7 @@ def run_at17(args: argparse.Namespace) -> dict[str, Any]:
     for key in ("theta", "omega", "twist", "kappa_rest"):
         a = control[key]
         b = injected[key]
-        # Fields are laid out (..., env) on the last structural axis for
-        # edges/internal vertices: (F, E, B) / (F, IV, B) / (F, IV, B, 2).
+        # Fields are laid out (F, E|IV, B[, 2]); env axis is 2.
         env_axis = 2
         a_sel = np.take(a, successful, axis=env_axis)
         b_sel = np.take(b, successful, axis=env_axis)
@@ -372,6 +386,7 @@ def run_at17(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "goal_id": goal_id,
         "n_envs": n_envs,
+        "backend": backend_info["backend"],
         "forced_failure_envs": list(forced_failures),
         "successful_envs": [int(i) for i in successful],
         "control_settle_steps": [int(s) for s in control_settle],
@@ -382,48 +397,148 @@ def run_at17(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def spawn_section(
+    section: str, out_path: Path, backend: str, extra: list[str], timeout_s: int
+) -> dict[str, Any]:
+    env = dict(os.environ)
+    if backend == "cpu":
+        env["CUDA_VISIBLE_DEVICES"] = ""
+    else:
+        env.pop("CUDA_VISIBLE_DEVICES", None)
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--section",
+        section,
+        "--backend",
+        backend,
+        "--out",
+        str(out_path),
+        *extra,
+    ]
+    completed = subprocess.run(
+        command, env=env, timeout=timeout_s,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        tail = completed.stderr.decode(errors="replace")[-2000:]
+        raise RuntimeError(
+            f"section {section} {extra} exited {completed.returncode}: {tail}"
+        )
+    return json.loads(out_path.read_text())
+
+
+def run_driver(args: argparse.Namespace) -> dict[str, Any]:
+    plan = battery_episode_plan()
+    total_episodes = len(plan)
+    slices = [
+        (first, min(first + BATTERY_SLICE_EPISODES - 1, total_episodes))
+        for first in range(1, total_episodes + 1, BATTERY_SLICE_EPISODES)
+    ]
+
+    episodes: list[dict[str, Any]] = []
+    battery_backends: set[str] = set()
+    with tempfile.TemporaryDirectory(prefix="v2_integrity_") as tmp:
+        tmpdir = Path(tmp)
+        if not args.skip_battery:
+            for first, last in slices:
+                partial = spawn_section(
+                    "battery-slice",
+                    tmpdir / f"battery_{first:03d}.json",
+                    args.backend,
+                    ["--slice-first", str(first), "--slice-last", str(last)],
+                    timeout_s=3600,
+                )
+                episodes.extend(partial["episodes"])
+                battery_backends.add(partial["backend_info"]["backend"])
+        at15 = (
+            None
+            if args.skip_at15
+            else spawn_section("at15", tmpdir / "at15.json", "cpu", [], timeout_s=3600)
+        )
+        at17 = spawn_section("at17", tmpdir / "at17.json", "cpu", [], timeout_s=1800)
+
+    result: dict[str, Any] = {
+        "schema_version": 2,
+        "battery": args.battery,
+        "battery_backend": sorted(battery_backends),
+        "cpu_pinned_sections": ["at15", "at17"],
+        "code_sha256": sha256_file(Path(__file__).resolve()),
+        "process_isolation": {
+            "slice_episodes": BATTERY_SLICE_EPISODES,
+            "reason": "Genesis kernel-recompile accumulation segfaults near the "
+                      "~50th fresh env in one process (SIGSEGV observed twice)",
+        },
+    }
+    if not args.skip_battery:
+        if len(episodes) != total_episodes:
+            raise RuntimeError(
+                f"battery merged {len(episodes)} of {total_episodes} episodes"
+            )
+        violations = sum(e["light_reset_residual_violation"] for e in episodes)
+        parking = sum(e["parking_node_hits"] for e in episodes)
+        residuals = sum(e["detach_residuals"] for e in episodes)
+        escalations = sum(e["detach_escalations"] for e in episodes)
+        leftover = sum(e["post_detach_leftover"] for e in episodes)
+        result["battery_primitives"] = total_episodes * BATTERY_PRIMITIVES
+        result["at14"] = {
+            "light_reset_checks": total_episodes,
+            "light_reset_residual_violations": int(violations),
+            "parking_node_hits": int(parking),
+            "backend": sorted(battery_backends),
+            "pass": violations == 0 and parking == 0,
+        }
+        result["at16"] = {
+            "detach_residuals_first_pass": int(residuals),
+            "detach_escalations": int(escalations),
+            "post_detach_leftover": int(leftover),
+            "backend": sorted(battery_backends),
+            "pass": leftover == 0,
+        }
+        result["battery_episodes"] = episodes
+    if at15 is not None:
+        result["at15"] = at15
+    result["at17"] = at17
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--battery", choices=["standard"], default="standard")
     parser.add_argument("--out", type=permitted_path, required=True)
     parser.add_argument(
-        "--skip-battery", action="store_true",
-        help="run only AT-15/AT-17 (development aid; final gate must run all)",
+        "--backend", choices=["cpu", "gpu"], default="gpu",
+        help="battery backend (AT-15/AT-17 stay CPU-pinned regardless)",
     )
-    parser.add_argument(
-        "--skip-at15", action="store_true",
-        help="skip AT-15 (development aid; final gate must run all)",
-    )
+    parser.add_argument("--section", choices=["driver", "battery-slice", "at15", "at17"], default="driver")
+    parser.add_argument("--slice-first", type=int, default=1)
+    parser.add_argument("--slice-last", type=int, default=60)
+    parser.add_argument("--skip-battery", action="store_true")
+    parser.add_argument("--skip-at15", action="store_true")
     args = parser.parse_args()
 
-    init_cpu_genesis()
     started = time.time()
+    if args.section != "driver":
+        if args.section in ("at15", "at17"):
+            backend_info = init_genesis("cpu")
+        else:
+            backend_info = init_genesis(args.backend)
+        if args.section == "battery-slice":
+            result = run_battery_slice(args.slice_first, args.slice_last, backend_info)
+        elif args.section == "at15":
+            result = run_at15(backend_info)
+        else:
+            result = run_at17(backend_info)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        return 0
 
-    result: dict[str, Any] = {
-        "schema_version": 1,
-        "device": "cpu",
-        "data_scope": "development",
-        "battery": args.battery,
-        "code_sha256": sha256_file(Path(__file__).resolve()),
-    }
-    if not args.skip_battery:
-        battery = run_battery(args)
-        result["at14"] = battery["at14"]
-        result["at16"] = battery["at16"]
-        result["battery_primitives"] = battery["primitives"]
-        result["battery_episodes"] = battery["episodes"]
-    if not args.skip_at15:
-        result["at15"] = run_at15(args)
-    result["at17"] = run_at17(args)
+    result = run_driver(args)
     result["elapsed_s"] = round(time.time() - started, 1)
-
     gates = [
-        result[key]["pass"]
-        for key in ("at14", "at15", "at16", "at17")
-        if key in result
+        result[key]["pass"] for key in ("at14", "at15", "at16", "at17") if key in result
     ]
     result["pass"] = bool(gates) and all(gates)
-
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(
