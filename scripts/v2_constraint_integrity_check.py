@@ -171,12 +171,14 @@ def episode_actions(rng: np.random.Generator, n_envs: int) -> tuple[np.ndarray, 
 
 def run_battery_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, Any]:
     """AT-14 + AT-16 over battery episodes with ordinal in [first, last]."""
-    from dgcc.envs.dlolab import LIFT_HEIGHTS
+    from dgcc.envs.dlolab import GRIPPER_PARK_Z
     from dgcc.tasks.domain import p1_rope_params
     from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
 
     params = p1_rope_params()
-    parking_z = float(LIFT_HEIGHTS["high"])
+    # R10: live batteries scan against the CURRENT parking constant; scans of
+    # historical artifacts must keep the old 0.15 constant (design §5.6 note 9).
+    parking_z = float(GRIPPER_PARK_Z)
     goals = family_goals()
 
     episodes: list[dict[str, Any]] = []

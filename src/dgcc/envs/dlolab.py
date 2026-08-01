@@ -19,7 +19,17 @@ MU_S_BASE = 0.30
 MU_K_RATIO = 0.80
 SEGMENT_MASS_BASE = 1.0e-3
 MAX_DELTA_NORM = 0.15
+# R6: with horizontal δ (R4) the `lift` height alone decides the transit
+# height — δz no longer dominates it (design §5.1 R6; historically a
+# lift="low" grasp could reach z≈0.14 because δz was added on top).
 LIFT_HEIGHTS = {"low": 0.02, "high": 0.15}
+# R10: gripper parking height used by reset placement.  Low enough that a
+# regressed residual attachment drags its node near the ground instead of
+# 0.15 m mid-air (defense in depth for D1), but still 6x the rope resting
+# height so the AT-14 parking-z signature (+-2 mm) stays discriminative.
+# Historical artifact scans must keep using the OLD constant 0.15
+# (= LIFT_HEIGHTS["high"]) — design §5.6 note 9.
+GRIPPER_PARK_Z = 0.03
 GRASP_FAILURE_PROB = 0.05
 GRASP_NOISE_CHOICES = (-1, 0, 1)
 VALID_INIT_SHAPES = frozenset({"straight", "u_bend", "s_curve", "random_smooth"})
@@ -204,10 +214,30 @@ class DLOLabEnv(DLOEnvBase):
         rod_angular_damping: float = 5.0,
         initial_settle_steps: int = 20,
         reset_settle_max_steps: int = 1000,
+        move_v_max: float | None = None,
+        move_hold_max_steps: int | None = None,
         move_step_size: float = 0.002,
         move_hold_steps: int = 20,
         grasp_realism: bool = True,
     ) -> None:
+        """R1/R2 (env-correction Rev 2 §5.1) parameter semantics.
+
+        ``move_v_max`` [m/s] is the quasi-static gripper velocity cap; the
+        per-step displacement is derived as ``move_v_max * dt`` (the legacy
+        ``n_steps = max(20, ceil(d / step))`` formula is already an exact
+        velocity cap — §0.2).  Supplying ``move_v_max`` activates the
+        quasi-static primitive as ONE unit: velocity cap (R1),
+        hold-until-quiescent bounded by ``move_hold_max_steps`` (R2, default
+        2000), lowering waypoint (R3), horizontal-δ semantics (R4) and the
+        subfloor-target assert (R5).  The bundle is indivisible by
+        construction so the C3 divergence precondition (velocity cap with
+        ``hold=0``) cannot be configured (§1.2 / merge constraint iii).
+
+        ``move_step_size``/``move_hold_steps`` are the DEPRECATED legacy
+        displacement-per-step and fixed-hold-count parameters, retained for
+        one release; when ``move_v_max`` is absent the adapter behaves
+        exactly as before (fixed 20-step floor, ground clip, δ ∈ R³).
+        """
         if n_envs < 1:
             raise ValueError("n_envs must be at least 1")
         self.n_envs = int(n_envs)
@@ -217,9 +247,30 @@ class DLOLabEnv(DLOEnvBase):
         self.rod_angular_damping = float(rod_angular_damping)
         self.initial_settle_steps = int(initial_settle_steps)
         self.reset_settle_max_steps = int(reset_settle_max_steps)
+        self.quasi_static = move_v_max is not None
+        if self.quasi_static:
+            if float(move_v_max) <= 0.0:
+                raise ValueError("move_v_max must be positive")
+            self.move_v_max = float(move_v_max)
+            self._move_step = self.move_v_max * self.dt
+            hold_cap = 2000 if move_hold_max_steps is None else int(move_hold_max_steps)
+            if hold_cap < 1:
+                raise ValueError(
+                    "move_hold_max_steps must be >= 1: the quasi-static bundle "
+                    "forbids the hold=0 divergence precondition (design §1.2)"
+                )
+            self.move_hold_max_steps = hold_cap
+        else:
+            if move_hold_max_steps is not None:
+                raise ValueError("move_hold_max_steps requires move_v_max")
+            self.move_v_max = None
+            self._move_step = float(move_step_size)
+            self.move_hold_max_steps = None
         self.move_step_size = float(move_step_size)
         self.move_hold_steps = int(move_hold_steps)
         self.grasp_realism = bool(grasp_realism)
+        self.last_hold_steps_used = 0
+        self.last_hold_converged: bool | None = None
 
         self.gs: Any | None = None
         self.scene: Any | None = None
@@ -484,6 +535,12 @@ class DLOLabEnv(DLOEnvBase):
             raise ValueError(f"delta must have shape (3,), got {delta_vec.shape}")
         if not np.all(np.isfinite(delta_vec)):
             raise ValueError("delta contains non-finite values")
+        if self.quasi_static:
+            # R4: δ is a HORIZONTAL displacement — the z component is ignored
+            # (dimension kept at R³ for checkpoint/action-space compatibility,
+            # design §5.6 note 1) and the clamp applies to ‖δ_xy‖.
+            delta_vec = delta_vec.copy()
+            delta_vec[2] = 0.0
         norm = float(np.linalg.norm(delta_vec))
         if norm > MAX_DELTA_NORM:
             delta_vec = delta_vec * (MAX_DELTA_NORM / norm)
@@ -511,7 +568,80 @@ class DLOLabEnv(DLOEnvBase):
         radius = float(self.params.radius) if self.params is not None else 0.005
         return max(radius, 0.005)
 
-    def _move_prepared(self, delta_vec: np.ndarray, lift: str) -> np.ndarray:
+    def _finalize_move_targets(self, lifted: np.ndarray, deltas: np.ndarray) -> np.ndarray:
+        """Shared single/batch target construction with R5 floor handling."""
+        target = lifted + deltas
+        floor = self._gripper_z_floor()
+        if self.quasi_static:
+            # R5: with horizontal δ (R4) a subfloor target is unreachable by
+            # construction, so the legacy clip is promoted to a fail-closed
+            # assert (AT-9): its firing means R4 regressed upstream.
+            if bool(np.any(target[:, 2] < floor)):
+                raise RuntimeError(
+                    "subfloor gripper target commanded despite horizontal-δ "
+                    f"semantics (min z {float(target[:, 2].min()):.6f} < floor "
+                    f"{floor:.6f}); R4 regressed"
+                )
+        else:
+            target[:, 2] = np.maximum(target[:, 2], floor)
+        return target
+
+    def _execute_move(
+        self, lifted: np.ndarray, target: np.ndarray, vel_threshold: float
+    ) -> np.ndarray:
+        """Shared single/batch waypoint walk + hold (design §5.6 note 2).
+
+        Legacy mode: (lift, translate) waypoints and a fixed hold count —
+        byte-compatible with the historical behavior.  Quasi-static mode adds
+        the R3 lowering waypoint (release at rest height instead of transit
+        height) and replaces the fixed hold with R2 hold-until-quiescent:
+        hold the final target until every node speed drops below
+        ``vel_threshold``, bounded by ``move_hold_max_steps``; convergence is
+        recorded in ``last_hold_converged`` (AT-3 becomes structural).
+        """
+        waypoints = [lifted, target]
+        if self.quasi_static:
+            lowered = target.copy()
+            lowered[:, 2] = self._gripper_z_floor()
+            waypoints.append(lowered)
+
+        current = self._gripper_positions()
+        for waypoint in waypoints:
+            max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
+            n_steps = max(20, int(ceil(max_distance / self._move_step)))
+            for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
+                pos = (1.0 - alpha) * current + alpha * waypoint
+                self._set_gripper_positions(pos)
+                self._step_scene()
+            current = waypoint.copy()
+
+        final = waypoints[-1]
+        if self.quasi_static:
+            hold_steps = 0
+            threshold = float(vel_threshold)
+            while (
+                hold_steps < self.move_hold_max_steps
+                and float(np.max(self.max_node_speed_batch())) >= threshold
+            ):
+                self._set_gripper_positions(final)
+                self._step_scene()
+                hold_steps += 1
+            self.last_hold_steps_used = hold_steps
+            self.last_hold_converged = bool(
+                float(np.max(self.max_node_speed_batch())) < threshold
+            )
+        else:
+            for _ in range(max(0, self.move_hold_steps)):
+                self._set_gripper_positions(final)
+                self._step_scene()
+            self.last_hold_steps_used = max(0, self.move_hold_steps)
+            self.last_hold_converged = None
+        self._assert_finite()
+        return final
+
+    def _move_prepared(
+        self, delta_vec: np.ndarray, lift: str, vel_threshold: float = 1e-3
+    ) -> np.ndarray:
         """Run the waypoint move for an already-validated/clamped delta (A7: clamp once)."""
         self._require_reset()
         if self.active_node is None:
@@ -520,27 +650,18 @@ class DLOLabEnv(DLOEnvBase):
         start = self._gripper_positions()
         lifted = start.copy()
         lifted[:, 2] = LIFT_HEIGHTS[lift]
-        target = lifted + delta_vec.reshape(1, 3)
-        target[:, 2] = np.maximum(target[:, 2], self._gripper_z_floor())
+        target = self._finalize_move_targets(lifted, delta_vec.reshape(1, 3))
         self.last_move_target = target.copy()
 
-        current = start
-        for waypoint in (lifted, target):
-            max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
-            n_steps = max(20, int(ceil(max_distance / self.move_step_size)))
-            for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
-                pos = (1.0 - alpha) * current + alpha * waypoint
-                self._set_gripper_positions(pos)
-                self._step_scene()
-            current = waypoint.copy()
+        final = self._execute_move(lifted, target, vel_threshold)
+        return final[0].copy() if self.n_envs == 1 else final.copy()
 
-        for _ in range(max(0, self.move_hold_steps)):
-            self._set_gripper_positions(target)
-            self._step_scene()
-        self._assert_finite()
-        return target[0].copy() if self.n_envs == 1 else target.copy()
-
-    def _move_prepared_batch(self, delta_vecs: np.ndarray, lift_values: Sequence[str]) -> np.ndarray:
+    def _move_prepared_batch(
+        self,
+        delta_vecs: np.ndarray,
+        lift_values: Sequence[str],
+        vel_threshold: float = 1e-3,
+    ) -> np.ndarray:
         """Run batched waypoint moves with one target per environment."""
 
         self._require_reset()
@@ -560,25 +681,10 @@ class DLOLabEnv(DLOEnvBase):
         start = self._gripper_positions()
         lifted = start.copy()
         lifted[:, 2] = np.asarray([LIFT_HEIGHTS[lift] for lift in lifts], dtype=float)
-        target = lifted + deltas
-        target[:, 2] = np.maximum(target[:, 2], self._gripper_z_floor())
+        target = self._finalize_move_targets(lifted, deltas)
         self.last_move_target = target.copy()
 
-        current = start
-        for waypoint in (lifted, target):
-            max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
-            n_steps = max(20, int(ceil(max_distance / self.move_step_size)))
-            for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
-                pos = (1.0 - alpha) * current + alpha * waypoint
-                self._set_gripper_positions(pos)
-                self._step_scene()
-            current = waypoint.copy()
-
-        for _ in range(max(0, self.move_hold_steps)):
-            self._set_gripper_positions(target)
-            self._step_scene()
-        self._assert_finite()
-        return target.copy()
+        return self._execute_move(lifted, target, vel_threshold).copy()
 
     def release(self, vel_threshold: float = 1e-3, max_steps: int = 5000) -> bool:
         self._require_reset()
@@ -676,6 +782,11 @@ class DLOLabEnv(DLOEnvBase):
             raise ValueError(f"delta must have shape ({self.n_envs}, 3), got {delta_array.shape}")
         if not np.all(np.isfinite(delta_array)):
             raise ValueError("delta contains non-finite values")
+        if self.quasi_static:
+            # R4: horizontal-δ semantics — z is ignored (dimension kept at R³)
+            # and the norm clamp applies to ‖δ_xy‖.
+            delta_array = delta_array.copy()
+            delta_array[:, 2] = 0.0
         norms = np.linalg.norm(delta_array, axis=1)
         scale = np.ones_like(norms)
         over = norms > MAX_DELTA_NORM
@@ -720,7 +831,9 @@ class DLOLabEnv(DLOEnvBase):
             self._batched_active_nodes[env_idx] = int(node)
         self._step_scene()
 
-        target = self._move_prepared_batch(delta_clamped, lift_values)
+        target = self._move_prepared_batch(
+            delta_clamped, lift_values, vel_threshold=vel_threshold
+        )
 
         # D2 (env-correction Rev 2 §1.4): verified detach against solver truth.
         # `_batched_active_nodes` is only released after verification succeeds —
@@ -799,6 +912,9 @@ class DLOLabEnv(DLOEnvBase):
                 "restoration_drift_mean_m": restoration_drift_mean,
                 "detach_residuals": int(detach_residuals),
                 "detach_escalations": int(detach_escalations),
+                "hold_steps_used": int(self.last_hold_steps_used),
+                "hold_converged": self.last_hold_converged,
+                "quasi_static": bool(self.quasi_static),
             },
         }
 
@@ -909,7 +1025,7 @@ class DLOLabEnv(DLOEnvBase):
         # persistence mechanism behind consecutive covenant discards observed
         # in the P1-M2 smoke.
         safe_gripper = np.zeros((self.n_envs, 3), dtype=float)
-        safe_gripper[:, 2] = LIFT_HEIGHTS["high"]
+        safe_gripper[:, 2] = GRIPPER_PARK_Z
         self._set_gripper_positions(safe_gripper)
         # D1 (env-correction Rev 2 §1.4): unconditionally clear every vertex
         # constraint of the scoped envs at reset placement, BEFORE the state
