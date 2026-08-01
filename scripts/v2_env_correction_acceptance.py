@@ -141,7 +141,8 @@ def build_probe_env(n_envs: int):
             arclen = float(edges.sum())
             rest = float(self.params.length_m) / (raw.shape[0] - 1)
             strain = float(np.abs(edges / rest - 1.0).max())
-            self.probe_rows.append((phase, speed, ke, arclen, strain))
+            min_z = float(raw[:, 2].min())
+            self.probe_rows.append((phase, speed, ke, arclen, strain, min_z))
 
         def _verified_detach_batch(self):
             if self.probe_active:
@@ -164,14 +165,38 @@ def build_probe_env(n_envs: int):
             ke = np.asarray([r[2] for r in rows], dtype=float)
             arclen = np.asarray([r[3] for r in rows], dtype=float)
             strain = np.asarray([r[4] for r in rows], dtype=float)
+            min_z = np.asarray([r[5] for r in rows], dtype=float)
             move_mask = phases == "move"
             hold_mask = phases == "hold"
             settle_mask = phases == "settle"
+            # T2 (adjudication §1.8-1): attribute the move-phase peak to the
+            # lift/translate/lower leg.  Move-classified steps are ordered:
+            # a leading remainder (teleport/attach gripper commands) followed
+            # by exactly the per-waypoint walks recorded by the adapter.
+            move_speed = speed[move_mask]
+            waypoint_steps = [int(n) for n in self.last_waypoint_steps]
+            leg_names = ["lift", "translate", "lower"][: len(waypoint_steps)]
+            walk_total = int(sum(waypoint_steps))
+            leg_peaks: dict[str, float] = {}
+            premove_peak = 0.0
+            if len(move_speed) >= walk_total > 0:
+                lead = len(move_speed) - walk_total
+                premove_peak = float(move_speed[:lead].max()) if lead else 0.0
+                cursor = lead
+                for name, count in zip(leg_names, waypoint_steps):
+                    segment = move_speed[cursor:cursor + count]
+                    leg_peaks[f"v_peak_{name}"] = (
+                        float(segment.max()) if segment.size else 0.0
+                    )
+                    cursor += count
             return {
                 "total_sim_steps": int(len(rows)),
                 "move_steps": int(move_mask.sum()),
                 "hold_steps": int(hold_mask.sum()),
                 "settle_steps_observed": int(settle_mask.sum()),
+                "n_waypoint_steps": waypoint_steps,
+                "v_peak_premove": premove_peak,
+                **leg_peaks,
                 "v_peak_move": float(speed[move_mask | hold_mask].max()) if (move_mask | hold_mask).any() else 0.0,
                 "v_peak_settle": float(speed[settle_mask].max()) if settle_mask.any() else 0.0,
                 "v_peak_total": float(speed.max()) if len(rows) else 0.0,
@@ -180,6 +205,11 @@ def build_probe_env(n_envs: int):
                 "strain_peak": float(strain.max()) if len(rows) else 0.0,
                 "arclen_peak": float(arclen.max()) if len(rows) else 0.0,
                 "arclen_final": float(arclen[-1]) if len(rows) else float("nan"),
+                # T2 (adjudication §1.8-2 / AT-9b): actual ground penetration.
+                # z is the node CENTER; center below the plane (z < 0) is an
+                # unambiguous penetration regardless of the 5 mm rope radius.
+                "min_node_z": float(min_z.min()) if len(rows) else float("nan"),
+                "ground_penetration_steps": int((min_z < 0.0).sum()),
             }
 
     return ProbeEnv(
@@ -295,6 +325,13 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
                     "lift": str(lift[0]),
                     "target_z": float(env.last_move_target[0, 2]),
                     "subfloor_target_commanded": subfloor,
+                    "n_waypoint_steps": probe["n_waypoint_steps"],
+                    "v_peak_premove": probe["v_peak_premove"],
+                    "v_peak_lift": probe.get("v_peak_lift", 0.0),
+                    "v_peak_translate": probe.get("v_peak_translate", 0.0),
+                    "v_peak_lower": probe.get("v_peak_lower", 0.0),
+                    "min_node_z": probe["min_node_z"],
+                    "ground_penetration_steps": probe["ground_penetration_steps"],
                     "v_peak_move": probe["v_peak_move"],
                     "v_peak_settle": probe["v_peak_settle"],
                     "v_peak_total": probe["v_peak_total"],
@@ -402,6 +439,39 @@ def judge(primitives: list[dict[str, Any]]) -> dict[str, Any]:
     }
     for test in tests.values():
         test["pass"] = test["violations"] == 0
+
+    # T2 repairs (Stage 2 adjudication §1.8; informational until the Rev 3
+    # criteria are pinned by the owner — reported, not gated):
+    hold_cap_exhausted = sum(1 for p in primitives if not p["hold_converged"])
+    tests["AT-3"]["hold_cap_exhausted"] = int(hold_cap_exhausted)
+    tests["AT-3"]["hold_cap_exhausted_rate"] = round(
+        hold_cap_exhausted / len(primitives), 4
+    )
+    penetration = np.asarray(
+        [p.get("ground_penetration_steps", 0) for p in primitives], dtype=int
+    )
+    min_node_z = np.asarray(
+        [p.get("min_node_z", np.nan) for p in primitives], dtype=float
+    )
+    tests["AT-9b (reported)"] = {
+        "criterion": "actual node ground penetration (center z < 0) == 0",
+        "primitives_with_penetration": int((penetration > 0).sum()),
+        "penetration_steps_total": int(penetration.sum()),
+        "min_node_z_overall": float(np.nanmin(min_node_z)),
+        "informational_pending_rev3": True,
+        "pass": True,
+    }
+    quantiles = [50, 90, 95, 99]
+    tests["arclen_transient_stats (reported)"] = {
+        "criterion": "transient |L/L0-1| evidence for the R7 covenant "
+                     "threshold review (0.05 -> 0.02 candidate)",
+        "max": float(arclen_peak_rel.max()),
+        **{f"p{q}": float(np.percentile(arclen_peak_rel, q)) for q in quantiles},
+        "count_above_0.02": int((arclen_peak_rel > 0.02).sum()),
+        "count_above_0.05": int((arclen_peak_rel > 0.05).sum()),
+        "informational_pending_rev3": True,
+        "pass": True,
+    }
     return tests
 
 

@@ -271,6 +271,7 @@ class DLOLabEnv(DLOEnvBase):
         self.grasp_realism = bool(grasp_realism)
         self.last_hold_steps_used = 0
         self.last_hold_converged: bool | None = None
+        self.last_waypoint_steps: list[int] = []
 
         self.gs: Any | None = None
         self.scene: Any | None = None
@@ -606,9 +607,15 @@ class DLOLabEnv(DLOEnvBase):
             waypoints.append(lowered)
 
         current = self._gripper_positions()
+        # T2 instrumentation (Stage 2 adjudication §1.8-1): per-waypoint step
+        # counts so acceptance peaks can be attributed to the lift/translate/
+        # lower leg directly from the artifact (design §5.5 required
+        # n_waypoint_steps[3] and Stage 2 shipped without it).
+        self.last_waypoint_steps = []
         for waypoint in waypoints:
             max_distance = float(np.max(np.linalg.norm(waypoint - current, axis=1)))
             n_steps = max(20, int(ceil(max_distance / self._move_step)))
+            self.last_waypoint_steps.append(int(n_steps))
             for alpha in np.linspace(1.0 / n_steps, 1.0, n_steps):
                 pos = (1.0 - alpha) * current + alpha * waypoint
                 self._set_gripper_positions(pos)
@@ -915,6 +922,7 @@ class DLOLabEnv(DLOEnvBase):
                 "hold_steps_used": int(self.last_hold_steps_used),
                 "hold_converged": self.last_hold_converged,
                 "quasi_static": bool(self.quasi_static),
+                "n_waypoint_steps": list(self.last_waypoint_steps),
             },
         }
 
