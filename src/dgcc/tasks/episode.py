@@ -609,7 +609,15 @@ class BatchedEpisodeRunner:
             ],
             dtype=float,
         )
-        self.d_current = np.where(~self.done, recovered_d, self.d_current)
+        # B3 (env-correction Rev 2 §1.6.3): scope the d_current rewrite to the
+        # reseeded envs. `recovered_d` reflects the extra recovery settle, and
+        # d_current feeds d_before -> step_reward on the NEXT step, so an
+        # unscoped rewrite biases the reward baseline of innocent envs and
+        # poisons the replay buffer (a reward-signal defect, not telemetry —
+        # treated at the same grade as the dynamics corrections).
+        scoped = np.zeros(self.n_envs, dtype=bool)
+        scoped[all_reseeded] = True
+        self.d_current = np.where(scoped & ~self.done, recovered_d, self.d_current)
 
         if bad_envs.size:
             self._record_incidents(
