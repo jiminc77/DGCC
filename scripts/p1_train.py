@@ -678,6 +678,9 @@ class TrainingRun:
         # A new episode batch invalidates every in-flight AT-1H accumulator:
         # eval and full rebuilds discard the running episodes, so their
         # partial counters must not leak into the next episode's row.
+        # Whatever those episodes had already measured is persisted first
+        # (episode_complete=false) rather than dropped.
+        self.flush_at1h_open_episodes()
         self._at1h_reset_slots()
         if self.task == "t2":
             self.runner.begin_episodes(
@@ -1018,10 +1021,27 @@ class TrainingRun:
             active & (np.asarray(record["done"], dtype=bool) | np.asarray(record["truncated"], dtype=bool))
         )
         if finished.size:
-            self._flush_at1h_episodes(finished)
+            self._flush_at1h_episodes(finished, complete=True)
             self._at1h_reset_slots(finished)
 
-    def _flush_at1h_episodes(self, env_indices: np.ndarray) -> None:
+    def flush_at1h_open_episodes(self) -> int:
+        """Persist the counters of episodes still in flight.
+
+        A run that halts, is truncated by its budget, or is interrupted by an
+        eval boundary would otherwise DISCARD the AT-1H evidence of every
+        episode that had not yet terminated.  Rev 3 asks for the counters,
+        not for the counters of conveniently-timed episodes, so the partial
+        rows are written with ``episode_complete=false`` and are trivially
+        separable at analysis time.
+        """
+        open_slots = np.flatnonzero(self._at1h_primitives > 0)
+        if not open_slots.size:
+            return 0
+        written = self._flush_at1h_episodes(open_slots, complete=False)
+        self._at1h_reset_slots(open_slots)
+        return written
+
+    def _flush_at1h_episodes(self, env_indices: np.ndarray, *, complete: bool) -> int:
         rows = []
         for env_idx in env_indices:
             n = int(self._at1h_primitives[env_idx])
@@ -1040,13 +1060,15 @@ class TrainingRun:
                 "strain_peak_max": float(self._at1h_strain_max[env_idx]),
                 "ke_over_pe_max": float(self._at1h_kepe_max[env_idx]),
                 "clean_terminal": bool(self._at1h_clean_terminal[env_idx]),
+                "episode_complete": bool(complete),
             })
         if not rows:
-            return
+            return 0
         self._at1h_path.parent.mkdir(parents=True, exist_ok=True)
         with self._at1h_path.open("a", encoding="utf-8") as handle:
             for row in rows:
                 handle.write(json.dumps(row) + "\n")
+        return len(rows)
 
     def at1h_run_summary(self) -> dict[str, Any]:
         n = max(1, self._at1h_run_primitives)
@@ -1409,12 +1431,16 @@ class TrainingRun:
             # Global rule 6, training level: halt + preserve last checkpoint +
             # factual report. No silent continuation.
             self.halt_reason = f"TrainingNaNError: {exc}"
+            # AT-1H evidence of the episodes that were running when the halt
+            # fired is exactly the evidence a halt investigation wants.
+            self.flush_at1h_open_episodes()
             print(f"TRAINING HALT (rule 6): {self.halt_reason}")
             print(f"last checkpoint preserved: {self.last_checkpoint}")
             self.diag.save_history()
             self.save_run_summary()
             return 2
 
+        self.flush_at1h_open_episodes()
         if not self.eval_history or self.eval_history[-1]["transitions"] < self.transitions:
             self.eval_and_checkpoint(final=True)
         else:
