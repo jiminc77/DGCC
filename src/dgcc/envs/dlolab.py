@@ -989,6 +989,20 @@ class DLOLabEnv(DLOEnvBase):
         self.last_grasp_actual_node = int(p_actual[0]) if self.n_envs == 1 else None
         self.last_grasp_success = bool(np.all(grasp_success))
 
+        # P9 Rev 4 (residual-energy repair, 2026-08-02): capture the FULL
+        # solver-truth rod state BEFORE the primitive perturbs anything, so a
+        # failed grasp can be rewound to a state the solver itself produced
+        # rather than to a synthesized one.  Snapshotting a state that never
+        # existed (positions restored but velocity/theta/omega/twist zeroed and
+        # the material frames re-seeded from scratch) breaks the elastic
+        # equilibrium the rope was holding and injects energy that is charged to
+        # the NEXT primitive -- the measured cause of the AT-1H absolute-cap
+        # exceptions.  Only taken when the sample actually contains a failure
+        # (~GRASP_FAILURE_PROB of primitives), so the steady-state cost is nil.
+        pre_primitive_state = (
+            None if bool(np.all(grasp_success)) else self._snapshot_rod_state()
+        )
+
         env_indices = np.arange(self.n_envs)
         self._set_gripper_positions(raw_before[env_indices, p_actual, :])
         self._step_scene()
@@ -1034,9 +1048,9 @@ class DLOLabEnv(DLOEnvBase):
             )
             restoration_drift_max = float(failed_drift.max()) if failed_drift.size else 0.0
             restoration_drift_mean = float(failed_drift.mean()) if failed_drift.size else 0.0
-            raw_after[~grasp_success] = raw_before[~grasp_success]
-            # D4 (env-correction Rev 2 §1.5, strengthened to satisfy AT-17):
-            # restore ONLY the failed envs through the scoped solver state
+            # D4 (env-correction Rev 2 §1.5, strengthened to satisfy AT-17;
+            # repaired in Rev 4): restore ONLY the failed envs, and restore the
+            # FULL pre-primitive solver state verbatim through the scoped state
             # kernel.  The design's literal one-liner
             # (`place_rod_vertices_batch(raw_after, reinit_env_indices=failed)`)
             # still zeroes every env's velocities, re-parks every gripper and
@@ -1044,10 +1058,13 @@ class DLOLabEnv(DLOEnvBase):
             # successful envs' theta/omega/twist and breaks AT-17's
             # bit-identity requirement.  The scoped restore below writes
             # nothing outside the failed envs and steps nothing, so
-            # successful envs stay bit-identical to a no-failure run while
-            # failed envs get the specified restoration contract
-            # (pos = raw_before, vel = 0, frames rebuilt, twist reset).
-            self._restore_failed_grasp_envs(raw_after, np.flatnonzero(~grasp_success))
+            # successful envs stay bit-identical to a no-failure run (AT-17)
+            # while failed envs are returned EXACTLY to the state they were in
+            # when the primitive began -- a real solver equilibrium, so the
+            # rewind is energy-neutral by construction.
+            self._restore_failed_grasp_envs(
+                pre_primitive_state, np.flatnonzero(~grasp_success)
+            )
             X_after = self.get_centerline_batch()
             X_after[~grasp_success] = X_before[~grasp_success]
             settle_steps = settle_steps.copy()
@@ -1500,33 +1517,108 @@ class DLOLabEnv(DLOEnvBase):
         self.detach_escalation_total += escalations
         return residual_first, escalations
 
-    def _restore_failed_grasp_envs(
-        self, batched_positions: np.ndarray, failed_env_indices: np.ndarray
-    ) -> None:
-        """D4: scoped failed-grasp restoration with zero successful-env impact.
+    # -- P9 Rev 4 faithful failed-grasp rewind ---------------------------
+    # `_ROD_STATE_FIELDS` is the exact argument order shared by the frozen
+    # upstream `_kernel_get_state` / `_kernel_set_state` pair (rod_solver.py
+    # 2207-2306).  Keeping one tuple means the reader and the writer cannot
+    # drift apart silently.
+    _ROD_STATE_FIELDS = (
+        "pos", "vel", "fixed", "theta", "omega", "edge", "length",
+        "d1", "d2", "d3", "d1_ref", "d2_ref", "kb", "twist", "kappa_rest",
+    )
 
-        Validates the full batch, clears the failed envs' constraint slots
-        (D1 defense-in-depth) and rewrites their full solver state through the
-        scoped `_kernel_set_state` path.  No entity-level full-batch write, no
-        gripper re-park and no extra scene step happen, so envs outside the
-        scope remain bit-identical to an execution without any grasp failure
-        (AT-17).  The failed envs get the documented restoration contract:
-        positions restored, velocities zeroed, frames rebuilt, twist reset.
+    def _snapshot_rod_state(self) -> dict[str, "torch.Tensor"]:
+        """Read the complete solver-truth rod state for every environment.
+
+        Dual of `_kernel_set_state`: every field the setter writes is read
+        back by the frozen upstream `_kernel_get_state`, so a snapshot/restore
+        round trip is the identity.  Nothing is synthesized and nothing is
+        zeroed, which is the whole point -- the rope's elastic equilibrium
+        lives in `theta`/`omega`/`twist` and the material frames, not in the
+        vertex positions alone.
+        """
+
+        assert self.rod_entity is not None and self.gs is not None
+        import torch
+
+        solver = self.rod_entity._solver
+        device = self.gs.device
+        tc = self.gs.tc_float
+        n_envs = self.n_envs
+        n_v = int(solver._n_vertices)
+        n_e = int(solver._n_edges)
+        n_iv = int(solver.n_internal_vertices)
+
+        def real(*shape: int) -> "torch.Tensor":
+            return torch.zeros(shape, dtype=tc, device=device)
+
+        snapshot = {
+            "pos": real(n_envs, n_v, 3),
+            "vel": real(n_envs, n_v, 3),
+            "fixed": torch.zeros((n_envs, n_v), dtype=torch.bool, device=device),
+            "theta": real(n_envs, n_e),
+            "omega": real(n_envs, n_e),
+            "edge": real(n_envs, n_e, 3),
+            "length": real(n_envs, n_e),
+            "d1": real(n_envs, n_e, 3),
+            "d2": real(n_envs, n_e, 3),
+            "d3": real(n_envs, n_e, 3),
+            "d1_ref": real(n_envs, n_e, 3),
+            "d2_ref": real(n_envs, n_e, 3),
+            "kb": real(n_envs, n_iv, 3),
+            "twist": real(n_envs, n_iv),
+            "kappa_rest": real(n_envs, n_iv, 2),
+        }
+        solver._kernel_get_state(
+            self.rod_entity._sim.cur_substep_local,
+            *(snapshot[name] for name in self._ROD_STATE_FIELDS),
+        )
+        return snapshot
+
+    def _restore_failed_grasp_envs(
+        self, snapshot: dict[str, "torch.Tensor"] | None, failed_env_indices: np.ndarray
+    ) -> None:
+        """D4 (Rev 4): scoped failed-grasp rewind with zero successful-env impact.
+
+        Clears the failed envs' constraint slots (D1 defense-in-depth) and
+        rewrites their full solver state from `snapshot` -- the state captured
+        at the top of this primitive, before anything touched the rope --
+        through the scoped `_kernel_set_state` path.  No entity-level
+        full-batch write, no gripper re-park and no extra scene step happen,
+        so envs outside the scope remain bit-identical to an execution without
+        any grasp failure (AT-17).
+
+        Rev 3 restored positions only and zeroed velocity/theta/omega/twist
+        while re-seeding the material frames by fresh parallel transport.  On a
+        rope carrying a tight hinge that is not a rewind: it is a synthesized
+        state that was never in equilibrium, and the solver converts the
+        resulting unbalanced bending moment into a metre-per-second ejection on
+        the next scene step -- attributed to the FOLLOWING primitive, because
+        this primitive's AT-1H window has already closed.  Restoring the real
+        prior state removes the injection at its source instead of masking it.
         """
         scoped = np.asarray(failed_env_indices, dtype=int).reshape(-1)
         if scoped.size == 0:
             return
-        verts = np.asarray(batched_positions, dtype=float)
-        n_vertices = self._n_vertices()
-        if verts.shape != (self.n_envs, n_vertices, 3):
-            raise ValueError(
-                "vertices must have shape "
-                f"({self.n_envs}, {n_vertices}, 3), got {verts.shape}"
+        if snapshot is None:
+            raise RuntimeError(
+                "failed-grasp rewind requested without a pre-primitive snapshot"
             )
-        if not np.all(np.isfinite(verts[scoped])):
-            raise ValueError("vertices contain non-finite values")
+        assert self.rod_entity is not None and self.gs is not None
+        import torch
+
+        if not bool(torch.isfinite(snapshot["pos"][scoped]).all()):
+            raise ValueError("snapshot positions contain non-finite values")
+
         self._clear_vertex_constraints(env_indices=scoped)
-        self._reinitialize_edge_state(verts, env_indices=scoped)
+        envs_idx = torch.as_tensor(
+            scoped.astype(np.int32), dtype=torch.int32, device=self.gs.device
+        )
+        self.rod_entity._solver._kernel_set_state(
+            self.rod_entity._sim.cur_substep_local,
+            envs_idx,
+            *(snapshot[name] for name in self._ROD_STATE_FIELDS),
+        )
 
     def _place_rod_vertices(self, vertices: np.ndarray) -> None:
         self._require_reset()

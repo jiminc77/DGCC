@@ -7,8 +7,18 @@ run:
   # 8192 is excluded: warmup_transitions=10240 would be crossed inside
   # round 2, collapsing the pre-update collection window.
   n_envs: 4096
-  eval_every_transitions: 25000
-  checkpoint_every_transitions: 25000
+  # Amendment 6 appendix (owner-approved 2026-08-02, rd#44
+  # #issuecomment-5156550194): 25,000 -> 24,576 = 6 x n_envs 4,096, so every
+  # eval/checkpoint boundary lands on an exact round boundary instead of the
+  # ragged 28,672/53,248/... schedule 25,000 produced against a 4,096 batch.
+  # Effective schedule (measured by scripts/v2_eval_schedule_audit.py):
+  # 24,576*k for k=1..12 (= 294,912) plus the terminal eval at run end.
+  eval_every_transitions: 24576
+  # NOT read by scripts/p1_train.py: `eval_and_checkpoint()` writes the
+  # checkpoint on the eval boundary, so the checkpoint schedule IS the eval
+  # schedule.  Kept equal to eval_every_transitions so the config cannot
+  # advertise a cadence the code does not implement.
+  checkpoint_every_transitions: 24576
 eval:
   t1_episodes_per_task: 100
   t2_val_goals: 50

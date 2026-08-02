@@ -89,11 +89,21 @@ AT6_REVISED = {"median": 2.0, "p95": 6.0}
 # exhaustion had a clean terminal, arclen_dev <= 9.2e-5, 1/10 of the
 # AT-5 bound; measured rates 1.33% low / 1.0% high).
 AT7B_RATE = 0.02
+# Action-stream tag (Rev 4 verification, orchestrator directive 2026-08-02
+# item 4).  77,000 is the ORIGINAL preregistered battery sequence; a second
+# run under an INDEPENDENT tag (91,000) proves the repair is not overfitted to
+# one action realisation.  The tag is recorded in the artifact so the two runs
+# are never confused, and it feeds `action_sequence_sha256` so a changed tag
+# cannot masquerade as the preregistered sequence.
+DEFAULT_ACTION_STREAM_TAG = 77_000
+INDEPENDENT_ACTION_STREAM_TAG = 91_000
 
 
-def stratified_actions(episode: int, seed: int) -> list[dict[str, Any]]:
+def stratified_actions(
+    episode: int, seed: int, stream_tag: int = DEFAULT_ACTION_STREAM_TAG
+) -> list[dict[str, Any]]:
     """Deterministic per-episode action schedule: lift balanced 5/5."""
-    rng = np.random.default_rng([77_000, episode, seed])
+    rng = np.random.default_rng([int(stream_tag), episode, seed])
     lifts = np.array(["low"] * 5 + ["high"] * 5, dtype=object)
     rng.shuffle(lifts)
     actions = []
@@ -110,17 +120,22 @@ def stratified_actions(episode: int, seed: int) -> list[dict[str, Any]]:
     return actions
 
 
-def action_sequence_sha256() -> str:
+def action_sequence_sha256(stream_tag: int = DEFAULT_ACTION_STREAM_TAG) -> str:
     digest = hashlib.sha256()
     for entry in battery_episode_plan():
-        for action in stratified_actions(entry["episode"], entry["seed"]):
+        for action in stratified_actions(entry["episode"], entry["seed"], stream_tag):
             digest.update(
                 json.dumps(action, sort_keys=True, separators=(",", ":")).encode()
             )
     return digest.hexdigest()
 
 
-def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, Any]:
+def run_slice(
+    first: int,
+    last: int,
+    backend_info: dict[str, Any],
+    stream_tag: int = DEFAULT_ACTION_STREAM_TAG,
+) -> dict[str, Any]:
     from dgcc.envs.dlolab import LIFT_HEIGHTS
     from dgcc.tasks.domain import p1_rope_params
     from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
@@ -145,7 +160,9 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
             init_shapes=[entry["init_shape"]],
             goals=[goal],
         )
-        for k, action in enumerate(stratified_actions(episode_ordinal, entry["seed"])):
+        for k, action in enumerate(
+            stratified_actions(episode_ordinal, entry["seed"], stream_tag)
+        ):
             env.probe_begin_primitive()
             subfloor = False
             try:
@@ -210,7 +227,11 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
         }
         del runner
         del env
-    return {"primitives": primitives, "backend_info": backend_info}
+    return {
+        "primitives": primitives,
+        "backend_info": backend_info,
+        "action_stream_tag": int(stream_tag),
+    }
 
 
 def adjudication_criteria(primitives: list[dict[str, Any]]) -> dict[str, Any]:
@@ -272,7 +293,9 @@ def adjudication_criteria(primitives: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def spawn_slice(out_path: Path, backend: str, first: int, last: int) -> dict[str, Any]:
+def spawn_slice(
+    out_path: Path, backend: str, first: int, last: int, stream_tag: int
+) -> dict[str, Any]:
     env = dict(os.environ)
     if backend == "cpu":
         env["CUDA_VISIBLE_DEVICES"] = ""
@@ -283,6 +306,7 @@ def spawn_slice(out_path: Path, backend: str, first: int, last: int) -> dict[str
         "--section", "slice", "--backend", backend,
         "--slice-first", str(first), "--slice-last", str(last),
         "--out", str(out_path), "--authorize", ADJUDICATION_SHA_PREFIX,
+        "--action-stream-tag", str(stream_tag),
     ]
     completed = subprocess.run(
         command, env=env, timeout=7200,
@@ -307,6 +331,14 @@ def main() -> int:
         help="required for the full battery: adjudication SHA-256 prefix "
              "(the Stage 2 remeasurement must wait for owner pins O1-O4)",
     )
+    parser.add_argument(
+        "--action-stream-tag", type=int, default=DEFAULT_ACTION_STREAM_TAG,
+        help=(
+            "RNG tag for the stratified action schedule: "
+            f"{DEFAULT_ACTION_STREAM_TAG} = original preregistered sequence, "
+            f"{INDEPENDENT_ACTION_STREAM_TAG} = independent verification sequence"
+        ),
+    )
     args = parser.parse_args()
 
     started = time.time()
@@ -314,14 +346,16 @@ def main() -> int:
         if args.authorize != ADJUDICATION_SHA_PREFIX and not args.smoke:
             raise SystemExit("slice execution requires --authorize")
         backend_info = init_genesis(args.backend)
-        result = run_slice(args.slice_first, args.slice_last, backend_info)
+        result = run_slice(
+            args.slice_first, args.slice_last, backend_info, args.action_stream_tag
+        )
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         return 0
 
     if args.smoke:
         backend_info = init_genesis(args.backend)
-        partial = run_slice(1, 1, backend_info)
+        partial = run_slice(1, 1, backend_info, args.action_stream_tag)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(partial, indent=2) + "\n", encoding="utf-8")
         print(json.dumps({"smoke": True, "primitives": len(partial["primitives"])}))
@@ -343,7 +377,13 @@ def main() -> int:
     backends: set[str] = set()
     with tempfile.TemporaryDirectory(prefix="v2_stratified_") as tmp:
         for first, last in slices:
-            partial = spawn_slice(Path(tmp) / f"slice_{first:03d}.json", args.backend, first, last)
+            partial = spawn_slice(
+                Path(tmp) / f"slice_{first:03d}.json",
+                args.backend,
+                first,
+                last,
+                args.action_stream_tag,
+            )
             primitives.extend(partial["primitives"])
             backends.add(partial["backend_info"]["backend"])
 
@@ -370,7 +410,11 @@ def main() -> int:
         "battery": "stage2-stratified",
         "backend": sorted(backends),
         "adjudication_sha_prefix": ADJUDICATION_SHA_PREFIX,
-        "action_sequence_sha256": action_sequence_sha256(),
+        "action_stream_tag": int(args.action_stream_tag),
+        "action_stream_is_preregistered": bool(
+            int(args.action_stream_tag) == DEFAULT_ACTION_STREAM_TAG
+        ),
+        "action_sequence_sha256": action_sequence_sha256(args.action_stream_tag),
         "code_sha256": sha256_file(Path(__file__).resolve()),
         "rev2_thresholds": AT_THRESHOLDS,
         "per_stratum": per_stratum,
