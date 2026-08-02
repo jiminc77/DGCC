@@ -33,7 +33,18 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from dgcc.envs.dlolab import DLOLabEnv
+from dgcc.envs.dlolab import (
+    AT1H_ABSOLUTE,
+    AT1H_CEILING,
+    AT1H_CEILING_RATE,
+    AT1H_CLEAN_TERMINAL_ARCLEN_DEV,
+    DLOLabEnv,
+)
+from dgcc.envs.env_config import (
+    assert_corrected_env,
+    format_effective_env_params,
+    resolve_env_kwargs,
+)
 from dgcc.goals.dual_goal import goal_curve
 from dgcc.models.networks import goal_residual_flips
 from dgcc.rl.diagnostics import DiagnosticsLogger
@@ -46,7 +57,6 @@ from dgcc.tasks.domain import (
     P1_LENGTH_M,
     P1_N_SEGMENTS,
     RewardConstants,
-    SETTLE_MAX_STEPS,
     p1_rope_params,
 )
 from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig, is_nonfinite_error
@@ -171,27 +181,32 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def env_kwargs(config: dict[str, Any], n_envs: int) -> dict[str, Any]:
-    sim = config.get("sim", {})
-    kwargs = {
-        "n_envs": int(n_envs),
-        "dt": float(sim.get("dt", 1.0e-3)),
-        "substeps": int(sim.get("substeps", 5)),
-        "rod_damping": float(sim.get("rod_damping", 10.0)),
-        "rod_angular_damping": float(sim.get("rod_angular_damping", 5.0)),
-        "initial_settle_steps": int(sim.get("initial_settle_steps", 0)),
-        "reset_settle_max_steps": int(sim.get("reset_settle_max_steps", SETTLE_MAX_STEPS)),
-        "grasp_realism": bool(sim.get("grasp_realism", True)),
-    }
-    if "move_v_max" in sim:
-        # R8 (env-correction Rev 3): quasi-static primitive configuration.
-        kwargs["move_v_max"] = float(sim["move_v_max"])
-        kwargs["move_hold_max_steps"] = int(sim.get("move_hold_max_steps", 2000))
-    else:
-        # Deprecated legacy keys (one release; pre-correction semantics).
-        kwargs["move_step_size"] = float(sim.get("move_step_size", 0.03))
-        kwargs["move_hold_steps"] = int(sim.get("move_hold_steps", 0))
-    return kwargs
+def env_kwargs(
+    config: dict[str, Any], n_envs: int, *, allow_legacy: bool = False
+) -> dict[str, Any]:
+    """Resolve the `sim` block into DLOLabEnv kwargs, FAIL-CLOSED.
+
+    Reselection preflight (benchmark §5(c) item 0a).  The previous body
+    built a literal dict from `sim.get(key, default)` calls.  That shape
+    dropped any `sim` key it did not enumerate, and because the adapter
+    reads a missing ``move_v_max`` as "run the DEPRECATED pre-correction
+    primitive", a dropped key silently downgraded the physics: no
+    exception, no warning, no log line.  A governed launch could therefore
+    consume a SHA-pinned corrected config and still train on the
+    uncorrected environment.
+
+    The literal-dict construction is removed entirely.  The accepted key
+    set is derived from ``DLOLabEnv.__init__`` itself, unknown keys are
+    rejected, and -- unless ``allow_legacy`` is set by the explicit
+    ``--allow-legacy-env`` operator flag -- legacy keys are rejected and the
+    corrected-mode keys must be present.  See `dgcc.envs.env_config`.
+    """
+    return resolve_env_kwargs(
+        config,
+        n_envs,
+        env_cls=DLOLabEnv,
+        require_corrected=not allow_legacy,
+    )
 
 
 class TrainingRun:
@@ -274,6 +289,24 @@ class TrainingRun:
         self.episode_index = 0
         self.full_rebuilds = 0
         self._consecutive_discards = 0
+        # Explicit legacy opt-in (default False, i.e. corrected env required).
+        self.allow_legacy_env = bool(getattr(args, "allow_legacy_env", False))
+        # AT-1H always-on counters (env-correction Rev 3 상시 로깅 요건).
+        # Per-env accumulators are folded into one JSONL row per finished
+        # episode; the run-level totals ride along in the run summary.
+        self._at1h_path = self.output_dir / "metrics" / "at1h_counters.jsonl"
+        self._at1h_primitives = np.zeros(self.n_envs, dtype=np.int64)
+        self._at1h_ceiling = np.zeros(self.n_envs, dtype=np.int64)
+        self._at1h_absolute = np.zeros(self.n_envs, dtype=np.int64)
+        self._at1h_dirty_violators = np.zeros(self.n_envs, dtype=np.int64)
+        self._at1h_v_max = np.zeros(self.n_envs, dtype=float)
+        self._at1h_strain_max = np.zeros(self.n_envs, dtype=float)
+        self._at1h_kepe_max = np.zeros(self.n_envs, dtype=float)
+        self._at1h_clean_terminal = np.ones(self.n_envs, dtype=bool)
+        self._at1h_run_primitives = 0
+        self._at1h_run_ceiling = 0
+        self._at1h_run_absolute = 0
+        self._at1h_run_dirty_violators = 0
         self.last_checkpoint: Path | None = None
         self.best_success = -1.0
         self.eval_history: list[dict[str, Any]] = []
@@ -606,7 +639,26 @@ class TrainingRun:
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        self.env = DLOLabEnv(**env_kwargs(self.config, self.n_envs))
+        # Fail-closed env construction (reselection preflight, task B).
+        # 1. `env_kwargs` refuses an unknown/legacy/incomplete `sim` block.
+        # 2. Every EFFECTIVE parameter is printed before the first step, so
+        #    a run's physics is auditable from the log head alone.
+        # 3. `assert_corrected_env` re-proves the property on the CONSTRUCTED
+        #    object, which also covers a direct-construction bypass.
+        kwargs = env_kwargs(self.config, self.n_envs, allow_legacy=self.allow_legacy_env)
+        self.env = DLOLabEnv(**kwargs)
+        print(format_effective_env_params(self.env, kwargs, env_cls=DLOLabEnv), flush=True)
+        if self.allow_legacy_env:
+            print(
+                "=" * 78 + "\n"
+                "WARNING: --allow-legacy-env is set. This run uses the DEPRECATED\n"
+                "pre-correction environment. Its results are NOT admissible as\n"
+                "confirmatory / reselection evidence.\n" + "=" * 78,
+                flush=True,
+            )
+        else:
+            assert_corrected_env(self.env, kwargs)
+        self.effective_env_kwargs = dict(kwargs)
         self.env.reset(
             self.params,
             init_shape="straight",
@@ -623,6 +675,10 @@ class TrainingRun:
     def begin_training_episodes(self) -> None:
         assert self.runner is not None
         self.episode_index += 1
+        # A new episode batch invalidates every in-flight AT-1H accumulator:
+        # eval and full rebuilds discard the running episodes, so their
+        # partial counters must not leak into the next episode's row.
+        self._at1h_reset_slots()
         if self.task == "t2":
             self.runner.begin_episodes(
                 seed=self.seed,
@@ -844,6 +900,7 @@ class TrainingRun:
             return 0
 
         active = record["active"]
+        self._accumulate_at1h(record)
         self._consecutive_discards = 0
         count = int(active.sum())
         next_transitions = self.transitions + count
@@ -884,6 +941,130 @@ class TrainingRun:
         # Auto-reset may have refreshed goals for finished envs.
         self.refresh_goal_curves()
         return count
+
+    # -- AT-1H always-on counters (env-correction Rev 3) -----------------
+
+    def _at1h_reset_slots(self, env_indices: np.ndarray | None = None) -> None:
+        idx = slice(None) if env_indices is None else env_indices
+        self._at1h_primitives[idx] = 0
+        self._at1h_ceiling[idx] = 0
+        self._at1h_absolute[idx] = 0
+        self._at1h_dirty_violators[idx] = 0
+        self._at1h_v_max[idx] = 0.0
+        self._at1h_strain_max[idx] = 0.0
+        self._at1h_kepe_max[idx] = 0.0
+        self._at1h_clean_terminal[idx] = True
+
+    def _accumulate_at1h(self, record: dict[str, Any]) -> None:
+        """Fold one primitive's per-env AT-1H peaks into the episode rows.
+
+        Rev 3 requires the confirmatory runs to record the AT-1H counters
+        PER EPISODE: the ceiling-violation rate, the absolute-cap maxima
+        (v / strain / KE-PE) and the terminal-cleanliness flag.  The
+        thresholds and the clean-terminal definition are imported from the
+        adapter so this cannot drift from the battery's verdict logic.
+        """
+        at1h = record.get("info", {}).get("at1h")
+        if at1h is None:
+            return
+        active = np.asarray(record["active"], dtype=bool)
+        if not active.any():
+            return
+        v = np.asarray(at1h["v_peak"], dtype=float)
+        strain = np.asarray(at1h["strain_peak"], dtype=float)
+        kepe = np.asarray(at1h["ke_over_pe"], dtype=float)
+        arclen_dev = np.asarray(at1h["arclen_dev"], dtype=float)
+        settled = np.asarray(record["settle_converged"], dtype=bool)
+
+        ceiling = (
+            (v > AT1H_CEILING["v"])
+            | (strain > AT1H_CEILING["strain"])
+            | (kepe > AT1H_CEILING["ke_over_pe"])
+        )
+        absolute = (
+            (v > AT1H_ABSOLUTE["v"])
+            | (strain > AT1H_ABSOLUTE["strain"])
+            | (kepe > AT1H_ABSOLUTE["ke_over_pe"])
+        )
+        clean = settled & (arclen_dev <= AT1H_CLEAN_TERMINAL_ARCLEN_DEV)
+
+        self._at1h_primitives[active] += 1
+        self._at1h_ceiling[active] += ceiling[active]
+        self._at1h_absolute[active] += absolute[active]
+        self._at1h_dirty_violators[active] += (ceiling & ~clean)[active]
+        np.maximum(self._at1h_v_max, np.where(active, v, 0.0), out=self._at1h_v_max)
+        np.maximum(self._at1h_strain_max, np.where(active, strain, 0.0), out=self._at1h_strain_max)
+        np.maximum(self._at1h_kepe_max, np.where(active, kepe, 0.0), out=self._at1h_kepe_max)
+        self._at1h_clean_terminal[active] &= clean[active]
+
+        self._at1h_run_primitives += int(active.sum())
+        self._at1h_run_ceiling += int(ceiling[active].sum())
+        self._at1h_run_absolute += int(absolute[active].sum())
+        self._at1h_run_dirty_violators += int((ceiling & ~clean)[active].sum())
+
+        # Zero-tolerance items are surfaced the moment they happen; the
+        # episode row alone would bury a single absolute-cap breach in a
+        # 37k-row file.
+        breached = np.flatnonzero(absolute & active)
+        for env_idx in breached:
+            print(
+                f"AT-1H ABSOLUTE CAP BREACH transitions={self.transitions} env={int(env_idx)} "
+                f"v={v[env_idx]:.4f} strain={strain[env_idx]:.5f} ke_over_pe={kepe[env_idx]:.4f} "
+                f"clean_terminal={bool(clean[env_idx])}",
+                flush=True,
+            )
+
+        finished = np.flatnonzero(
+            active & (np.asarray(record["done"], dtype=bool) | np.asarray(record["truncated"], dtype=bool))
+        )
+        if finished.size:
+            self._flush_at1h_episodes(finished)
+            self._at1h_reset_slots(finished)
+
+    def _flush_at1h_episodes(self, env_indices: np.ndarray) -> None:
+        rows = []
+        for env_idx in env_indices:
+            n = int(self._at1h_primitives[env_idx])
+            if n <= 0:
+                continue
+            rows.append({
+                "transitions": int(self.transitions),
+                "episode_index": int(self.episode_index),
+                "env": int(env_idx),
+                "primitives": n,
+                "ceiling_violations": int(self._at1h_ceiling[env_idx]),
+                "ceiling_rate": round(float(self._at1h_ceiling[env_idx]) / n, 6),
+                "absolute_cap_violations": int(self._at1h_absolute[env_idx]),
+                "violators_with_dirty_terminal": int(self._at1h_dirty_violators[env_idx]),
+                "v_peak_max": float(self._at1h_v_max[env_idx]),
+                "strain_peak_max": float(self._at1h_strain_max[env_idx]),
+                "ke_over_pe_max": float(self._at1h_kepe_max[env_idx]),
+                "clean_terminal": bool(self._at1h_clean_terminal[env_idx]),
+            })
+        if not rows:
+            return
+        self._at1h_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._at1h_path.open("a", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row) + "\n")
+
+    def at1h_run_summary(self) -> dict[str, Any]:
+        n = max(1, self._at1h_run_primitives)
+        return {
+            "criterion": (
+                f"ceiling(v>{AT1H_CEILING['v']}|strain>{AT1H_CEILING['strain']}|"
+                f"KE/PE>{AT1H_CEILING['ke_over_pe']}) rate <= {AT1H_CEILING_RATE}; "
+                f"absolute caps v<={AT1H_ABSOLUTE['v']}/strain<={AT1H_ABSOLUTE['strain']}/"
+                f"KE/PE<={AT1H_ABSOLUTE['ke_over_pe']} zero-tolerance; "
+                "violators must have clean terminals"
+            ),
+            "primitives": int(self._at1h_run_primitives),
+            "ceiling_violations": int(self._at1h_run_ceiling),
+            "ceiling_rate": round(self._at1h_run_ceiling / n, 6),
+            "absolute_cap_violations": int(self._at1h_run_absolute),
+            "violators_with_dirty_terminal": int(self._at1h_run_dirty_violators),
+            "counters_file": str(self._at1h_path),
+        }
 
     def train_updates(self, n_updates: int) -> None:
         if self.buffer.size < self.agent_config.warmup_transitions:
@@ -1138,6 +1319,9 @@ class TrainingRun:
             "reward_constants": vars(self.episode_config.reward),
             "td_target_bound": dict(self.agent.td_target_bound),
             "initial_weights_sha256": self.initial_weights_sha256,
+            "effective_env_kwargs": getattr(self, "effective_env_kwargs", None),
+            "legacy_env_explicitly_allowed": self.allow_legacy_env,
+            "at1h_counters": self.at1h_run_summary(),
             "total_budget": self.total,
             "transitions": self.transitions,
             "updates": self.agent.update_count,
@@ -1255,6 +1439,18 @@ def main() -> int:
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--asset-manifest", type=Path, default=None)
     parser.add_argument("--expected-asset-manifest-sha256", type=str, default=None)
+    # Reselection preflight (task B): the corrected environment is the
+    # DEFAULT and its absence is fatal.  Pre-correction configs (every
+    # `configs/*.yaml` except v2_t2.yaml is still one) remain runnable for
+    # historical reproduction, but ONLY through this explicit flag, which is
+    # banner-printed and recorded in the run summary.  There is no code path
+    # that reaches the legacy adapter without an operator typing this.
+    parser.add_argument(
+        "--allow-legacy-env",
+        action="store_true",
+        help="EXPLICITLY permit the DEPRECATED pre-correction environment "
+             "(historical reproduction only; never for confirmatory runs)",
+    )
     args = parser.parse_args()
 
     registry_root = Path("outputs/attempts")

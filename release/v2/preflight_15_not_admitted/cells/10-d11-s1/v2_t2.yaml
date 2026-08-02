@@ -3,7 +3,10 @@ task: t2
 run:
   total_transitions: 300000
   seeds: [0, 1, 2]
-  n_envs: 1024
+  # n_envs: 1024 -> 4096 (owner-approved, Charter Amendment 6 §3.6).
+  # 8192 is excluded: warmup_transitions=10240 would be crossed inside
+  # round 2, collapsing the pre-update collection window.
+  n_envs: 4096
   eval_every_transitions: 25000
   checkpoint_every_transitions: 25000
 eval:
@@ -39,9 +42,13 @@ sim:
   rod_angular_damping: 5.0
   initial_settle_steps: 0
   reset_settle_max_steps: 10000
-  move_step_size: 0.03
-  move_hold_steps: 0
+  move_v_max: 0.15
+  move_hold_max_steps: 2000
   grasp_realism: true
+  # AT-1H always-on counters (env-correction design Rev 3 상시 로깅 요건).
+  # Required for the confirmatory reselection runs; adds one velocity and
+  # one vertex read per scene step.
+  at1h_counters: true
 sprint:
   aux_weight: 1.0
   beta_contact: 0.015363

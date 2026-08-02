@@ -68,9 +68,20 @@ def test_worker_executes_disposable_one_step_selector_branches() -> None:
     class Goal:
         pass
 
+    built_envs: list[dict] = []
     class FakeEnv:
         def __init__(self, **kwargs):
             self.n_envs = kwargs["n_envs"]
+            # Record the resolved kwargs so the test also proves the worker
+            # builds the CORRECTED adapter (reselection preflight, task A).
+            self.kwargs = dict(kwargs)
+            built_envs.append(dict(kwargs))
+            self.env_resets: list[int] = []
+        def reset(self, params, *, init_shape, seed):
+            # `execute_branch` resets the scene before every batch; the stub
+            # used to omit this, which made the test die on the first call
+            # instead of exercising the selector branches it is named for.
+            self.env_resets.append(int(seed))
         def get_centerline_batch(self):
             return np.zeros((self.n_envs, 32, 3), dtype=float)
 
@@ -92,14 +103,24 @@ def test_worker_executes_disposable_one_step_selector_branches() -> None:
             return p, np.zeros((len(X), 3)), ["low"] * len(X)
 
     val_pairs = [("a", Goal()), ("b", Goal())]
+    # The worker resolves `sim` fail-closed (reselection preflight): the
+    # request always carries the training run's config snapshot, so the
+    # fixture must carry a corrected `sim` block too.  A stub config that
+    # omitted `sim` used to be silently defaulted into the pre-correction
+    # adapter -- exactly the failure mode the resolver now refuses.
+    cf_config = {
+        "run": {"n_envs": 2},
+        "eval": {"t2_episodes_per_goal": 1},
+        "sim": {"move_v_max": 0.15, "move_hold_max_steps": 2000},
+    }
     worker.goal_curve = lambda goal, length_m: np.zeros((32, 3))
     agent = FakeAgent()
     request = {"seed": 5, "transition": 9, "total_budget": 10, "development_episode_index_start": 90001}
     q1_p, q1_progress, q1_starts, q1_ids, q1_hashes = worker.execute_branch(
-        "q1", agent, {"run": {"n_envs": 2}, "eval": {"t2_episodes_per_goal": 1}}, request,
+        "q1", agent, cf_config, request,
         val_pairs, FakeEnv, FakeRunner)
     qmin_p, qmin_progress, qmin_starts, qmin_ids, qmin_hashes = worker.execute_branch(
-        "qmin", agent, {"run": {"n_envs": 2}, "eval": {"t2_episodes_per_goal": 1}}, request,
+        "qmin", agent, cf_config, request,
         val_pairs, FakeEnv, FakeRunner)
     assert agent.calls == ["q1", "qmin"]
     assert resets == [(505, 90001), (505, 90001)]
@@ -110,6 +131,18 @@ def test_worker_executes_disposable_one_step_selector_branches() -> None:
     assert np.array_equal(q1_ids, ["a", "b"])
     assert np.array_equal(q1_ids, qmin_ids)
     assert np.array_equal(q1_hashes, qmin_hashes)
+    # The worker must build the CORRECTED adapter for BOTH branches: a
+    # counterfactual measured in a pre-correction env would attribute the
+    # physics difference to the selector.
+    assert built_envs, "execute_branch built no environment"
+    for kwargs in built_envs:
+        assert kwargs["move_v_max"] == 0.15
+        assert kwargs["move_hold_max_steps"] == 2000
+        assert kwargs["at1h_counters"] is False
+        assert "move_step_size" not in kwargs
+        assert "move_hold_steps" not in kwargs
+
+
 def test_panel_selector_uses_authenticated_panel_order_and_rejects_tampering(
     tmp_path: Path,
 ) -> None:

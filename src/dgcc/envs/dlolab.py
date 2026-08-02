@@ -47,6 +47,20 @@ HOLD_QUIESCENT_VEL = 0.05
 GRASP_FAILURE_PROB = 0.05
 GRASP_NOISE_CHOICES = (-1, 0, 1)
 VALID_INIT_SHAPES = frozenset({"straight", "u_bend", "s_curve", "random_smooth"})
+# AT-1H final redefinition (adjudicator O2 + orchestrator, 2026-08-02,
+# commit 8d17786): a primitive is a CEILING violation when any of
+# v/strain/KE-PE exceeds AT1H_CEILING, and an ABSOLUTE-CAP violation when it
+# exceeds AT1H_ABSOLUTE.  The gate is: ceiling rate <= AT1H_CEILING_RATE AND
+# zero absolute-cap violations AND every ceiling violator ends clean.  These
+# constants are duplicated from `scripts/v2_at1h_confirmatory_precheck.py`
+# on purpose -- the training-time counters must be judged by the SAME
+# numbers as the battery, so they live next to the adapter that produces
+# them and any divergence is a one-line diff instead of a silent drift.
+AT1H_GRAVITY = 9.81
+AT1H_CEILING = {"v": 2.0, "strain": 0.02, "ke_over_pe": 1.0}
+AT1H_ABSOLUTE = {"v": 10.0, "strain": 0.06, "ke_over_pe": 3.0}
+AT1H_CEILING_RATE = 0.005
+AT1H_CLEAN_TERMINAL_ARCLEN_DEV = 1.0e-3
 
 
 def sample_grasp(
@@ -233,6 +247,7 @@ class DLOLabEnv(DLOEnvBase):
         move_step_size: float = 0.002,
         move_hold_steps: int = 20,
         grasp_realism: bool = True,
+        at1h_counters: bool = False,
     ) -> None:
         """R1/R2 (env-correction Rev 2 §5.1) parameter semantics.
 
@@ -251,6 +266,14 @@ class DLOLabEnv(DLOEnvBase):
         displacement-per-step and fixed-hold-count parameters, retained for
         one release; when ``move_v_max`` is absent the adapter behaves
         exactly as before (fixed 20-step floor, ground clip, δ ∈ R³).
+
+        ``at1h_counters`` enables the Rev 3 always-on AT-1H instrumentation
+        (design §"상시 로깅 요건"): per-primitive running maxima of node
+        speed, edge strain and kinetic energy, sampled after EVERY scene
+        step of the primitive so the peaks are identical in definition to
+        the ones the acceptance battery measures with its `Probe` wrapper.
+        Off by default because it adds one velocity read and one vertex
+        read per scene step; the confirmatory training runs turn it on.
         """
         if n_envs < 1:
             raise ValueError("n_envs must be at least 1")
@@ -292,6 +315,16 @@ class DLOLabEnv(DLOEnvBase):
         self.last_lower_z: np.ndarray | None = None
         self.last_tension_pause_steps = 0
         self.last_tension_freezes = 0
+        # AT-1H always-on counters (Rev 3 상시 로깅 요건).  `_at1h_active`
+        # is only true between `_at1h_begin()` and `_at1h_end()`, i.e. for
+        # the duration of one primitive (move legs + hold + post-release
+        # settle), matching the acceptance battery's per-primitive window.
+        self.at1h_counters = bool(at1h_counters)
+        self._at1h_active = False
+        self._at1h_v_peak = np.zeros(self.n_envs, dtype=float)
+        self._at1h_strain_peak = np.zeros(self.n_envs, dtype=float)
+        self._at1h_ke_peak = np.zeros(self.n_envs, dtype=float)
+        self._at1h_samples = 0
 
         self.gs: Any | None = None
         self.scene: Any | None = None
@@ -937,6 +970,10 @@ class DLOLabEnv(DLOEnvBase):
             if lift_value not in LIFT_HEIGHTS:
                 raise ValueError(f"lift must be one of {sorted(LIFT_HEIGHTS)}, got {lift_value!r}")
 
+        # AT-1H window opens BEFORE the grasp so the pre-move constraint
+        # impulse (the physical cause of every logged Stage 2 exception) is
+        # inside the measured span, matching `probe_begin_primitive()`.
+        self._at1h_begin()
         X_before = self.get_centerline_batch()
         grasp_rng = self._rng if rng is None else rng
         raw_before = self.get_centerline_raw_batch()
@@ -1025,6 +1062,7 @@ class DLOLabEnv(DLOEnvBase):
         self.last_settle_converged_batch = settle_converged.copy()
         self.last_settle_steps = int(np.max(settle_steps)) if settle_steps.size else 0
         self.last_settle_converged = bool(np.all(settle_converged))
+        at1h = self._at1h_end(lift_values)
         self._assert_finite()
 
         return {
@@ -1057,6 +1095,7 @@ class DLOLabEnv(DLOEnvBase):
                 "tension_pause_steps": int(self.last_tension_pause_steps),
                 "tension_freezes": int(self.last_tension_freezes),
                 "lower_z": None if self.last_lower_z is None else [float(v) for v in self.last_lower_z],
+                "at1h": at1h,
             },
         }
 
@@ -1130,6 +1169,82 @@ class DLOLabEnv(DLOEnvBase):
     def max_node_speed(self) -> float:
         speeds = self.max_node_speed_batch()
         return float(np.max(speeds)) if speeds.size else 0.0
+
+    # -- AT-1H always-on counters (env-correction Rev 3) -----------------
+
+    def _at1h_begin(self) -> None:
+        """Open a per-primitive AT-1H measurement window."""
+        if not self.at1h_counters:
+            return
+        self._at1h_v_peak = np.zeros(self.n_envs, dtype=float)
+        self._at1h_strain_peak = np.zeros(self.n_envs, dtype=float)
+        self._at1h_ke_peak = np.zeros(self.n_envs, dtype=float)
+        self._at1h_samples = 0
+        self._at1h_active = True
+
+    def _at1h_observe(self) -> None:
+        """Fold one post-step sample into the running per-env maxima.
+
+        Definitions are taken verbatim from the acceptance battery probe so
+        the training-time counters are directly comparable to the gate
+        evidence: speed is the max per-node velocity norm, KE is
+        ``0.5 * SEGMENT_MASS_BASE * Σ‖v‖²`` and strain is the max
+        ``|edge/rest − 1|``.
+        """
+        assert self.rod_entity is not None
+        vels = np.asarray(self.rod_entity.get_all_vels(), dtype=float)
+        if vels.size:
+            if vels.ndim == 2:
+                vels = vels.reshape(1, *vels.shape)
+            speeds = np.linalg.norm(vels, axis=-1)
+            np.maximum(
+                self._at1h_v_peak, np.max(speeds, axis=1).reshape(self.n_envs),
+                out=self._at1h_v_peak,
+            )
+            ke = 0.5 * SEGMENT_MASS_BASE * np.sum(vels ** 2, axis=(1, 2))
+            np.maximum(self._at1h_ke_peak, ke.reshape(self.n_envs), out=self._at1h_ke_peak)
+        if self.params is not None:
+            np.maximum(
+                self._at1h_strain_peak, self._max_edge_strain_batch(),
+                out=self._at1h_strain_peak,
+            )
+        self._at1h_samples += 1
+
+    def _at1h_end(self, lift_values: Sequence[str] | None) -> dict[str, Any] | None:
+        """Close the window and return the per-env AT-1H counter payload.
+
+        ``grav_pe`` is per-env because ``lift`` is a per-env action; the
+        battery's scalar ``rope_mass * g * lift_height`` becomes a vector
+        with the same definition (rope mass = n_segments * SEGMENT_MASS_BASE).
+        """
+        if not self.at1h_counters:
+            return None
+        self._at1h_active = False
+        if self.params is None:
+            return None
+        rope_mass = float(self.params.n_segments) * SEGMENT_MASS_BASE
+        if lift_values is None:
+            heights = np.full(self.n_envs, LIFT_HEIGHTS["high"], dtype=float)
+        else:
+            heights = np.asarray(
+                [LIFT_HEIGHTS[str(value)] for value in lift_values], dtype=float
+            )
+        grav_pe = rope_mass * AT1H_GRAVITY * heights
+        # Terminal-cleanliness input.  The battery reads `arclen_final` from
+        # the probe's last post-settle sample; the equivalent here is one
+        # vertex read at window close (once per primitive, not per step).
+        raw = np.asarray(self._raw_batch(), dtype=float)
+        arclen = np.linalg.norm(raw[:, 1:, :] - raw[:, :-1, :], axis=-1).sum(axis=1)
+        arclen_dev = np.abs(arclen / float(self.params.length_m) - 1.0)
+        return {
+            "v_peak": self._at1h_v_peak.copy(),
+            "strain_peak": self._at1h_strain_peak.copy(),
+            "ke_peak": self._at1h_ke_peak.copy(),
+            "grav_pe": grav_pe,
+            "ke_over_pe": self._at1h_ke_peak / grav_pe,
+            "arclen_dev": arclen_dev,
+            "samples": int(self._at1h_samples),
+        }
 
 
     def _raw_batch(self) -> np.ndarray:
@@ -1448,6 +1563,12 @@ class DLOLabEnv(DLOEnvBase):
         self._require_reset()
         assert self.scene is not None
         self.scene.step(update_visualizer=False, refresh_visualizer=False)
+        # AT-1H instrumentation is hooked HERE rather than at each leg's
+        # call site so no future leg can be added without being measured,
+        # and so the sample lands after the step exactly like the
+        # acceptance battery's `Probe._step_scene` override does.
+        if self._at1h_active:
+            self._at1h_observe()
 
     def _rollout(self, steps: int) -> None:
         for _ in range(max(0, int(steps))):

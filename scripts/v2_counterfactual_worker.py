@@ -26,10 +26,11 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from dgcc.envs.dlolab import DLOLabEnv
+from dgcc.envs.env_config import resolve_env_kwargs
 from dgcc.goals.dual_goal import goal_curve
 from dgcc.rl.panel_artifacts import load_panel_bytes
 from dgcc.rl.td3 import TD3Agent, TD3Config
-from dgcc.tasks.domain import RewardConstants, SETTLE_MAX_STEPS, p1_rope_params
+from dgcc.tasks.domain import RewardConstants, p1_rope_params
 from dgcc.tasks.episode import BatchedEpisodeRunner, EpisodeConfig
 from dgcc.tasks.t2 import load_t2_payload_bytes, load_t2_split_payload
 
@@ -87,24 +88,26 @@ def atomic_npz(path: Path, **payload: object) -> None:
 
 
 def env_kwargs(config: dict[str, Any], n_envs: int) -> dict[str, Any]:
-    sim = config.get("sim", {})
-    kwargs = {
-        "n_envs": n_envs, "dt": float(sim.get("dt", 1.0e-3)),
-        "substeps": int(sim.get("substeps", 5)), "rod_damping": float(sim.get("rod_damping", 10.0)),
-        "rod_angular_damping": float(sim.get("rod_angular_damping", 5.0)),
-        "initial_settle_steps": int(sim.get("initial_settle_steps", 0)),
-        "reset_settle_max_steps": int(sim.get("reset_settle_max_steps", SETTLE_MAX_STEPS)),
-        "grasp_realism": bool(sim.get("grasp_realism", True)),
-    }
-    if "move_v_max" in sim:
-        # R8 (env-correction Rev 3): quasi-static primitive configuration.
-        kwargs["move_v_max"] = float(sim["move_v_max"])
-        kwargs["move_hold_max_steps"] = int(sim.get("move_hold_max_steps", 2000))
-    else:
-        # Deprecated legacy keys (one release; pre-correction semantics).
-        kwargs["move_step_size"] = float(sim.get("move_step_size", 0.03))
-        kwargs["move_hold_steps"] = int(sim.get("move_hold_steps", 0))
-    return kwargs
+    """Resolve the `sim` block into DLOLabEnv kwargs, FAIL-CLOSED.
+
+    This worker is spawned BY the training run (`_run_counterfactual_worker`)
+    and its diagnostic is only meaningful if it evaluates the same physics
+    the policy was trained in.  It therefore uses the same strict resolver
+    as `p1_train.py`: a silently-dropped `sim` key here would compare a
+    corrected-env policy against a pre-correction environment and report the
+    difference as a counterfactual effect.
+
+    The AT-1H per-step instrumentation is explicitly disabled: the training
+    run owns the counter ledger, and paying the probe cost again inside a
+    diagnostic that never writes AT-1H rows is pure overhead.
+    """
+    return resolve_env_kwargs(
+        config,
+        n_envs,
+        env_cls=DLOLabEnv,
+        require_corrected=True,
+        overrides={"at1h_counters": False},
+    )
 
 
 def validation_batches(
