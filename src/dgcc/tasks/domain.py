@@ -38,22 +38,26 @@ from dgcc.envs.base import RopeParams
 
 # --- P1 §5 common rope domain (immutable for P1; OOD domains forbidden) ---
 P1_LENGTH_M = 1.0
-# Rev 6 (owner confirmation 2026-08-03, pilot `dossier/pilot_report_nodecount.md`):
-# the main line moves from 32 to 64 raw vertices.  The pilot measured that the
-# 149.56-degree hinges that drove the AT-1H exceptions are a 32-node
-# DISCRETIZATION artifact (1.417% of hinges at n=32; exactly 0.000% at n=64
-# under mass control) while the step cost is 1.01x.  Because the policy acts on
-# a K=32 arc-length resampling, this is a physics refinement, not an action- or
-# observation-space change -- the Rev 6 C1 mapping layer is what makes that
-# true (`dgcc.envs.dlolab.arc_length_vertex_index`).
-P1_N_SEGMENTS = 32  # STAGE 1 (byte-identity proof); stage 2 sets 64
+# Rev 6: the discretization stays at 32 for now.  The 64-node adoption is
+# READY (the C1 mapping layer, the C2 mass generalization and the n=32
+# byte-identity proof are all in place) but is HELD by the orchestrator steer
+# of 2026-08-03: the pilot's "64 nodes = 1.01x step cost" is a 1024-env
+# artifact, at n_envs=4096 the reported cost is raw 2.56x / tr/s 0.40x on a
+# 4090, and the cost on the main-line host (RTX PRO 6000 Blackwell) is
+# UNMEASURED.  The flip lands only after this host's cost cells are measured.
+# n=100 is dropped as a candidate outright (scene.build CUDA illegal-address,
+# 5/5 at 4096).
+P1_N_SEGMENTS = 32
 # Rev 6 (owner-specified): total rope mass.  Previously implicit -- the adapter
 # fixed the PER-SEGMENT mass at 1 g, so the rope weighed n_segments grams and a
 # discretization change was silently a mass change.  Mass is now declared once,
 # here, and the segment mass is derived.  0.040 kg is a PHYSICS CHANGE from the
 # historical 0.032 kg and is recorded as such in the change history; it is not
-# the byte-identity baseline (that is 0.032 kg at n=32).
-P1_ROPE_MASS_TOTAL_KG = 0.032  # STAGE 1 (byte-identity proof); stage 2 sets 0.040
+# the byte-identity baseline (that is 0.032 kg at n=32).  It is adopted AHEAD
+# of the node flip on purpose (steer 2026-08-03 item 4): changing mass and
+# discretization together would make an acceptance regression unattributable,
+# so the mass change is measured on its own first.
+P1_ROPE_MASS_TOTAL_KG = 0.040
 P1_BEND_STIFFNESS = 1.0
 P1_TWIST_STIFFNESS = 1.0
 P1_FRICTION = 1.0

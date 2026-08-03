@@ -15,6 +15,9 @@ Cases
   6. null       `move_v_max: null` is REFUSED
   7. bypass     a constructed adapter that is NOT quasi-static is REFUSED
   8. parity     all 15 published cell configs are byte-identical to configs/
+  9. nodes      `n_segments` absent (Rev 6: the silent-domain-default path) is REFUSED
+ 10. mass       `rope_mass_total` absent (Rev 6) is REFUSED
+ 11. mismatch   `sim` and the rope domain disagreeing on n_segments is REFUSED
 
 Exit code 0 iff every case behaves as specified.
 """
@@ -82,6 +85,8 @@ def main() -> int:
     ok = (
         kwargs.get("move_v_max") == 0.15
         and kwargs.get("move_hold_max_steps") == 2000
+        and kwargs.get("n_segments") == 32
+        and kwargs.get("rope_mass_total") == 0.040
         and kwargs.get("at1h_counters") is True
         and kwargs.get("n_envs") == 4096
         and "move_step_size" not in kwargs
@@ -143,6 +148,34 @@ def main() -> int:
         f"{len(digests)} distinct sha256, matches configs/ = {digests == {canonical_digest}}"
     )
     results.append(ok)
+
+    # 9/10. Rev 6: the rope discretization and total mass are physics, so an
+    # omitted declaration must refuse rather than inherit a code default.
+    for key in ("n_segments", "rope_mass_total"):
+        dropped = copy.deepcopy(canonical)
+        dropped["sim"].pop(key)
+        results.append(_expect_refusal(f"no-{key}", dropped, env_cls, "missing"))
+
+    # 11. Rev 6: the `sim` declaration and the rope domain object must agree.
+    # The resolver cannot see the domain object, so the adapter enforces it;
+    # this exercises the adapter guard directly (still CPU-only -- the check
+    # runs before Genesis is touched).
+    from dgcc.tasks.domain import p1_rope_params
+
+    mismatched = env_cls(
+        n_envs=1,
+        move_v_max=0.15,
+        move_hold_max_steps=2000,
+        n_segments=int(p1_rope_params().n_segments) + 1,
+        rope_mass_total=float(p1_rope_params().rope_mass_total_kg),
+    )
+    try:
+        mismatched._assert_domain_matches_config(p1_rope_params())
+        print("[FAIL] domain-mismatch: accepted a config/domain disagreement")
+        results.append(False)
+    except ValueError as error:
+        print(f"[PASS] domain-mismatch: refused -> {error}")
+        results.append(True)
 
     print()
     print(f"fail-closed battery: {sum(results)}/{len(results)} passed")
