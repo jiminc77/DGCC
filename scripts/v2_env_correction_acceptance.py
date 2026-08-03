@@ -101,7 +101,10 @@ def init_genesis(backend: str) -> dict[str, Any]:
 
 def build_probe_env(n_envs: int):
     """Probe subclass: per-step kinematic instrumentation via super() wrapping."""
-    from dgcc.envs.dlolab import DLOLabEnv, SEGMENT_MASS_BASE
+    # Rev 6 C2: the per-segment mass is derived from the rope's total mass,
+    # so the probe's KE must use the SAME derivation as the adapter instead
+    # of a module constant that no longer exists.
+    from dgcc.envs.dlolab import DLOLabEnv, segment_mass_kg
 
     class ProbeEnv(DLOLabEnv):
         def __init__(self, **kwargs: Any) -> None:
@@ -135,7 +138,7 @@ def build_probe_env(n_envs: int):
             if vels.ndim == 2:
                 vels = vels[None, ...]
             speed = float(np.linalg.norm(vels[0], axis=-1).max())
-            ke = float(0.5 * SEGMENT_MASS_BASE * np.sum(vels[0] ** 2))
+            ke = float(0.5 * segment_mass_kg(self.params) * np.sum(vels[0] ** 2))
             raw = np.asarray(self._raw_batch(), dtype=float)[0]
             edges = np.linalg.norm(raw[1:] - raw[:-1], axis=-1)
             arclen = float(edges.sum())
@@ -286,7 +289,10 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
 
     params = p1_rope_params()
     goals = family_goals()
-    rope_mass = 32 * 1.0e-3
+    # Rev 6 C2: the KE/PE denominator is the rope's TOTAL mass, taken from the
+    # domain object.  The old literal `32 * 1.0e-3` silently judged every
+    # discretization by the 32-node mass.
+    rope_mass = float(params.rope_mass_total_kg)
 
     primitives: list[dict[str, Any]] = []
     for entry in battery_episode_plan():

@@ -12,6 +12,15 @@ from dataclasses import dataclass
 import numpy as np
 
 
+#: Rev 6 C2 (pilot §4 C2): total rope mass in kg.  Before Rev 6 the adapters
+#: used a fixed PER-SEGMENT mass, which made the total mass a function of the
+#: discretization (32 nodes = 32 g, 64 nodes = 64 g).  Mass is a rope property,
+#: so it is carried here and the segment mass is derived.  The default
+#: reproduces the historical model exactly at ``n_segments = 32``
+#: (0.032 / 32 = 1.0e-3 kg per segment).
+ROPE_MASS_TOTAL_KG_BASE = 0.032
+
+
 @dataclass(kw_only=True)
 class RopeParams:
     """Rope physical parameters supplied to simulator adapters.
@@ -26,6 +35,9 @@ class RopeParams:
         friction: Static-friction-style coefficient; adapters map this value to
             simulator-specific friction parameters.
         radius: Rope radius in meters. The P0 default is 0.005 m.
+        rope_mass_total_kg: Total rope mass in kg (Rev 6 C2).  The adapters
+            derive the per-segment mass as ``rope_mass_total_kg / n_segments``,
+            so refining the discretization no longer changes the physics.
     """
 
     length_m: float
@@ -34,6 +46,7 @@ class RopeParams:
     twist_stiffness: float
     friction: float
     radius: float = 0.005
+    rope_mass_total_kg: float = ROPE_MASS_TOTAL_KG_BASE
 
 
 class DLOEnvBase(ABC):

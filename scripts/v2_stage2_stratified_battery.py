@@ -142,7 +142,9 @@ def run_slice(
 
     params = p1_rope_params()
     goals = family_goals()
-    rope_mass = 32 * 1.0e-3
+    # Rev 6 C2: KE/PE denominator = the rope's TOTAL mass from the domain
+    # object, not the literal 32-node mass.
+    rope_mass = float(params.rope_mass_total_kg)
     gravity = 9.81
 
     primitives: list[dict[str, Any]] = []
