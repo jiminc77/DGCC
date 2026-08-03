@@ -9,7 +9,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from dgcc.envs.base import DLOEnvBase, RopeParams
+from dgcc.envs.base import ROPE_MASS_TOTAL_KG_BASE, DLOEnvBase, RopeParams
 from dgcc.utils.seeding import seed_everything
 
 STRETCH_BASE = 8.0e5
@@ -17,7 +17,15 @@ BEND_BASE = 1.0e5
 TWIST_BASE = 1.0e4
 MU_S_BASE = 0.30
 MU_K_RATIO = 0.80
-SEGMENT_MASS_BASE = 1.0e-3
+# Rev 6 C2 (mass generalization, pilot §4 C2).  Segment mass used to be the
+# fixed constant 1.0e-3 kg, which made the TOTAL rope mass a function of the
+# discretization: 32 nodes = 32 g, 64 nodes = 64 g, 100 nodes = 100 g.  The
+# pilot (§3.2 table C) showed that every "node count" physics comparison run
+# against that model is really a mass comparison.  Mass is now a rope property
+# (`RopeParams.rope_mass_total_kg`) and the segment mass is DERIVED, so
+# changing the discretization is a pure refinement.  The base value 0.032
+# reproduces the historical model exactly at n=32 (0.032/32 = 1.0e-3) —
+# byte-identical by construction.
 MAX_DELTA_NORM = 0.15
 # R6: with horizontal δ (R4) the `lift` height alone decides the transit
 # height — δz no longer dominates it (design §5.1 R6; historically a
@@ -31,8 +39,14 @@ LIFT_HEIGHTS = {"low": 0.02, "high": 0.15}
 # (= LIFT_HEIGHTS["high"]) — design §5.6 note 9.
 GRIPPER_PARK_Z = 0.03
 # P9 Rev 3 pile-aware lowering constants (adjudication §3.3, owner pin O1):
-# neighborhood radius ≈ 2 segment intervals, clearance ε above the pile, and
-# the strain fail-safe trigger at half the AT-4 threshold.
+# clearance ε above the pile and the strain fail-safe trigger at half the AT-4
+# threshold.
+# Rev 6 C4 (pilot §4 C4): the neighbourhood radius is an ABSOLUTE geometric
+# length — the guard's job is "do not drive the gripper down onto an existing
+# pile", which is a distance in metres, not a count of segments.  The former
+# comment derived it as "≈ 2 segment intervals"; that derivation is removed so
+# a discretization change cannot be read as a reason to move the value.  Value
+# unchanged (n=32 behaviour identical).
 PILE_NEIGHBOR_RADIUS_M = 0.065
 PILE_CLEARANCE_M = 0.010
 LOWER_STRAIN_ABORT = 0.005
@@ -90,7 +104,16 @@ APPROACH_A_DEC = 7.0
 ATTACH_REL_VEL = 1.0e-2
 APPROACH_MAX_STEPS = 3000
 GRASP_FAILURE_PROB = 0.05
-GRASP_NOISE_CHOICES = (-1, 0, 1)
+# Rev 6 C3 (pilot §4 C3, orchestrator technical judgement (b), owner veto
+# reserved).  The M3 grasp-realism model is pinned as "±1 node" in
+# `domain.py`'s immutable tier, but "1 node" is a DISCRETIZATION unit, not a
+# physical one: at n=32 it is ±32.3 mm, at n=64 it would silently become
+# ±15.9 mm and at n=100 ±10.1 mm.  A real gripper's placement error does not
+# shrink because the simulator refines its mesh, so the invariant is restated
+# as a fixed ARC LENGTH — the value it already had at n=32, L/31 — and the
+# vertex offset that realizes it is derived per discretization.  At n=32 the
+# derived offset is exactly 1, so the model is byte-identical there.
+GRASP_NOISE_ARC_FRACTION = 1.0 / 31.0
 VALID_INIT_SHAPES = frozenset({"straight", "u_bend", "s_curve", "random_smooth"})
 # AT-1H final redefinition (adjudicator O2 + orchestrator, 2026-08-02,
 # commit 8d17786): a primitive is a CEILING violation when any of
@@ -108,6 +131,85 @@ AT1H_CEILING_RATE = 0.005
 AT1H_CLEAN_TERMINAL_ARCLEN_DEV = 1.0e-3
 
 
+def grasp_noise_offset_nodes(n_nodes: int) -> int:
+    """Vertex offset that realizes ``GRASP_NOISE_ARC_FRACTION`` at ``n_nodes``.
+
+    The rest-state vertex interval is ``L/(n-1)`` of the rope, so in
+    length-normalized units one interval is ``1/(n-1)``.  The offset is that
+    fixed arc fraction expressed in intervals and rounded to the nearest whole
+    vertex (at least 1, so the noise model never silently degenerates to "no
+    noise" on a coarse mesh).
+
+    n=32 -> 1 (exactly the historical ±1 vertex, byte-identical)
+    n=64 -> 2 (2/63 L = 31.7 mm vs the pinned 32.3 mm)
+    n=100 -> 3 (3/99 L = 30.3 mm)
+    """
+
+    n = int(n_nodes)
+    if n < 2:
+        return 0
+    interval = 1.0 / (n - 1)
+    return max(1, int(round(GRASP_NOISE_ARC_FRACTION / interval)))
+
+
+def grasp_noise_choices(n_nodes: int) -> tuple[int, int, int]:
+    """The three-way ± offset draw, in vertices, for this discretization."""
+
+    offset = grasp_noise_offset_nodes(n_nodes)
+    return (-offset, 0, offset)
+
+
+def arc_length_vertex_index(
+    raw: np.ndarray, p: np.ndarray, k_nodes: int
+) -> np.ndarray:
+    """Rev 6 C1: map policy node indices to raw vertex indices by arc length.
+
+    The policy acts on a ``k_nodes``-point arc-length-uniform resampling of the
+    centerline (``DLOEnvBase.K``), while the solver stores ``n`` raw vertices
+    whose spacing follows the deformed shape.  Before Rev 6 the adapter used
+    the policy index AS a raw vertex index.  That is correct only when the two
+    counts coincide; at n=64 the pilot measured (§3.3) that "grasp node 20"
+    silently grasped 31.7% along the rope instead of 64.5%, and the rear half
+    of the rope left the action space with no exception, warning or log line.
+
+    Mapping: target arc length ``s* = p/(K-1) * S_total`` per environment (each
+    env has its own deformed shape, so the cumulative arc length is computed
+    per env), then the nearest vertex by ``|s_v - s*|``.  Boundaries are exact:
+    ``p=0 -> vertex 0`` and ``p=K-1 -> vertex n-1``.
+
+    ``n == k_nodes`` takes an EXPLICIT identity branch.  Arc-length
+    correspondence is identity there to within float noise at the measured
+    strain (<1e-3), but "to within float noise" does not prove byte-identity;
+    the branch does (pilot design principle D2).
+
+    Parameters
+    ----------
+    raw: ``(n_envs, n, 3)`` raw vertex positions.
+    p: ``(n_envs,)`` policy node indices in ``[0, k_nodes)``.
+    """
+
+    policy = np.asarray(p, dtype=int)
+    k = int(k_nodes)
+    if k < 2:
+        raise ValueError("k_nodes must be at least 2")
+    if np.any((policy < 0) | (policy >= k)):
+        raise IndexError(f"policy node indices must lie inside [0, {k})")
+    vertices = np.asarray(raw, dtype=float)
+    if vertices.ndim != 3 or vertices.shape[2] != 3:
+        raise ValueError(f"raw must have shape (n_envs, n, 3), got {vertices.shape}")
+    n = vertices.shape[1]
+    if n == k:
+        return policy.copy()
+
+    edges = np.linalg.norm(np.diff(vertices, axis=1), axis=-1)  # (n_envs, n-1)
+    cumulative = np.concatenate(
+        [np.zeros((edges.shape[0], 1)), np.cumsum(edges, axis=1)], axis=1
+    )  # (n_envs, n)
+    total = cumulative[:, -1:]
+    target = (policy / (k - 1.0))[:, None] * total
+    return np.abs(cumulative - target).argmin(axis=1).astype(int)
+
+
 def sample_grasp(
     p: int,
     n_nodes: int,
@@ -116,9 +218,15 @@ def sample_grasp(
 ) -> tuple[int, bool]:
     """Sample the M3 grasp-realism noise/failure model without touching Genesis.
 
-    Boundary semantics: the ±1 offset is drawn uniformly and then clamped to the
+    ``p`` is a RAW VERTEX index here (Rev 6: the caller applies the C1 policy
+    mapping first), because the placement error is a physical length applied at
+    the actual grasp point.
+
+    Boundary semantics: the ± offset is drawn uniformly and then clamped to the
     valid node range, so the two end nodes self-select with probability 2/3
-    (an outward miss re-grasps the end node); interior nodes stay uniform ±1.
+    (an outward miss re-grasps the end node); interior nodes stay uniform ±.
+    Rev 6: the offset magnitude is the fixed arc length of
+    :func:`grasp_noise_offset_nodes` (1 vertex at n=32 — byte-identical).
     """
 
     node = int(p)
@@ -130,7 +238,7 @@ def sample_grasp(
     if not enabled:
         return node, True
 
-    offset = int(rng.choice(GRASP_NOISE_CHOICES))
+    offset = int(rng.choice(grasp_noise_choices(n)))
     actual = int(np.clip(node + offset, 0, n - 1))
     success = bool(rng.random() >= GRASP_FAILURE_PROB)
     return actual, success
@@ -274,16 +382,44 @@ def ensure_genesis_initialized(seed: int | None = None):
     return gs
 
 
-def stiffness_bases() -> dict[str, float]:
-    """Return the simulator-unit bases used for RopeParams multipliers."""
+def segment_mass_kg(params: RopeParams) -> float:
+    """Rev 6 C2: per-segment mass DERIVED from the rope's total mass.
 
+    ``rope_mass_total_kg / n_segments``.  At the historical P1 domain
+    (0.032 kg, 32 segments) this is exactly 1.0e-3 kg — the constant the
+    adapter used to hard-code.
+    """
+
+    n = int(params.n_segments)
+    if n < 1:
+        raise ValueError("n_segments must be at least 1")
+    total = float(params.rope_mass_total_kg)
+    if not (total > 0.0):
+        raise ValueError("rope_mass_total_kg must be positive")
+    return total / n
+
+
+def stiffness_bases(params: RopeParams | None = None) -> dict[str, float]:
+    """Return the simulator-unit bases used for RopeParams multipliers.
+
+    Rev 6 C2: ``segment_mass_base`` is no longer a constant — it depends on the
+    discretization.  When ``params`` is supplied the reported value is the one
+    actually in force; without it the historical P1 base (0.032 kg / 32) is
+    reported so existing diagnostic callers keep their meaning.
+    """
+
+    rope_mass = (
+        ROPE_MASS_TOTAL_KG_BASE if params is None else float(params.rope_mass_total_kg)
+    )
+    n_segments = 32 if params is None else int(params.n_segments)
     return {
         "stretch_base_K": STRETCH_BASE,
         "bend_base_E": BEND_BASE,
         "twist_base_G": TWIST_BASE,
         "mu_s_base": MU_S_BASE,
         "mu_k_ratio": MU_K_RATIO,
-        "segment_mass_base": SEGMENT_MASS_BASE,
+        "rope_mass_total_kg": rope_mass,
+        "segment_mass_base": rope_mass / n_segments,
     }
 
 
@@ -297,8 +433,9 @@ def mapped_parameters(params: RopeParams) -> dict[str, float]:
         "twisting_stiffness_G": TWIST_BASE * float(params.twist_stiffness),
         "mu_s": mu_s,
         "mu_k": MU_K_RATIO * mu_s,
-        "segment_mass": SEGMENT_MASS_BASE,
+        "segment_mass": segment_mass_kg(params),
         "segment_radius": float(params.radius),
+        "rope_mass_total_kg": float(params.rope_mass_total_kg),
     }
 
 
@@ -319,6 +456,8 @@ class DLOLabEnv(DLOEnvBase):
         move_hold_max_steps: int | None = None,
         move_step_size: float = 0.002,
         move_hold_steps: int = 20,
+        n_segments: int | None = None,
+        rope_mass_total: float | None = None,
         grasp_realism: bool = True,
         at1h_counters: bool = False,
     ) -> None:
@@ -381,6 +520,19 @@ class DLOLabEnv(DLOEnvBase):
         self.move_step_size = float(move_step_size)
         self.move_hold_steps = int(move_hold_steps)
         self.grasp_realism = bool(grasp_realism)
+        # Rev 6 B: rope discretization and total mass are declared in the
+        # `sim` config block and cross-checked against the `RopeParams` handed
+        # to `reset()`.  Two independent declarations that must agree is the
+        # point: a config that says 64 nodes / 40 g can no longer be paired
+        # with a 32-node domain object without the launch failing closed.
+        self.cfg_n_segments = None if n_segments is None else int(n_segments)
+        self.cfg_rope_mass_total = (
+            None if rope_mass_total is None else float(rope_mass_total)
+        )
+        if self.cfg_n_segments is not None and self.cfg_n_segments < 2:
+            raise ValueError("n_segments must be at least 2")
+        if self.cfg_rope_mass_total is not None and not (self.cfg_rope_mass_total > 0.0):
+            raise ValueError("rope_mass_total must be positive")
         self.last_hold_steps_used = 0
         self.last_hold_converged: bool | None = None
         self.last_waypoint_steps: list[int] = []
@@ -422,6 +574,9 @@ class DLOLabEnv(DLOEnvBase):
         self.last_delta_clamped = np.zeros(3, dtype=float)
         self.last_move_target = np.zeros((self.n_envs, 3), dtype=float)
         self.last_grasp_actual_node: int | None = None
+        self.last_grasp_policy_node: int | None = None
+        self.last_grasp_target_vertex: int | None = None
+        self.last_grasp_target_vertices: np.ndarray | None = None
         self.last_grasp_success = False
         self._rng = np.random.default_rng(0)
         self.last_reset_settle_converged: bool | None = None
@@ -435,6 +590,7 @@ class DLOLabEnv(DLOEnvBase):
 
     def reset(self, params: RopeParams, init_shape: str, seed: int) -> dict[str, Any]:
         self._validate_params(params)
+        self._assert_domain_matches_config(params)
         normalized_shape = _normalize_init_shape(init_shape)
         init_vertices = analytic_init_centerline(params, normalized_shape, seed)
 
@@ -528,7 +684,7 @@ class DLOLabEnv(DLOEnvBase):
             "interval_m": interval,
             "initial_arc_length_m": centerline_arc_length(init_vertices),
             "mapped_parameters": mapped,
-            "stiffness_bases": stiffness_bases(),
+            "stiffness_bases": stiffness_bases(params),
             "reset_settle_converged": self.last_reset_settle_converged,
             "init_vertex_setter": "rod_entity.set_position((n_envs, n_vertices, 3)); rod_entity.set_velocity(zeros)",
             "show_viewer": False,
@@ -789,9 +945,54 @@ class DLOLabEnv(DLOEnvBase):
             "offset_at_attach": offset_at_attach,
         }
 
+    def policy_nodes_to_vertices(self, p: np.ndarray) -> np.ndarray:
+        """Rev 6 C1: per-env policy index -> raw vertex index, by arc length.
+
+        Thin adapter-side binding of :func:`arc_length_vertex_index` to the
+        live rope state and this adapter's policy node count ``self.K``.
+        """
+
+        self._require_reset()
+        return arc_length_vertex_index(self._raw_batch(), p, self.K)
+
+    def _policy_node_to_shared_vertex(self, p: int) -> int:
+        """Map ONE policy index to ONE raw vertex shared by every env.
+
+        The single-node ``grasp()`` path attaches through the all-env upstream
+        API, which cannot express a different vertex per env.  With the C1
+        mapping the per-env deformed shapes could in principle disagree, so the
+        disagreement is a fail-closed error rather than a silent env-0 pick.
+        """
+
+        mapped = self.policy_nodes_to_vertices(np.full(self.n_envs, int(p), dtype=int))
+        unique = np.unique(mapped)
+        if unique.size != 1:
+            raise RuntimeError(
+                f"policy node {int(p)} maps to different raw vertices across envs "
+                f"({unique.tolist()}); the all-env grasp path cannot express that. "
+                "Use step_primitive_batch(), which attaches per env."
+            )
+        return int(unique[0])
+
+    def grasp_policy_node(self, p: int) -> bool:
+        """Grasp the vertex that policy node ``p`` denotes (Rev 6 C1 entry).
+
+        ``grasp()`` itself stays RAW-vertex by contract — ``active_node``,
+        ``_batched_active_nodes`` and the upstream attach/detach kernels all
+        speak raw vertex indices, so re-interpreting its argument would make
+        the mechanism-level call ambiguous.  Every path where a POLICY index
+        actually enters the adapter (this method, ``step_primitive`` and
+        ``step_primitive_batch``) applies the mapping first.
+        """
+
+        return self.grasp(self._policy_node_to_shared_vertex(p))
+
     def grasp(self, p: int) -> bool:
         self._require_reset()
         assert self.rod_entity is not None and self.gripper_link is not None
+        # Rev 6 C1: ``p`` is a RAW VERTEX index here by contract.  Callers that
+        # hold a POLICY index must map it first (``grasp_policy_node``,
+        # ``step_primitive``, ``step_primitive_batch``).
         node = int(p)
         n_vertices = self._n_vertices()
         if node < 0 or node >= n_vertices:
@@ -1095,8 +1296,16 @@ class DLOLabEnv(DLOEnvBase):
     def step_primitive(self, p: int, delta: np.ndarray, lift: str) -> dict[str, Any]:
         delta_vec = self._prepare_primitive_inputs(delta, lift)
         X_before = self.get_centerline()
-        p_actual, sampled_success = sample_grasp(p, self._n_vertices(), self._rng, self.grasp_realism)
+        # Rev 6 C1: `p` is a POLICY node index; map it to a raw vertex by arc
+        # length BEFORE the grasp-realism draw, because the C3 placement error
+        # is a physical length applied at the actual grasp point.
+        p_vertex = self._policy_node_to_shared_vertex(p)
+        p_actual, sampled_success = sample_grasp(
+            p_vertex, self._n_vertices(), self._rng, self.grasp_realism
+        )
         self.last_grasp_actual_node = p_actual
+        self.last_grasp_policy_node = int(p)
+        self.last_grasp_target_vertex = int(p_vertex)
         self.last_grasp_success = bool(sampled_success)
 
         if not sampled_success:
@@ -1116,7 +1325,8 @@ class DLOLabEnv(DLOEnvBase):
                     "p_actual": int(p_actual),
                     "grasp_realism": bool(self.grasp_realism),
                     "grasp_failure_prob": GRASP_FAILURE_PROB,
-                    "grasp_noise": int(p_actual - int(p)),
+                    "grasp_noise": int(p_actual - p_vertex),
+                    "p_vertex": int(p_vertex),
                     "delta_clamped": delta_vec.copy(),
                     "lift": lift,
                     "gripper_target": None,
@@ -1155,7 +1365,7 @@ class DLOLabEnv(DLOEnvBase):
                     "p_actual": int(p_actual),
                     "grasp_realism": bool(self.grasp_realism),
                     "grasp_failure_prob": GRASP_FAILURE_PROB,
-                    "grasp_noise": int(p_actual - int(p)),
+                    "grasp_noise": int(p_actual - p_vertex),
                     "delta_clamped": delta_vec.copy(),
                     "lift": lift,
                     "gripper_target": None,
@@ -1180,7 +1390,7 @@ class DLOLabEnv(DLOEnvBase):
                 "p_actual": int(p_actual),
                 "grasp_realism": bool(self.grasp_realism),
                 "grasp_failure_prob": GRASP_FAILURE_PROB,
-                "grasp_noise": int(p_actual - int(p)),
+                "grasp_noise": int(p_actual - p_vertex),
                 "delta_clamped": self.last_delta_clamped.copy(),
                 "lift": lift,
                 "gripper_target": target,
@@ -1216,8 +1426,13 @@ class DLOLabEnv(DLOEnvBase):
         p_array = np.asarray(p, dtype=int)
         if p_array.shape != (self.n_envs,):
             raise ValueError(f"p must have shape ({self.n_envs},), got {p_array.shape}")
-        if np.any((p_array < 0) | (p_array >= n_vertices)):
-            raise IndexError(f"grasp nodes must be inside [0, {n_vertices})")
+        # Rev 6 C1: `p` is the POLICY action space, bounded by K (= 32), not by
+        # the solver's vertex count.  Validating against `n_vertices` was the
+        # exact defect the pilot measured: at n=64 every policy index passed
+        # this check and then addressed the wrong material point, and at n=100
+        # the rear 68.7% of the rope silently left the action space.
+        if np.any((p_array < 0) | (p_array >= self.K)):
+            raise IndexError(f"policy grasp nodes must be inside [0, {self.K})")
 
         delta_array = np.asarray(delta, dtype=float)
         if delta_array.shape != (self.n_envs, 3):
@@ -1250,14 +1465,18 @@ class DLOLabEnv(DLOEnvBase):
         grasp_rng = self._rng if rng is None else rng
         raw_before = self.get_centerline_raw_batch()
 
+        # Rev 6 C1/C3: policy index -> raw vertex by per-env arc length, THEN
+        # the ± arc-length placement error at the actual grasp point.
+        p_vertex = arc_length_vertex_index(raw_before, p_array, self.K)
         sampled = [
             sample_grasp(int(node), n_vertices, grasp_rng, self.grasp_realism)
-            for node in p_array
+            for node in p_vertex
         ]
         p_actual = np.asarray([item[0] for item in sampled], dtype=int)
         grasp_success = np.asarray([item[1] for item in sampled], dtype=bool)
         self.last_grasp_actual_nodes = p_actual.copy()
         self.last_grasp_actual_node = int(p_actual[0]) if self.n_envs == 1 else None
+        self.last_grasp_target_vertices = p_vertex.copy()
         sampled_success = grasp_success.copy()
 
         # P9 Rev 4 (residual-energy repair, 2026-08-02): capture the FULL
@@ -1360,7 +1579,8 @@ class DLOLabEnv(DLOEnvBase):
                 "p_actual": p_actual,
                 "grasp_realism": bool(self.grasp_realism),
                 "grasp_failure_prob": GRASP_FAILURE_PROB,
-                "grasp_noise": p_actual - p_array,
+                "grasp_noise": p_actual - p_vertex,
+                "p_vertex": p_vertex,
                 "delta_clamped": delta_clamped,
                 "lift": np.asarray(lift_values, dtype=object),
                 "gripper_target": target,
@@ -1491,7 +1711,9 @@ class DLOLabEnv(DLOEnvBase):
         Definitions are taken verbatim from the acceptance battery probe so
         the training-time counters are directly comparable to the gate
         evidence: speed is the max per-node velocity norm, KE is
-        ``0.5 * SEGMENT_MASS_BASE * Σ‖v‖²`` and strain is the max
+        ``0.5 * segment_mass * Σ‖v‖²`` (Rev 6 C2: segment mass is derived from
+        the rope's total mass, so KE is discretization-invariant) and strain is
+        the max
         ``|edge/rest − 1|``.
         """
         assert self.rod_entity is not None
@@ -1504,7 +1726,7 @@ class DLOLabEnv(DLOEnvBase):
                 self._at1h_v_peak, np.max(speeds, axis=1).reshape(self.n_envs),
                 out=self._at1h_v_peak,
             )
-            ke = 0.5 * SEGMENT_MASS_BASE * np.sum(vels ** 2, axis=(1, 2))
+            ke = 0.5 * segment_mass_kg(self.params) * np.sum(vels ** 2, axis=(1, 2))
             np.maximum(self._at1h_ke_peak, ke.reshape(self.n_envs), out=self._at1h_ke_peak)
         if self.params is not None:
             np.maximum(
@@ -1518,14 +1740,17 @@ class DLOLabEnv(DLOEnvBase):
 
         ``grav_pe`` is per-env because ``lift`` is a per-env action; the
         battery's scalar ``rope_mass * g * lift_height`` becomes a vector
-        with the same definition (rope mass = n_segments * SEGMENT_MASS_BASE).
+        with the same definition.  Rev 6 C2: the rope mass is
+        ``params.rope_mass_total_kg`` directly rather than
+        ``n_segments * SEGMENT_MASS_BASE``, so the KE/PE denominator no longer
+        moves when the discretization changes.
         """
         if not self.at1h_counters:
             return None
         self._at1h_active = False
         if self.params is None:
             return None
-        rope_mass = float(self.params.n_segments) * SEGMENT_MASS_BASE
+        rope_mass = float(self.params.rope_mass_total_kg)
         if lift_values is None:
             heights = np.full(self.n_envs, LIFT_HEIGHTS["high"], dtype=float)
         else:
@@ -1984,3 +2209,31 @@ class DLOLabEnv(DLOEnvBase):
             raise ValueError("twist_stiffness multiplier must be positive")
         if params.friction < 0:
             raise ValueError("friction multiplier must be non-negative")
+        if params.rope_mass_total_kg <= 0:
+            raise ValueError("rope_mass_total_kg must be positive")
+
+    def _assert_domain_matches_config(self, params: RopeParams) -> None:
+        """Rev 6 B: fail closed when `sim` and the rope domain disagree.
+
+        `sim.n_segments` / `sim.rope_mass_total` are the launch-time
+        declaration; `RopeParams` is what the caller actually built.  A silent
+        mismatch would train on a different rope than the SHA-pinned config
+        advertises, which is the same class of defect the corrected-env
+        resolver was written to stop.
+        """
+
+        if (
+            self.cfg_n_segments is not None
+            and int(params.n_segments) != self.cfg_n_segments
+        ):
+            raise ValueError(
+                f"env config: `sim.n_segments` = {self.cfg_n_segments} but the rope "
+                f"domain supplies n_segments = {int(params.n_segments)}"
+            )
+        if self.cfg_rope_mass_total is not None and not np.isclose(
+            float(params.rope_mass_total_kg), self.cfg_rope_mass_total, rtol=0.0, atol=1e-12
+        ):
+            raise ValueError(
+                f"env config: `sim.rope_mass_total` = {self.cfg_rope_mass_total} but the "
+                f"rope domain supplies rope_mass_total_kg = {float(params.rope_mass_total_kg)}"
+            )

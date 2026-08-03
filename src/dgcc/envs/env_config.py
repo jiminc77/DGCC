@@ -64,7 +64,20 @@ class EnvConfigError(RuntimeError):
 #: ``DLOLabEnv`` activates the R1-R5 bundle iff ``move_v_max`` is not None,
 #: and ``move_hold_max_steps`` is the R2 bound; requiring both explicitly
 #: means a corrected launch cannot inherit either from a code default.
-CORRECTED_REQUIRED_KEYS = ("move_v_max", "move_hold_max_steps")
+#:
+#: Rev 6 adds the rope's discretization and total mass for the same reason.
+#: Before Rev 6 both were implicit: ``n_segments`` lived only in
+#: ``dgcc.tasks.domain`` and the total mass did not exist as a concept at all
+#: (the adapter fixed the PER-SEGMENT mass, so the rope silently weighed
+#: ``n_segments`` grams).  A launch that changes the discretization changes the
+#: physics, so the config must say so out loud and the adapter cross-checks the
+#: declaration against the rope domain it is handed.
+CORRECTED_REQUIRED_KEYS = (
+    "move_v_max",
+    "move_hold_max_steps",
+    "n_segments",
+    "rope_mass_total",
+)
 
 #: Pre-correction parameters.  Retained in the adapter for one release
 #: (its docstring says so) but forbidden in a corrected launch.
@@ -180,11 +193,24 @@ def resolve_env_kwargs(
             )
         missing = [key for key in CORRECTED_REQUIRED_KEYS if key not in sim]
         if missing:
+            # The consequence differs per key, so name it rather than printing
+            # one blanket sentence that is wrong for half the set.
+            consequence = {
+                "move_v_max": "the adapter would silently fall back to the "
+                              "pre-correction primitive (legacy fixed-step move, hold=0)",
+                "move_hold_max_steps": "the adapter would silently fall back to the "
+                                       "pre-correction primitive (legacy fixed-step move, hold=0)",
+                "n_segments": "the rope discretization would be inherited silently from "
+                              "`dgcc.tasks.domain`, so the config could not be trusted to "
+                              "describe the physics it launches (Rev 6 C1/C2)",
+                "rope_mass_total": "the rope mass would be inherited silently, and before "
+                                   "Rev 6 it was implicitly `n_segments` grams -- exactly the "
+                                   "coupling Rev 6 removed (Rev 6 C2)",
+            }
+            detail = "; ".join(f"{key}: {consequence[key]}" for key in sorted(missing))
             raise EnvConfigError(
                 f"env config: corrected environment required but `sim` is missing "
-                f"{sorted(missing)}. The adapter would silently fall back to the "
-                "pre-correction primitive (legacy fixed-step move, hold=0), so the "
-                "launch is refused instead."
+                f"{sorted(missing)}. {detail}. The launch is refused instead."
             )
         for key in CORRECTED_REQUIRED_KEYS:
             if sim[key] is None:

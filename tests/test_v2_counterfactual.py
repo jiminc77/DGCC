@@ -111,7 +111,14 @@ def test_worker_executes_disposable_one_step_selector_branches() -> None:
     cf_config = {
         "run": {"n_envs": 2},
         "eval": {"t2_episodes_per_goal": 1},
-        "sim": {"move_v_max": 0.15, "move_hold_max_steps": 2000},
+        # Rev 6: the rope discretization and total mass are required `sim`
+        # keys, so a fixture that omits them is refused like the real config.
+        "sim": {
+            "move_v_max": 0.15,
+            "move_hold_max_steps": 2000,
+            "n_segments": 32,
+            "rope_mass_total": 0.040,
+        },
     }
     worker.goal_curve = lambda goal, length_m: np.zeros((32, 3))
     agent = FakeAgent()

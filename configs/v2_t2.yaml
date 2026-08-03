@@ -54,6 +54,23 @@ sim:
   reset_settle_max_steps: 10000
   move_v_max: 0.15
   move_hold_max_steps: 2000
+  # Rev 6 (owner-confirmed 2026-08-03, pilot dossier/pilot_report_nodecount.md).
+  # Rope discretization and total mass are now DECLARED here and cross-checked
+  # against the rope domain object at reset(); a config and a domain that
+  # disagree fail the launch closed.  Both keys are required for a corrected
+  # launch (dgcc.envs.env_config.CORRECTED_REQUIRED_KEYS) -- there is no
+  # silent default, because changing either one changes the physics.
+  #   n_segments stays 32.  The 64-node transition is implemented and proven
+  #   byte-identical at 32, but is HELD until this host's cost cells exist
+  #   (steer 2026-08-03: the "1.01x" figure is a 1024-env artifact; at 4096 the
+  #   reported cost is raw 2.56x / tr/s 0.40x on a 4090, and this host is
+  #   unmeasured).
+  #   rope_mass_total 0.040 kg: previously implicit and equal to n_segments
+  #   grams (0.032 kg at n=32).  Owner-specified value; this is a physics
+  #   change and is recorded as one.  It is adopted ahead of the node flip so
+  #   an acceptance regression is attributable to one variable.
+  n_segments: 32
+  rope_mass_total: 0.040
   grasp_realism: true
   # AT-1H always-on counters (env-correction design Rev 3 상시 로깅 요건).
   # Required for the confirmatory reselection runs; adds one velocity and
