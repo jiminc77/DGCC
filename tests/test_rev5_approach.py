@@ -279,37 +279,3 @@ def test_approach_step_classification_matches_the_probe_rule() -> None:
     expected_holds = len(commands) - expected_moves
     assert result["walk_steps"] == expected_moves
     assert result["dwell_steps"] == expected_holds
-
-
-# ------------------------------------------------- Rev 7 release gate
-
-
-def test_release_gate_threshold_and_budget_match_the_measured_distribution() -> None:
-    """Owner-adjudicated values, derived from the 80-primitive distribution
-    (residual strain at natural release p50 6.90e-4 / p95 2.26e-3 / max 4.04e-3).
-    Pinned here so a silent edit cannot drift them."""
-
-    from dgcc.envs.dlolab import RELEASE_STRAIN_MAX_STEPS, RELEASE_STRAIN_THRESHOLD
-
-    assert RELEASE_STRAIN_THRESHOLD == 7.5e-4
-    assert RELEASE_STRAIN_MAX_STEPS == 600
-    # Must sit below the Rev 4 ep44 p0 release value (1.21e-3), which still
-    # whipped, and above the observed floor (1.96e-5).
-    assert 1.96e-5 < RELEASE_STRAIN_THRESHOLD < 1.21e-3
-
-
-def test_release_gate_is_best_effort_not_a_grasp_failure() -> None:
-    """Budget exhaustion must release anyway and be COUNTED, never converted
-    into a grasp failure -- otherwise grasp-success statistics and the
-    failure-restoration path move together and nothing is attributable."""
-
-    import inspect
-
-    from dgcc.envs.dlolab import DLOLabEnv
-
-    body = inspect.getsource(DLOLabEnv._execute_move)
-    gate = body[body.index("RELEASE_STRAIN_MAX_STEPS"):]
-    assert "last_release_strain_relaxed" in gate
-    # the gate loop must not raise or flag failure
-    assert "raise" not in gate
-    assert "grasp_success" not in gate

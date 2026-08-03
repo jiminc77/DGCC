@@ -58,19 +58,6 @@ TENSION_PAUSE_MAX_STEPS = 500
 # 4): "quiescent" for hold-before-release means the release-speed acceptance
 # criterion (AT-3, 0.05 m/s), not the 1e-3 settle threshold.
 HOLD_QUIESCENT_VEL = 0.05
-# --- Rev 7 release gate (owner-approved 2026-08-03) ----------------------
-# The shipped hold-until-quiescent exits on VELOCITY alone, so a rope that is
-# still-but-loaded is released with its stored elastic energy intact; the ep44
-# p0 forensic identified that residual strain -- not the release speed, which
-# satisfied AT-3 in every arm -- as what sets the post-release peak.  These two
-# constants close that gap and are DERIVED from a measured distribution
-# (80 primitives, 32 nodes / 40 g: residual strain at natural release
-# p50 6.90e-4 / p90 1.60e-3 / p95 2.26e-3 / max 4.04e-3); the hold loop in
-# `_execute_move` carries the full selection argument.  Release is BEST
-# EFFORT: budget exhaustion releases anyway and is counted, never converted
-# into a grasp failure.
-RELEASE_STRAIN_THRESHOLD = 7.5e-4
-RELEASE_STRAIN_MAX_STEPS = 600
 # --- Rev 5 two-stage compliant approach (owner-approved 2026-08-03) -------
 # Rev 4 and earlier TELEPORTED the gripper onto the target node in a single
 # scene step and attached on the next one, so the 0.15 m/s cap only ever
@@ -553,10 +540,6 @@ class DLOLabEnv(DLOEnvBase):
         self.last_lower_z: np.ndarray | None = None
         self.last_tension_pause_steps = 0
         self.last_tension_freezes = 0
-        # Rev 7 release-gate telemetry.
-        self.last_release_strain_steps = 0
-        self.last_release_strain: float | None = None
-        self.last_release_strain_relaxed: bool | None = None
         # Rev 5 approach/attach telemetry (one primitive's worth).
         # `last_approach_steps` counts COMMANDED-MOTION scene steps and
         # `last_approach_dwell_steps` the frozen-command gate steps, using the
@@ -1245,63 +1228,12 @@ class DLOLabEnv(DLOEnvBase):
             self.last_hold_converged = bool(
                 float(np.max(self.max_node_speed_batch())) < threshold
             )
-            # Rev 7 release gate (owner-approved 2026-08-03).  The loop above
-            # exits on VELOCITY alone, so a rope that is still but still LOADED
-            # is released immediately.  The ep44 p0 forensic showed that is
-            # what decides a primitive's peak: same episode, same grasp node,
-            # commanded trajectory identical to 8 um, both Rev 4 and Rev 5 burst
-            # at the same settle step on the same node and edge, and the only
-            # discriminator was the residual strain at release (1.21e-3 -> peak
-            # 3.59 m/s; 2.00e-3 -> peak 8.42 m/s and an absolute-cap violation;
-            # 8.6e-4 -> peak 0.83 m/s and no violation at all).
-            #
-            # This is the symmetric twin of the Rev 5 attach gate: attach only
-            # when the relative velocity is low, release only when the rope is
-            # both still AND unloaded.
-            #
-            # Threshold and budget are DERIVED from the measured distribution
-            # (`scripts/v2_rev7_release_strain_distribution.py`, 80 primitives,
-            # 32 nodes / 40 g): residual strain at natural release is
-            # p50 6.90e-4 / p90 1.60e-3 / p95 2.26e-3 / max 4.04e-3.
-            #   * 2.0e-3 and 1.5e-3 are inert -- Rev 4 released ep44 p0 at
-            #     1.21e-3 and still whipped, so a threshold above that buys
-            #     nothing.
-            #   * 7.5e-4 is reached by 72.5% of primitives at a cost of
-            #     p50 0 / p95 6.6 / max 665 extra steps.
-            #   * 5.0e-4 only reaches 52.5% for no demonstrated extra benefit.
-            # Budget 600 covers essentially the whole observed cost while
-            # bounding the tail.
-            #
-            # BEST-EFFORT release: on budget exhaustion the rope is released
-            # anyway and the event is counted.  It is deliberately NOT a grasp
-            # failure -- the shipped velocity hold also releases on exhaustion,
-            # and converting exhaustion into a failure would move the grasp
-            # success statistics and the failure-restoration path at the same
-            # time, making any acceptance regression unattributable.
-            strain_steps = 0
-            release_strain = float(self._max_edge_strain_batch().max())
-            while (
-                strain_steps < RELEASE_STRAIN_MAX_STEPS
-                and release_strain >= RELEASE_STRAIN_THRESHOLD
-            ):
-                self._set_gripper_positions(final)
-                self._step_scene()
-                strain_steps += 1
-                release_strain = float(self._max_edge_strain_batch().max())
-            self.last_release_strain_steps = strain_steps
-            self.last_release_strain = release_strain
-            self.last_release_strain_relaxed = bool(
-                release_strain < RELEASE_STRAIN_THRESHOLD
-            )
         else:
             for _ in range(max(0, self.move_hold_steps)):
                 self._set_gripper_positions(final)
                 self._step_scene()
             self.last_hold_steps_used = max(0, self.move_hold_steps)
             self.last_hold_converged = None
-            self.last_release_strain_steps = 0
-            self.last_release_strain = float(self._max_edge_strain_batch().max())
-            self.last_release_strain_relaxed = None
         self._assert_finite()
         return final
 
@@ -1469,9 +1401,6 @@ class DLOLabEnv(DLOEnvBase):
                 "approach_dwell_steps": int(self.last_approach_dwell_steps),
                 "attach_rel_vel_max": float(np.nanmax(self.last_attach_rel_vel)),
                 "attach_offset_max": float(np.nanmax(self.last_attach_offset)),
-                "release_strain_steps": int(self.last_release_strain_steps),
-                "release_strain": self.last_release_strain,
-                "release_strain_relaxed": self.last_release_strain_relaxed,
                 "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
             },
         }
@@ -1670,11 +1599,6 @@ class DLOLabEnv(DLOEnvBase):
                 "lower_strain_aborts": int(self.last_lower_strain_aborts),
                 "tension_pause_steps": int(self.last_tension_pause_steps),
                 "tension_freezes": int(self.last_tension_freezes),
-                "release_strain_steps": int(self.last_release_strain_steps),
-                "release_strain": self.last_release_strain,
-                "release_strain_relaxed": self.last_release_strain_relaxed,
-                "release_strain_threshold": RELEASE_STRAIN_THRESHOLD,
-                "release_strain_max_steps": RELEASE_STRAIN_MAX_STEPS,
                 "lower_z": None if self.last_lower_z is None else [float(v) for v in self.last_lower_z],
                 "at1h": at1h,
                 "sampled_grasp_success": sampled_success,
