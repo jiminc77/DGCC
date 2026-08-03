@@ -229,6 +229,9 @@ def run_slice(
                     "move_steps_excl_approach": move_steps_gate,
                     "attach_rel_vel_max": info.get("attach_rel_vel_max"),
                     "attach_offset_max": info.get("attach_offset_max"),
+                    "release_strain_steps": int(probe["release_strain_steps"]),
+                    "release_strain": probe["release_strain"],
+                    "release_strain_relaxed": probe["release_strain_relaxed"],
                     "grasp_success": bool(out["grasp_success"][0]),
                     "hold_steps_used": int(info["hold_steps_used"]),
                     "hold_converged": bool(info["hold_converged"]),
@@ -436,6 +439,27 @@ def main() -> int:
         [p["attach_offset_max"] for p in primitives if p["attach_offset_max"] is not None],
         dtype=float,
     )
+    # Rev 7: release-gate cost and budget-exhaustion rate.  Best-effort
+    # release means exhaustion is a reported diagnostic, not a failure.
+    rel_steps = np.asarray([p["release_strain_steps"] for p in primitives], dtype=float)
+    rel_strain = np.asarray(
+        [p["release_strain"] for p in primitives if p["release_strain"] is not None],
+        dtype=float,
+    )
+    exhausted = [p for p in primitives if p["release_strain_relaxed"] is False]
+    release_gate = {
+        "threshold": 7.5e-4,
+        "max_steps": 600,
+        "extra_steps_mean": float(rel_steps.mean()),
+        "extra_steps_p50": float(np.percentile(rel_steps, 50)),
+        "extra_steps_p95": float(np.percentile(rel_steps, 95)),
+        "extra_steps_max": float(rel_steps.max()),
+        "budget_exhausted": len(exhausted),
+        "budget_exhausted_rate": round(len(exhausted) / len(primitives), 5),
+        "release_strain_p50": float(np.percentile(rel_strain, 50)) if rel_strain.size else None,
+        "release_strain_p95": float(np.percentile(rel_strain, 95)) if rel_strain.size else None,
+        "release_strain_max": float(rel_strain.max()) if rel_strain.size else None,
+    }
     approach_cost = {
         "approach_steps_mean": float(approach.mean()),
         "approach_steps_median": float(np.median(approach)),
@@ -470,6 +494,7 @@ def main() -> int:
         "per_stratum": per_stratum,
         "overall_adjudication": overall_adjudication,
         "approach_cost": approach_cost,
+        "release_gate": release_gate,
         "primitives": primitives,
         "elapsed_s": round(time.time() - started, 1),
     }
@@ -514,6 +539,7 @@ def main() -> int:
             {
                 "gate_per_stratum": result["gate_per_stratum"],
                 "approach_cost": approach_cost,
+                "release_gate": release_gate,
                 "recalibration_input": result["recalibration_input"],
                 "overall_adjudication": overall_adjudication,
                 "pass_rev2_both_strata": result["pass_rev2_both_strata"],
