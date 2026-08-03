@@ -44,6 +44,51 @@ TENSION_PAUSE_MAX_STEPS = 500
 # 4): "quiescent" for hold-before-release means the release-speed acceptance
 # criterion (AT-3, 0.05 m/s), not the 1e-3 settle threshold.
 HOLD_QUIESCENT_VEL = 0.05
+# --- Rev 5 two-stage compliant approach (owner-approved 2026-08-03) -------
+# Rev 4 and earlier TELEPORTED the gripper onto the target node in a single
+# scene step and attached on the next one, so the 0.15 m/s cap only ever
+# applied AFTER the rope was already held.  The contact transient this
+# produced is visible in rollout video and is not reproducible on a real
+# arm.  Rev 5 replaces the teleport with a speed-limited two-stage approach
+# plus a relative-velocity attach gate.  Parameter basis:
+#
+# APPROACH_V_FAST -- free-space transit speed.  0.75 m/s is 5x the
+#   quasi-static manipulation cap and well inside the Cartesian envelope of
+#   the 7-DOF arms this policy targets (Franka Panda TCP limit 1.7 m/s), so
+#   the transit leg is transferable instead of instantaneous.
+# APPROACH_R_SLOW -- radius of the final-approach zone, inside which the
+#   commanded speed never exceeds the manipulation speed.  0.04 m is ~1.24
+#   rope segment intervals (L/(N-1) = 32.3 mm at the P1 domain), i.e. the
+#   gripper is already at manipulation speed a full segment before contact,
+#   and it sits below the PILE_NEIGHBOR_RADIUS_M = 0.065 m neighbourhood the
+#   lowering guard reasons over.
+# APPROACH_A_DEC -- Cartesian deceleration limit used to blend the two
+#   stages.  7 m/s^2 is about half the Panda's translational acceleration
+#   limit (13 m/s^2), so the profile
+#     v(d) = clip(sqrt(v_slow^2 + 2*a*(d - r_slow)), v_slow, v_fast)
+#   is realizable by the real arm rather than a step discontinuity.  The
+#   braking band is (v_fast^2 - v_slow^2)/(2a) = 38.6 mm wide.
+# ATTACH_REL_VEL -- attach gate.  A rigid attach forces the node's velocity
+#   to the gripper's, so it injects a velocity discontinuity equal to the
+#   gripper-node RELATIVE speed.  The gate is one decade above the settle
+#   threshold (SETTLE_VEL_THRESHOLD = 1e-3 m/s, the existing quiescence
+#   scale) and 5x tighter than the realized release criterion
+#   (HOLD_QUIESCENT_VEL = 0.05 m/s, AT-3): attach IMPOSES a discontinuity
+#   where release only removes a constraint.  Energy bound: the injected
+#   kinetic energy is <= 0.5*m_seg*v_rel^2 = 5e-8 J, i.e. <= 1e-5 of the
+#   low-lift gravitational PE (6.3e-3 J) and five orders of magnitude under
+#   the AT-1H KE/PE ceiling of 1.0.
+# APPROACH_MAX_STEPS -- fail-closed budget.  Worst-case transit (gripper at
+#   one rope end, target node at the other, ~1.1 m) costs ~1.7e3 steps, so
+#   3000 leaves headroom while bounding a pathological dwell.  An env that
+#   does not clear the gate inside the budget is reported as a GRASP FAILURE
+#   and rewound through the Rev 4 snapshot path (no energy injection).
+APPROACH_V_FAST = 0.75
+APPROACH_V_SLOW = 0.15
+APPROACH_R_SLOW = 0.04
+APPROACH_A_DEC = 7.0
+ATTACH_REL_VEL = 1.0e-2
+APPROACH_MAX_STEPS = 3000
 GRASP_FAILURE_PROB = 0.05
 GRASP_NOISE_CHOICES = (-1, 0, 1)
 VALID_INIT_SHAPES = frozenset({"straight", "u_bend", "s_curve", "random_smooth"})
@@ -89,6 +134,34 @@ def sample_grasp(
     actual = int(np.clip(node + offset, 0, n - 1))
     success = bool(rng.random() >= GRASP_FAILURE_PROB)
     return actual, success
+
+
+def approach_speed(dist: np.ndarray, v_slow: float = APPROACH_V_SLOW) -> np.ndarray:
+    """Rev 5 two-stage approach speed profile as a function of remaining distance.
+
+    ``v(d) = clip(sqrt(v_slow^2 + 2*APPROACH_A_DEC*(d - APPROACH_R_SLOW)),
+    v_slow, APPROACH_V_FAST)``: free-space transit at ``APPROACH_V_FAST``, a
+    constant-deceleration braking band of width
+    ``(v_fast^2 - v_slow^2)/(2*a)``, and a hard cap at ``v_slow`` inside
+    ``APPROACH_R_SLOW``.  Pure function of the geometry so it is unit-testable
+    without a solver.
+    """
+
+    d = np.asarray(dist, dtype=float)
+    slow = float(v_slow)
+    if slow <= 0.0:
+        raise ValueError("v_slow must be positive")
+    ramp = np.sqrt(
+        slow * slow + 2.0 * APPROACH_A_DEC * np.maximum(d - APPROACH_R_SLOW, 0.0)
+    )
+    return np.clip(ramp, slow, APPROACH_V_FAST)
+
+
+def approach_brake_distance(v_slow: float = APPROACH_V_SLOW) -> float:
+    """Width of the constant-deceleration braking band, in metres."""
+
+    slow = float(v_slow)
+    return max(0.0, (APPROACH_V_FAST**2 - slow * slow) / (2.0 * APPROACH_A_DEC))
 
 
 def centerline_arc_length(points: np.ndarray) -> float:
@@ -315,6 +388,17 @@ class DLOLabEnv(DLOEnvBase):
         self.last_lower_z: np.ndarray | None = None
         self.last_tension_pause_steps = 0
         self.last_tension_freezes = 0
+        # Rev 5 approach/attach telemetry (one primitive's worth).
+        # `last_approach_steps` counts COMMANDED-MOTION scene steps and
+        # `last_approach_dwell_steps` the frozen-command gate steps, using the
+        # same "did the commanded array change" rule the acceptance probe uses
+        # to classify move vs hold, so the battery can subtract the approach
+        # out of the AT-6 denominator exactly.
+        self.last_approach_steps = 0
+        self.last_approach_dwell_steps = 0
+        self.last_approach_gate_failures = 0
+        self.last_attach_rel_vel: np.ndarray = np.full(self.n_envs, np.nan)
+        self.last_attach_offset: np.ndarray = np.full(self.n_envs, np.nan)
         # AT-1H always-on counters (Rev 3 상시 로깅 요건).  `_at1h_active`
         # is only true between `_at1h_begin()` and `_at1h_end()`, i.e. for
         # the duration of one primitive (move legs + hold + post-release
@@ -568,6 +652,143 @@ class DLOLabEnv(DLOEnvBase):
             "settle_steps": settle_steps,
         }
 
+    def _node_velocities_batch(self) -> np.ndarray:
+        """Per-env rod vertex velocities with an explicit ``(n_envs, N, 3)`` axis."""
+
+        assert self.rod_entity is not None
+        vels = np.asarray(self.rod_entity.get_all_vels(), dtype=float)
+        if vels.ndim == 2:
+            vels = vels.reshape(1, *vels.shape)
+        return vels.reshape(self.n_envs, -1, 3)
+
+    def _approach_v_slow(self) -> float:
+        """Final-approach speed cap: never above the manipulation cap in force."""
+
+        if self.quasi_static and self.move_v_max is not None:
+            return min(APPROACH_V_SLOW, float(self.move_v_max))
+        return APPROACH_V_SLOW
+
+    def _approach_and_attach(
+        self, nodes: np.ndarray, eligible: np.ndarray, *, per_env: bool
+    ) -> dict[str, Any]:
+        """Rev 5: speed-limited two-stage approach followed by an attach gate.
+
+        The gripper tracks the LIVE position of its target node under the
+        `approach_speed` profile (fast in free space, braking band, capped at
+        the manipulation speed inside ``APPROACH_R_SLOW``).  Because the
+        commanded displacement collapses to zero as the gripper converges on
+        the node, the commanded gripper velocity decays to the node's own
+        velocity, and the gate
+
+            ‖v_gripper_cmd − v_node‖ < ATTACH_REL_VEL  and  ‖p_node − p_grip‖ ≤ v_slow·dt
+
+        is the physical statement "only close the gripper once it is moving
+        WITH the material point it is about to constrain".  The gripper sphere
+        is non-colliding and uncoupled, so the approach itself applies no force
+        to the rope; what the gate removes is the velocity discontinuity the
+        rigid attach would otherwise impose.
+
+        ``per_env=True`` attaches each environment the instant it clears the
+        gate (batch path, per-env attach hooks).  ``per_env=False`` is the
+        single-node ``grasp()`` path, whose upstream API attaches all envs at
+        once, so it waits until every eligible env clears the gate together.
+
+        Envs still pending when ``APPROACH_MAX_STEPS`` is exhausted are
+        returned unattached; the caller converts them into grasp failures and
+        rewinds them through the Rev 4 snapshot path.
+        """
+
+        assert self.rod_entity is not None and self.gripper_link is not None
+        n_envs = self.n_envs
+        env_index = np.arange(n_envs)
+        targets = np.asarray(nodes, dtype=int).reshape(n_envs)
+        eligible_mask = np.asarray(eligible, dtype=bool).reshape(n_envs)
+        if not per_env and eligible_mask.any():
+            unique = np.unique(targets[eligible_mask])
+            if unique.size != 1:
+                raise ValueError(
+                    "all-env attach requires one shared target node, got "
+                    f"{unique.tolist()}"
+                )
+
+        pending = eligible_mask.copy()
+        attached = np.zeros(n_envs, dtype=bool)
+        rel_at_attach = np.full(n_envs, np.nan)
+        offset_at_attach = np.full(n_envs, np.nan)
+        v_slow = self._approach_v_slow()
+        arrive_tol = v_slow * self.dt
+        commanded = self._gripper_positions()
+        walk_steps = 0
+        dwell_steps = 0
+        steps = 0
+
+        while pending.any() and steps < APPROACH_MAX_STEPS:
+            previous = commanded
+            node_pos = self._raw_batch()[env_index, targets, :]
+            offset_vec = node_pos - previous
+            dist = np.linalg.norm(offset_vec, axis=1)
+            step_len = approach_speed(dist, v_slow) * self.dt
+            frac = np.minimum(1.0, step_len / np.maximum(dist, 1.0e-12))
+            frac = np.where(dist > 0.0, frac, 0.0)
+            commanded = previous + offset_vec * frac[:, None]
+            # Done / ineligible envs freeze their commanded pose so their
+            # gripper velocity is exactly zero and their attachment (if any)
+            # is not dragged while the remaining envs finish approaching.
+            commanded[~pending] = previous[~pending]
+            v_grip = (commanded - previous) / self.dt
+            # Mirrors the acceptance probe's move/hold classification exactly
+            # (bitwise equality of the commanded array).
+            if np.array_equal(commanded, previous):
+                dwell_steps += 1
+            else:
+                walk_steps += 1
+            self._set_gripper_positions(commanded)
+            self._step_scene()
+            steps += 1
+
+            node_pos = self._raw_batch()[env_index, targets, :]
+            node_vel = self._node_velocities_batch()[env_index, targets, :]
+            offset = np.linalg.norm(node_pos - commanded, axis=1)
+            rel = np.linalg.norm(v_grip - node_vel, axis=1)
+            ready = pending & (offset <= arrive_tol) & (rel < ATTACH_REL_VEL)
+            if not ready.any():
+                continue
+
+            if per_env:
+                for env_idx in np.flatnonzero(ready):
+                    self.rod_entity.attach_to_rigid_link_with_envs_idx(
+                        self.gripper_link, [int(targets[env_idx])], int(env_idx)
+                    )
+                    if self._batched_active_nodes is not None:
+                        self._batched_active_nodes[env_idx] = int(targets[env_idx])
+                selected = ready
+            else:
+                if not bool(np.all(ready[pending])):
+                    continue
+                node = int(targets[np.flatnonzero(pending)[0]])
+                self.rod_entity.attach_to_rigid_link(self.gripper_link, [node])
+                self.active_node = node
+                selected = pending.copy()
+            rel_at_attach[selected] = rel[selected]
+            offset_at_attach[selected] = offset[selected]
+            attached |= selected
+            pending &= ~selected
+
+        gate_failures = int((eligible_mask & ~attached).sum())
+        self.last_approach_steps = int(walk_steps)
+        self.last_approach_dwell_steps = int(dwell_steps)
+        self.last_approach_gate_failures = gate_failures
+        self.last_attach_rel_vel = rel_at_attach
+        self.last_attach_offset = offset_at_attach
+        return {
+            "attached": attached,
+            "walk_steps": int(walk_steps),
+            "dwell_steps": int(dwell_steps),
+            "gate_failures": gate_failures,
+            "rel_vel_at_attach": rel_at_attach,
+            "offset_at_attach": offset_at_attach,
+        }
+
     def grasp(self, p: int) -> bool:
         self._require_reset()
         assert self.rod_entity is not None and self.gripper_link is not None
@@ -576,11 +797,17 @@ class DLOLabEnv(DLOEnvBase):
         if node < 0 or node >= n_vertices:
             raise IndexError(f"grasp node {node} outside [0, {n_vertices})")
 
-        verts = self._raw_batch()
-        self._set_gripper_positions(verts[:, node, :])
-        self._step_scene()
-        self.rod_entity.attach_to_rigid_link(self.gripper_link, [node])
-        self.active_node = node
+        # Rev 5: no teleport.  The gripper walks in under the two-stage speed
+        # profile and only attaches once every env clears the relative-velocity
+        # gate; a budget exhaustion is a grasp FAILURE, not a forced attach.
+        approach = self._approach_and_attach(
+            np.full(self.n_envs, node, dtype=int),
+            np.ones(self.n_envs, dtype=bool),
+            per_env=False,
+        )
+        if not bool(approach["attached"].all()):
+            self._assert_finite()
+            return False
         self._step_scene()
         self._assert_finite()
         return True
@@ -899,7 +1126,47 @@ class DLOLabEnv(DLOEnvBase):
                 },
             }
 
+        # Rev 5: the attach gate can fail a grasp the sampler accepted, so the
+        # rewind target is captured BEFORE the approach starts.  Read-only, and
+        # only on the path that actually approaches (the sampled-failure branch
+        # above returned already).
+        pre_primitive_state = self._snapshot_rod_state()
         grasp_success = self.grasp(p_actual)
+        if not grasp_success:
+            # Attach gate not cleared inside the budget.  Nothing was attached,
+            # so the rope only free-evolved during the approach; rewind it to
+            # the pre-primitive solver state (energy-neutral, Rev 4 path) and
+            # report the standard grasp-failure contract.
+            self._restore_failed_grasp_envs(
+                pre_primitive_state, np.arange(self.n_envs)
+            )
+            self.last_grasp_success = False
+            measured_speed = self.max_node_speed()
+            measured_converged = bool(measured_speed <= 1e-3)
+            self.last_settle_steps = 0
+            self.last_settle_converged = measured_converged
+            return {
+                "X_before": X_before,
+                "X_after": X_before.copy(),
+                "grasp_success": False,
+                "settle_steps": 0,
+                "info": {
+                    "p": int(p),
+                    "p_actual": int(p_actual),
+                    "grasp_realism": bool(self.grasp_realism),
+                    "grasp_failure_prob": GRASP_FAILURE_PROB,
+                    "grasp_noise": int(p_actual - int(p)),
+                    "delta_clamped": delta_vec.copy(),
+                    "lift": lift,
+                    "gripper_target": None,
+                    "settle_converged": measured_converged,
+                    "max_node_speed": measured_speed,
+                    "attach_gate_failed": True,
+                    "approach_steps": int(self.last_approach_steps),
+                    "approach_dwell_steps": int(self.last_approach_dwell_steps),
+                    "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
+                },
+            }
         target = self._move_prepared(delta_vec, lift)
         settle_converged = self.release()
         X_after = self.get_centerline()
@@ -919,6 +1186,11 @@ class DLOLabEnv(DLOEnvBase):
                 "gripper_target": target,
                 "settle_converged": bool(settle_converged),
                 "max_node_speed": self.max_node_speed(),
+                "attach_gate_failed": False,
+                "approach_steps": int(self.last_approach_steps),
+                "approach_dwell_steps": int(self.last_approach_dwell_steps),
+                "attach_rel_vel_max": float(np.nanmax(self.last_attach_rel_vel)),
+                "attach_offset_max": float(np.nanmax(self.last_attach_offset)),
                 "mapped_parameters": mapped_parameters(self.params) if self.params is not None else None,
             },
         }
@@ -985,9 +1257,8 @@ class DLOLabEnv(DLOEnvBase):
         p_actual = np.asarray([item[0] for item in sampled], dtype=int)
         grasp_success = np.asarray([item[1] for item in sampled], dtype=bool)
         self.last_grasp_actual_nodes = p_actual.copy()
-        self.last_grasp_successes = grasp_success.copy()
         self.last_grasp_actual_node = int(p_actual[0]) if self.n_envs == 1 else None
-        self.last_grasp_success = bool(np.all(grasp_success))
+        sampled_success = grasp_success.copy()
 
         # P9 Rev 4 (residual-energy repair, 2026-08-02): capture the FULL
         # solver-truth rod state BEFORE the primitive perturbs anything, so a
@@ -997,26 +1268,23 @@ class DLOLabEnv(DLOEnvBase):
         # the material frames re-seeded from scratch) breaks the elastic
         # equilibrium the rope was holding and injects energy that is charged to
         # the NEXT primitive -- the measured cause of the AT-1H absolute-cap
-        # exceptions.  Only taken when the sample actually contains a failure
-        # (~GRASP_FAILURE_PROB of primitives), so the steady-state cost is nil.
-        pre_primitive_state = (
-            None if bool(np.all(grasp_success)) else self._snapshot_rod_state()
-        )
+        # exceptions.  Rev 5: the snapshot is now UNCONDITIONAL, because the
+        # attach gate can fail a grasp the sampler accepted and the rewind
+        # target must already exist when the approach starts.  It is a
+        # read-only state dump (no scene step, no write), so envs that never
+        # fail stay bit-identical to a no-failure run (AT-17).
+        pre_primitive_state = self._snapshot_rod_state()
 
-        env_indices = np.arange(self.n_envs)
-        self._set_gripper_positions(raw_before[env_indices, p_actual, :])
-        self._step_scene()
-
+        # Rev 5 two-stage approach + attach gate replaces the one-step
+        # teleport-and-attach.  Envs that do not clear the relative-velocity
+        # gate inside APPROACH_MAX_STEPS join the sampled failures under the
+        # single grasp-failure contract below (snapshot rewind, no energy
+        # injection).
         self._batched_active_nodes = np.full(self.n_envs, -1, dtype=int)
-        for env_idx, (node, success) in enumerate(zip(p_actual, grasp_success, strict=True)):
-            if not success:
-                continue
-            self.rod_entity.attach_to_rigid_link_with_envs_idx(
-                self.gripper_link,
-                [int(node)],
-                int(env_idx),
-            )
-            self._batched_active_nodes[env_idx] = int(node)
+        approach = self._approach_and_attach(p_actual, grasp_success, per_env=True)
+        grasp_success = grasp_success & approach["attached"]
+        self.last_grasp_successes = grasp_success.copy()
+        self.last_grasp_success = bool(np.all(grasp_success))
         self._step_scene()
 
         target = self._move_prepared_batch(
@@ -1113,6 +1381,24 @@ class DLOLabEnv(DLOEnvBase):
                 "tension_freezes": int(self.last_tension_freezes),
                 "lower_z": None if self.last_lower_z is None else [float(v) for v in self.last_lower_z],
                 "at1h": at1h,
+                "sampled_grasp_success": sampled_success,
+                "approach_steps": int(self.last_approach_steps),
+                "approach_dwell_steps": int(self.last_approach_dwell_steps),
+                "approach_gate_failures": int(approach["gate_failures"]),
+                "attach_rel_vel_max": (
+                    float(np.nanmax(self.last_attach_rel_vel))
+                    if bool(np.isfinite(self.last_attach_rel_vel).any())
+                    else None
+                ),
+                "attach_offset_max": (
+                    float(np.nanmax(self.last_attach_offset))
+                    if bool(np.isfinite(self.last_attach_offset).any())
+                    else None
+                ),
+                "approach_v_fast": APPROACH_V_FAST,
+                "approach_v_slow": self._approach_v_slow(),
+                "approach_r_slow": APPROACH_R_SLOW,
+                "attach_rel_vel_threshold": ATTACH_REL_VEL,
             },
         }
 

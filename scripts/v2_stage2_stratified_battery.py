@@ -182,6 +182,13 @@ def run_slice(
             lift_height = float(LIFT_HEIGHTS[action["lift"]])
             grav_pe = rope_mass * gravity * lift_height
             move_steps = probe["move_steps"]
+            # Rev 5: the two-stage approach is move-classified but is NOT part
+            # of the AT-6/AT-6' denominator — the ratio keeps its Rev 4
+            # meaning (lift/translate/lower walk) so the repair's extra steps
+            # cannot relax the criterion.  The inclusive ratio is reported
+            # alongside it.
+            approach_steps = int(probe["approach_steps"])
+            move_steps_gate = int(probe["move_steps_excl_approach"])
             settle_steps = int(out["settle_steps"][0])
             primitives.append(
                 {
@@ -214,9 +221,17 @@ def run_slice(
                     "settle_steps": settle_steps,
                     "settle_converged": bool(info["settle_converged"][0]),
                     "move_steps": move_steps,
+                    "approach_steps": approach_steps,
+                    "approach_dwell_steps": int(probe["approach_dwell_steps"]),
+                    "approach_gate_failures": int(probe["approach_gate_failures"]),
+                    "move_steps_excl_approach": move_steps_gate,
+                    "attach_rel_vel_max": info.get("attach_rel_vel_max"),
+                    "attach_offset_max": info.get("attach_offset_max"),
+                    "grasp_success": bool(out["grasp_success"][0]),
                     "hold_steps_used": int(info["hold_steps_used"]),
                     "hold_converged": bool(info["hold_converged"]),
-                    "settle_to_move_ratio": settle_steps / move_steps if move_steps else float("inf"),
+                    "settle_to_move_ratio": settle_steps / move_steps_gate if move_steps_gate else float("inf"),
+                    "settle_to_move_ratio_incl_approach": settle_steps / move_steps if move_steps else float("inf"),
                     "total_sim_steps": probe["total_sim_steps"],
                 }
             )
@@ -404,6 +419,39 @@ def main() -> int:
         for stratum, rows in strata.items()
     }
     overall_adjudication = adjudication_criteria(primitives)
+    # Rev 5 cost accounting: what the compliant approach actually costs per
+    # primitive, in absolute scene steps and as a fraction of the Rev 4
+    # per-primitive step budget (total_sim_steps already includes it).
+    approach = np.asarray([p["approach_steps"] for p in primitives], dtype=float)
+    dwell = np.asarray([p["approach_dwell_steps"] for p in primitives], dtype=float)
+    total = np.asarray([p["total_sim_steps"] for p in primitives], dtype=float)
+    baseline = total - approach - dwell
+    rel_vel = np.asarray(
+        [p["attach_rel_vel_max"] for p in primitives if p["attach_rel_vel_max"] is not None],
+        dtype=float,
+    )
+    offset = np.asarray(
+        [p["attach_offset_max"] for p in primitives if p["attach_offset_max"] is not None],
+        dtype=float,
+    )
+    approach_cost = {
+        "approach_steps_mean": float(approach.mean()),
+        "approach_steps_median": float(np.median(approach)),
+        "approach_steps_p95": float(np.percentile(approach, 95)),
+        "approach_steps_max": float(approach.max()),
+        "approach_dwell_steps_mean": float(dwell.mean()),
+        "added_steps_per_primitive_mean": float((approach + dwell).mean()),
+        "baseline_steps_per_primitive_mean": float(baseline.mean()),
+        "overhead_pct_mean": float(100.0 * (approach + dwell).sum() / baseline.sum()),
+        "attach_rel_vel_max": float(rel_vel.max()) if rel_vel.size else None,
+        "attach_rel_vel_mean": float(rel_vel.mean()) if rel_vel.size else None,
+        "attach_offset_max_m": float(offset.max()) if offset.size else None,
+        "attach_gate_failures": int(sum(p["approach_gate_failures"] for p in primitives)),
+        "grasp_successes": int(sum(1 for p in primitives if p["grasp_success"])),
+        "settle_to_move_ratio_incl_approach_median": float(
+            np.median([p["settle_to_move_ratio_incl_approach"] for p in primitives])
+        ),
+    }
 
     result = {
         "schema_version": 1,
@@ -419,6 +467,7 @@ def main() -> int:
         "rev2_thresholds": AT_THRESHOLDS,
         "per_stratum": per_stratum,
         "overall_adjudication": overall_adjudication,
+        "approach_cost": approach_cost,
         "primitives": primitives,
         "elapsed_s": round(time.time() - started, 1),
     }
@@ -462,6 +511,7 @@ def main() -> int:
         json.dumps(
             {
                 "gate_per_stratum": result["gate_per_stratum"],
+                "approach_cost": approach_cost,
                 "recalibration_input": result["recalibration_input"],
                 "overall_adjudication": overall_adjudication,
                 "pass_rev2_both_strata": result["pass_rev2_both_strata"],

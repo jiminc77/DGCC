@@ -171,8 +171,9 @@ def build_probe_env(n_envs: int):
             settle_mask = phases == "settle"
             # T2 (adjudication §1.8-1): attribute the move-phase peak to the
             # lift/translate/lower leg.  Move-classified steps are ordered:
-            # a leading remainder (teleport/attach gripper commands) followed
-            # by exactly the per-waypoint walks recorded by the adapter.
+            # a leading remainder (Rev 5: the two-stage approach walk; before
+            # Rev 5: the single teleport command) followed by exactly the
+            # per-waypoint walks recorded by the adapter.
             move_speed = speed[move_mask]
             waypoint_steps = [int(n) for n in self.last_waypoint_steps]
             leg_names = ["lift", "translate", "lower"][: len(waypoint_steps)]
@@ -192,6 +193,14 @@ def build_probe_env(n_envs: int):
             return {
                 "total_sim_steps": int(len(rows)),
                 "move_steps": int(move_mask.sum()),
+                # Rev 5: the approach walk is move-classified, so subtract it
+                # to keep the AT-6/AT-6' denominator semantically identical to
+                # Rev 4 (lift+translate+lower legs).  The criterion is NOT
+                # relaxed by the extra steps the repair introduces.
+                "approach_steps": int(self.last_approach_steps),
+                "approach_dwell_steps": int(self.last_approach_dwell_steps),
+                "approach_gate_failures": int(self.last_approach_gate_failures),
+                "move_steps_excl_approach": int(move_mask.sum()) - int(self.last_approach_steps),
                 "hold_steps": int(hold_mask.sum()),
                 "settle_steps_observed": int(settle_mask.sum()),
                 "n_waypoint_steps": waypoint_steps,
@@ -312,6 +321,12 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
             lift_height = float(LIFT_HEIGHTS[str(lift[0])])
             grav_pe = rope_mass * GRAVITY * lift_height
             move_steps = probe["move_steps"]
+            # Rev 5: AT-6 keeps its Rev 4 denominator (lift/translate/lower
+            # walk).  The two-stage approach is reported separately instead of
+            # being folded into the ratio, so the added steps cannot relax the
+            # criterion.
+            approach_steps = int(probe["approach_steps"])
+            move_steps_gate = int(probe["move_steps_excl_approach"])
             settle_steps = int(out["settle_steps"][0])
             primitives.append(
                 {
@@ -348,9 +363,16 @@ def run_slice(first: int, last: int, backend_info: dict[str, Any]) -> dict[str, 
                     "settle_steps": settle_steps,
                     "settle_converged": bool(out["info"]["settle_converged"][0]),
                     "move_steps": move_steps,
+                    "approach_steps": approach_steps,
+                    "approach_dwell_steps": int(probe["approach_dwell_steps"]),
+                    "approach_gate_failures": int(probe["approach_gate_failures"]),
+                    "move_steps_excl_approach": move_steps_gate,
+                    "attach_rel_vel_max": info.get("attach_rel_vel_max"),
+                    "attach_offset_max": info.get("attach_offset_max"),
                     "hold_steps_used": int(info["hold_steps_used"]),
                     "hold_converged": bool(info["hold_converged"]),
-                    "settle_to_move_ratio": settle_steps / move_steps if move_steps else float("inf"),
+                    "settle_to_move_ratio": settle_steps / move_steps_gate if move_steps_gate else float("inf"),
+                    "settle_to_move_ratio_incl_approach": settle_steps / move_steps if move_steps else float("inf"),
                     "total_sim_steps": probe["total_sim_steps"],
                     "detach_residuals": int(info["detach_residuals"]),
                     "detach_escalations": int(info["detach_escalations"]),
