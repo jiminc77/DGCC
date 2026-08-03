@@ -53,9 +53,7 @@ class ScriptedBatchEnv:
 
     def __init__(self, n_envs: int) -> None:
         self.n_envs = int(n_envs)
-        self._state: np.ndarray | None = None
-        self._raw_state: np.ndarray | None = None
-        self._raw_width = 32
+        self.state: np.ndarray | None = None
         self.step_states: list[np.ndarray] = []
         self.settle_calls: list[dict[str, Any]] = []
         self.magnitude_reset_env_once: int | None = None
@@ -85,59 +83,22 @@ class ScriptedBatchEnv:
         verts = np.asarray(vertices, dtype=float)
         if verts.ndim == 2:
             verts = np.broadcast_to(verts, (self.n_envs, *verts.shape)).copy()
-        # Rev 6: raw vertices (n_segments) in, external K=32 contract out.
-        self._raw_width = verts.shape[1]
-        self.state = self._resample(verts, self.K)
+        self.state = verts.copy()
         if self.magnitude_reset_env_once is not None:
-            corrupted = self.state.copy()
-            corrupted[int(self.magnitude_reset_env_once)] = constant_curve(4.0)
-            self.state = corrupted
+            self.state[int(self.magnitude_reset_env_once)] = constant_curve(4.0)
             self.magnitude_reset_env_once = None
         return {
             "settle_converged": np.ones(self.n_envs, dtype=bool),
             "settle_steps": np.zeros(self.n_envs, dtype=int),
         }
 
-    # Rev 6: raw vertices (n_segments, what `light_reset` receives and what
-    # `get_centerline_raw_batch` must return for the covenant path) and the
-    # external centerline (K = 32, what the episode runner and the goals speak)
-    # are no longer the same width.  The real adapter resamples between them;
-    # this fake keeps both and derives one from the other, so the scripted
-    # dynamics can stay in K space while the covenant sees raw-width state.
-    K = 32
-
-    @staticmethod
-    def _resample(state: np.ndarray, width: int) -> np.ndarray:
-        state = np.asarray(state, dtype=float)
-        if state.shape[1] == width:
-            return state.copy()
-        index = np.linspace(0.0, state.shape[1] - 1, width)
-        low = np.floor(index).astype(int)
-        high = np.ceil(index).astype(int)
-        weight = (index - low)[None, :, None]
-        return state[:, low, :] * (1.0 - weight) + state[:, high, :] * weight
-
-    @property
-    def state(self) -> np.ndarray | None:
-        return self._state
-
-    @state.setter
-    def state(self, value: np.ndarray | None) -> None:
-        if value is None:
-            self._state = None
-            self._raw_state = None
-            return
-        value = np.asarray(value, dtype=float)
-        self._state = value
-        self._raw_state = self._resample(value, self._raw_width)
-
     def get_centerline_batch(self) -> np.ndarray:
         assert self.state is not None
         return self.state.copy()
 
     def get_centerline_raw_batch(self) -> np.ndarray:
-        assert self._raw_state is not None
-        return self._raw_state.copy()
+        assert self.state is not None
+        return self.state.copy()
 
     def step_primitive_batch(
         self,

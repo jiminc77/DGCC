@@ -80,9 +80,7 @@ class FakeBatchEnv:
 
     def __init__(self, n_envs: int, *, approach_fraction: float = 0.0) -> None:
         self.n_envs = int(n_envs)
-        self._state: np.ndarray | None = None
-        self._raw_state: np.ndarray | None = None
-        self._raw_width = self.K
+        self.state: np.ndarray | None = None
         self.targets: np.ndarray | None = None
         self.approach_fraction = float(approach_fraction)
         self.settle_calls: list[dict[str, Any]] = []
@@ -96,58 +94,22 @@ class FakeBatchEnv:
         verts = np.asarray(vertices, dtype=float)
         if verts.ndim == 2:
             verts = np.broadcast_to(verts, (self.n_envs, *verts.shape)).copy()
-        self._raw_width = verts.shape[1]
-        self.state = self._resample(verts, self.K)
+        self.state = verts.copy()
         if self.corrupt_reset_env_once is not None:
-            corrupted = self.state.copy()
-            corrupted[self.corrupt_reset_env_once] = np.nan
-            self.state = corrupted
+            self.state[self.corrupt_reset_env_once] = np.nan
             self.corrupt_reset_env_once = None
         return {
             "settle_converged": np.ones(self.n_envs, dtype=bool),
             "settle_steps": np.zeros(self.n_envs, dtype=int),
         }
 
-    # Rev 6: raw vertices (n_segments, what `light_reset` receives and what
-    # `get_centerline_raw_batch` must return for the covenant path) and the
-    # external centerline (K = 32, what the episode runner and the goals speak)
-    # are no longer the same width.  The real adapter resamples between them;
-    # this fake keeps both and derives one from the other, so the scripted
-    # dynamics can stay in K space while the covenant sees raw-width state.
-    K = 32
-
-    @staticmethod
-    def _resample(state: np.ndarray, width: int) -> np.ndarray:
-        state = np.asarray(state, dtype=float)
-        if state.shape[1] == width:
-            return state.copy()
-        index = np.linspace(0.0, state.shape[1] - 1, width)
-        low = np.floor(index).astype(int)
-        high = np.ceil(index).astype(int)
-        weight = (index - low)[None, :, None]
-        return state[:, low, :] * (1.0 - weight) + state[:, high, :] * weight
-
-    @property
-    def state(self) -> np.ndarray | None:
-        return self._state
-
-    @state.setter
-    def state(self, value: np.ndarray | None) -> None:
-        if value is None:
-            self._state = None
-            self._raw_state = None
-            return
-        value = np.asarray(value, dtype=float)
-        self._state = value
-        self._raw_state = self._resample(value, self._raw_width)
-
     def get_centerline_batch(self) -> np.ndarray:
         assert self.state is not None
         return self.state.copy()
 
     def get_centerline_raw_batch(self) -> np.ndarray:
-        assert self._raw_state is not None
-        return self._raw_state.copy()
+        assert self.state is not None
+        return self.state.copy()
 
     def step_primitive_batch(
         self,
@@ -171,9 +133,7 @@ class FakeBatchEnv:
         if self.fail_next_step_with_nan_env is not None:
             bad = self.fail_next_step_with_nan_env
             self.fail_next_step_with_nan_env = None
-            corrupted = self.state.copy()
-            corrupted[bad] = np.nan
-            self.state = corrupted
+            self.state[bad] = np.nan
             raise FloatingPointError("fake non-finite rope state")
 
         x_before = self.state.copy()
@@ -204,11 +164,7 @@ def make_runner(n_envs: int = 4, **fake_kwargs: Any) -> tuple[BatchedEpisodeRunn
 def test_p1_rope_domain_pinned_field_by_field() -> None:
     params = p1_rope_params()
     assert params.length_m == 1.0
-    # Rev 6: the main line runs 64 raw vertices with an explicitly declared
-    # total rope mass.  The POLICY node count K stays 32 (the C1 mapping
-    # layer is what decouples the two).
-    assert params.n_segments == 64  # base.py default is 50 — must be overridden
-    assert params.rope_mass_total_kg == 0.040
+    assert params.n_segments == 32  # base.py default is 50 — must be overridden
     assert params.bend_stiffness == 1.0
     assert params.twist_stiffness == 1.0
     assert params.friction == 1.0
@@ -500,7 +456,7 @@ def test_build_batch_init_vertices_shapes_and_determinism() -> None:
     verts2, shapes2, seeds2 = build_batch_init_vertices(params, n_envs=8, episode_index=0, seed=42)
     np.testing.assert_array_equal(verts1, verts2)
     assert shapes1 == shapes2 and seeds1 == seeds2
-    assert verts1.shape == (8, params.n_segments, 3)
+    assert verts1.shape == (8, 32, 3)
     assert set(shapes1) == {"straight", "u_bend", "s_curve", "random_smooth"}
 
 

@@ -46,14 +46,14 @@ P1_LENGTH_M = 1.0
 # a K=32 arc-length resampling, this is a physics refinement, not an action- or
 # observation-space change -- the Rev 6 C1 mapping layer is what makes that
 # true (`dgcc.envs.dlolab.arc_length_vertex_index`).
-P1_N_SEGMENTS = 64
+P1_N_SEGMENTS = 32  # STAGE 1 (byte-identity proof); stage 2 sets 64
 # Rev 6 (owner-specified): total rope mass.  Previously implicit -- the adapter
 # fixed the PER-SEGMENT mass at 1 g, so the rope weighed n_segments grams and a
 # discretization change was silently a mass change.  Mass is now declared once,
 # here, and the segment mass is derived.  0.040 kg is a PHYSICS CHANGE from the
 # historical 0.032 kg and is recorded as such in the change history; it is not
 # the byte-identity baseline (that is 0.032 kg at n=32).
-P1_ROPE_MASS_TOTAL_KG = 0.040
+P1_ROPE_MASS_TOTAL_KG = 0.032  # STAGE 1 (byte-identity proof); stage 2 sets 0.040
 P1_BEND_STIFFNESS = 1.0
 P1_TWIST_STIFFNESS = 1.0
 P1_FRICTION = 1.0
