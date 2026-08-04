@@ -311,7 +311,12 @@ def adjudication_criteria(primitives: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def spawn_slice(
-    out_path: Path, backend: str, first: int, last: int, stream_tag: int
+    out_path: Path,
+    backend: str,
+    first: int,
+    last: int,
+    stream_tag: int,
+    stderr_dir: Path | None = None,
 ) -> dict[str, Any]:
     env = dict(os.environ)
     if backend == "cpu":
@@ -325,13 +330,27 @@ def spawn_slice(
         "--out", str(out_path), "--authorize", ADJUDICATION_SHA_PREFIX,
         "--action-stream-tag", str(stream_tag),
     ]
-    completed = subprocess.run(
-        command, env=env, timeout=7200,
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-    )
+    # Rev 10b diagnosis: the child's stdout AND stderr are captured, in full, to
+    # a file the child writes directly (no pipe buffering, so nothing is lost if
+    # the child dies hard).  The Rev 10 version sent stdout to DEVNULL and
+    # re-raised only the last 2000 characters of stderr -- when both streams
+    # died at slice [41,50] that tail was pure Genesis warning noise and the
+    # cause was unrecoverable.  stdout matters specifically because the Genesis
+    # and Taichi runtimes report fatal errors there, not on stderr.
+    log_dir = stderr_dir if stderr_dir is not None else out_path.parent
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"slice_{stream_tag}_{first:03d}_{last:03d}.child.log"
+    with log_path.open("wb") as handle:
+        completed = subprocess.run(
+            command, env=env, timeout=7200,
+            stdout=handle, stderr=subprocess.STDOUT,
+        )
     if completed.returncode != 0:
-        tail = completed.stderr.decode(errors="replace")[-2000:]
-        raise RuntimeError(f"slice [{first},{last}] exited {completed.returncode}: {tail}")
+        tail = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
+        raise RuntimeError(
+            f"slice [{first},{last}] exited {completed.returncode}; "
+            f"full child output at {log_path}; tail: {tail}"
+        )
     return json.loads(out_path.read_text())
 
 
@@ -355,6 +374,23 @@ def main() -> int:
             f"{DEFAULT_ACTION_STREAM_TAG} = original preregistered sequence, "
             f"{INDEPENDENT_ACTION_STREAM_TAG} = independent verification sequence"
         ),
+    )
+    parser.add_argument(
+        "--slice-episodes", type=int, default=BATTERY_SLICE_EPISODES,
+        help=(
+            "episodes per SLICE PROCESS (execution partitioning only, default "
+            f"{BATTERY_SLICE_EPISODES}).  Slice boundaries always fall on episode "
+            "boundaries and every episode builds a fresh env with its own seeded "
+            "RNG, so this changes nothing measurable: the episode plan, the "
+            "action schedule, the physics and the judgement thresholds are "
+            "independent of how the 60 episodes are grouped into processes.  "
+            "Rev 10b uses 5 because the 10-episode process died at slice [41,50] "
+            "in BOTH streams at n=64 (2x the vertices of the n=32 runs)."
+        ),
+    )
+    parser.add_argument(
+        "--stderr-dir", type=permitted_path, default=None,
+        help="directory for each slice child's FULL stderr (Rev 10b diagnosis)",
     )
     args = parser.parse_args()
 
@@ -386,20 +422,25 @@ def main() -> int:
         )
 
     plan_size = len(battery_episode_plan())
+    slice_episodes = int(args.slice_episodes)
+    if slice_episodes < 1:
+        raise SystemExit("--slice-episodes must be >= 1")
     slices = [
-        (first, min(first + BATTERY_SLICE_EPISODES - 1, plan_size))
-        for first in range(1, plan_size + 1, BATTERY_SLICE_EPISODES)
+        (first, min(first + slice_episodes - 1, plan_size))
+        for first in range(1, plan_size + 1, slice_episodes)
     ]
     primitives: list[dict[str, Any]] = []
     backends: set[str] = set()
     with tempfile.TemporaryDirectory(prefix="v2_stratified_") as tmp:
         for first, last in slices:
+            print(f"[{time.strftime('%FT%T')}] slice [{first},{last}] start", flush=True)
             partial = spawn_slice(
                 Path(tmp) / f"slice_{first:03d}.json",
                 args.backend,
                 first,
                 last,
                 args.action_stream_tag,
+                args.stderr_dir,
             )
             primitives.extend(partial["primitives"])
             backends.add(partial["backend_info"]["backend"])
@@ -466,6 +507,11 @@ def main() -> int:
         ),
         "action_sequence_sha256": action_sequence_sha256(args.action_stream_tag),
         "code_sha256": sha256_file(Path(__file__).resolve()),
+        # Execution partitioning, recorded for the audit trail.  It changes how
+        # the 60 episodes are grouped into OS processes and nothing else -- see
+        # --slice-episodes.
+        "slice_episodes": slice_episodes,
+        "slices": [{"first": f, "last": l} for f, l in slices],
         "rev2_thresholds": AT_THRESHOLDS,
         "per_stratum": per_stratum,
         "overall_adjudication": overall_adjudication,
