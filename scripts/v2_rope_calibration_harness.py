@@ -178,55 +178,71 @@ def verts(env) -> np.ndarray:
 
 
 def test_a_droop(env, params, overhangs, desk_z: float = 0.75, threshold: float = 1.0e-3):
-    """Rope on a desk with `overhang` past the edge; measure the free-end droop."""
+    """Rope on a desk with `overhang` past the edge; measure the free-end droop.
+
+    The pinned/free boundary is SNAPPED to a vertex sitting exactly at x=0, so
+    the free arc length is an exact multiple of the vertex interval and the
+    exit point is a real material point rather than somewhere inside an edge.
+    The realized overhang is reported next to the requested one because at
+    n=64 the interval is 15.9 mm, which quantizes a 50 mm request by ~5%.
+
+    `chord_angle_exit_deg` is the owner's measurand: the angle, below the
+    on-table rope direction, of the chord from the table-exit point to the tip.
+    """
 
     n = int(params.n_segments)
     L = float(params.length_m)
     interval = L / (n - 1)
     rows = []
     for overhang in overhangs:
-        supported = L - float(overhang)
-        if supported <= 2 * interval:
+        m_free = max(1, int(round(float(overhang) / interval)))
+        if m_free >= n - 2:
             continue
+        edge_i = n - 1 - m_free
         line = np.zeros((n, 3))
-        line[:, 0] = np.linspace(-supported, float(overhang), n)
+        line[:, 0] = (np.arange(n) - edge_i) * interval
         line[:, 2] = desk_z
         place(env, line)
-        edge_i = int(np.searchsorted(line[:, 0], 0.0, side="right") - 1)
         pinned = np.arange(0, edge_i + 1)
         set_fixed(env, pinned)
         steps, converged = relax(env, threshold, fixed_idx=pinned)
         v = verts(env)
+        exit_pt = np.array([0.0, 0.0, desk_z])
+        chord_exit = v[-1] - exit_pt
         tip_edge = v[-1] - v[-2]
-        chord = v[-1] - v[edge_i]
+        chord_vertex = v[-1] - v[edge_i]
         rows.append({
             "overhang_m": float(overhang),
-            "supported_m": supported,
+            "realized_overhang_m": m_free * interval,
+            "supported_m": edge_i * interval,
             "edge_vertex": edge_i,
-            "free_vertices": n - 1 - edge_i,
+            "free_vertices": m_free,
+            "chord_angle_exit_deg": float(
+                np.degrees(np.arctan2(-chord_exit[2], abs(chord_exit[0]) + 1e-12))
+            ),
             "tip_tangent_angle_deg": float(
                 np.degrees(np.arctan2(-tip_edge[2], abs(tip_edge[0]) + 1e-12))
             ),
             "chord_angle_deg": float(
-                np.degrees(np.arctan2(-chord[2], abs(chord[0]) + 1e-12))
+                np.degrees(np.arctan2(-chord_vertex[2], abs(chord_vertex[0]) + 1e-12))
             ),
             "tip_drop_m": float(desk_z - v[-1, 2]),
             "profile_xz": [[float(a), float(b)] for a, b in zip(v[edge_i:, 0], v[edge_i:, 2])],
             "relax_steps": steps,
             "relax_converged": converged,
-            "angle_resolved": bool(n - 1 - edge_i >= 4),
+            "angle_resolved": bool(m_free >= 3),
         })
     return rows
 
 
 def droop_angle_at(env, params, overhang: float, desk_z: float = 0.75,
-                   metric: str = "tip_tangent_angle_deg") -> float:
+                   metric: str = "chord_angle_exit_deg") -> float:
     row = test_a_droop(env, params, [overhang], desk_z)
     return row[0][metric] if row else float("nan")
 
 
 def interpolate_overhang_for_angle(rows, target_deg: float,
-                                   metric: str = "tip_tangent_angle_deg") -> float | None:
+                                   metric: str = "chord_angle_exit_deg") -> float | None:
     """Linear interpolation of the overhang that yields `target_deg`."""
 
     pts = sorted(((r["overhang_m"], r[metric]) for r in rows), key=lambda t: t[0])
@@ -503,8 +519,8 @@ def main() -> int:
     ap.add_argument("--overhangs", default="0.05,0.10,0.15,0.20,0.25,0.30,0.35,0.40")
     ap.add_argument("--loads-kg", default="0.5,1.0,2.0")
     ap.add_argument("--droop-angle-deg", type=float, default=41.5)
-    ap.add_argument("--droop-metric", default="tip_tangent_angle_deg",
-                    choices=["tip_tangent_angle_deg", "chord_angle_deg"])
+    ap.add_argument("--droop-metric", default="chord_angle_exit_deg",
+                    choices=["tip_tangent_angle_deg", "chord_angle_deg", "chord_angle_exit_deg"])
     ap.add_argument("--threshold", type=float, default=1.0e-3)
     ap.add_argument(
         "--hang-relax-damping", type=float, default=60.0,

@@ -85,7 +85,7 @@ def main() -> int:
     ok = (
         kwargs.get("move_v_max") == 0.15
         and kwargs.get("move_hold_max_steps") == 2000
-        and kwargs.get("n_segments") == 32
+        and kwargs.get("n_segments") == 64
         and kwargs.get("rope_mass_total") == 0.040
         and kwargs.get("at1h_counters") is True
         and kwargs.get("n_envs") == 4096

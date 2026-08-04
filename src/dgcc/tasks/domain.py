@@ -38,16 +38,20 @@ from dgcc.envs.base import RopeParams
 
 # --- P1 §5 common rope domain (immutable for P1; OOD domains forbidden) ---
 P1_LENGTH_M = 1.0
-# Rev 6: the discretization stays at 32 for now.  The 64-node adoption is
-# READY (the C1 mapping layer, the C2 mass generalization and the n=32
-# byte-identity proof are all in place) but is HELD by the orchestrator steer
-# of 2026-08-03: the pilot's "64 nodes = 1.01x step cost" is a 1024-env
-# artifact, at n_envs=4096 the reported cost is raw 2.56x / tr/s 0.40x on a
-# 4090, and the cost on the main-line host (RTX PRO 6000 Blackwell) is
-# UNMEASURED.  The flip lands only after this host's cost cells are measured.
-# n=100 is dropped as a candidate outright (scene.build CUDA illegal-address,
-# 5/5 at 4096).
-P1_N_SEGMENTS = 32
+# Rev 10 (adopted 2026-08-04, owner-run discretization pilot + real-anchor
+# calibration): the discretization moves 32 -> 64.  The Rev 6 machinery made
+# the flip a pure refinement (C1 arc-length action mapping, C2 mass
+# generalization, C3 fixed grasp arc, plus the n=32 byte-identity proof), and
+# the Rev 6 HOLD was a COST hold, not a physics one -- the pilot's "1.01x step
+# cost" was a 1024-env artifact and this host was unmeasured.
+# The hold is released because 32 nodes is now known to be WRONG for this
+# domain, not merely coarse: the discretization pilot produces an
+# extreme-hinge artifact at 32 marks that is 0% at 64, and every real-anchor
+# fit in dossier/V2_rope_calibration/fit_real.json (bend E, stretch K) was
+# performed AT n=64.  Staying at 32 would mean running stiffness constants
+# fitted for a different mesh.  n=100 stays dropped outright (scene.build CUDA
+# illegal-address, 5/5 at 4096).
+P1_N_SEGMENTS = 64
 # Rev 6 (owner-specified): total rope mass.  Previously implicit -- the adapter
 # fixed the PER-SEGMENT mass at 1 g, so the rope weighed n_segments grams and a
 # discretization change was silently a mass change.  Mass is now declared once,

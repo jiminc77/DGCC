@@ -12,9 +12,39 @@ import numpy as np
 from dgcc.envs.base import ROPE_MASS_TOTAL_KG_BASE, DLOEnvBase, RopeParams
 from dgcc.utils.seeding import seed_everything
 
-STRETCH_BASE = 8.0e5
-BEND_BASE = 1.0e5
-TWIST_BASE = 1.0e4
+# --- Rev 10 real-anchor calibration (owner-run harness, adopted 2026-08-04) ---
+# These three bases WERE the P0 placeholder values 8.0e5 / 1.0e5 / 1.0e4.  They
+# are now the values fitted against the owner's benchtop rope
+# (dossier/V2_rope_calibration/fit_real.json, harness
+# `scripts/v2_rope_calibration_harness.py`), at the domain this repository
+# actually launches: n=64 nodes, 0.040 kg, dt 1e-3, substeps 5.
+#
+# BEND_BASE 421696.50 -- bisection on the 137 mm droop test (chord angle
+#   41.5 deg).  Four-point check against the measured overhang sweep, sim vs
+#   real chord angle: 5 cm 3.9/2.1, 10 cm 18.5/26, 15 cm 40.9/47, 20 cm
+#   63.1/60 deg (RMS 5.2 deg against a +-2..4 deg measurement uncertainty).
+#   The single-point fit is accepted and the remaining shape error is
+#   PUBLISHED as a residual instead of being tuned away.
+# STRETCH_BASE 2.4e6 -- owner decision (1): 80% of the MEASURED integrator
+#   stability ceiling (3.0e6 at substeps=5, dossier/V2_rope_calibration/
+#   stability_n64*.json).  The real rope's EA is 1962 N, which would need
+#   K ~ 2.2e7 -- unreachable at substeps=5.  The sim rope is therefore ~11.6x
+#   more compliant in axial stretch than the real one; that gap is QUANTIFIED
+#   in the Rev 10 residual-gap table rather than hidden behind a fitted number.
+# TWIST_BASE 42169.65 -- no torsion benchtop test exists, so G is carried at
+#   the SAME multiplier as E (4.216965x its P0 base): an isotropy ASSUMPTION,
+#   recorded as one.  The order's "42,170" is this value rounded.
+#
+# Damping (`rod_damping` / `rod_angular_damping`, configs/v2_t2.yaml) is NOT
+# recalibrated and stays 10 / 5.  The drop-arrest test's arrest time is
+# non-monotone in gamma (10/30/60/120 -> 1.369/2.204/1.828/1.337 s at the
+# 0.02 m/s observation threshold), i.e. that test is dominated by fall-phase
+# delay plus post-touchdown contact, not by linear damping, and does not
+# constrain gamma at all.  The 0.48 s measured arrest is an OPEN residual;
+# moving gamma without a constraining test is forbidden (Rev 10 limitation).
+STRETCH_BASE = 2.4e6
+BEND_BASE = 421696.5034285822
+TWIST_BASE = 42169.65034285822
 MU_S_BASE = 0.30
 MU_K_RATIO = 0.80
 # Rev 6 C2 (mass generalization, pilot §4 C2).  Segment mass used to be the

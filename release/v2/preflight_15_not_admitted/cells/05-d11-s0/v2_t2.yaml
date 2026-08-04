@@ -48,6 +48,16 @@ her: false
 sim:
   dt: 0.001
   substeps: 5
+  # Rev 10 (2026-08-04): damping is NOT recalibrated and stays 10 / 5.  The
+  # drop-arrest benchtop test was swept over gamma_lin in {10, 30, 60, 120} and
+  # the arrest time at the 0.02 m/s observation threshold came out
+  # 1.369 / 2.204 / 1.828 / 1.337 s -- NON-MONOTONE, i.e. effectively
+  # independent of gamma.  That test's arrest time is dominated by the fall
+  # phase plus post-touchdown contact behaviour, not by linear damping, so it
+  # does not constrain gamma.  The gap to the 0.48 s measured arrest is a
+  # published Rev 10 residual, NOT a licence to tune these two numbers; the
+  # test improvements (start the timer at first touchdown, calibrate friction
+  # and restitution) are registered as real-adaptation work.
   rod_damping: 10.0
   rod_angular_damping: 5.0
   initial_settle_steps: 0
@@ -60,16 +70,16 @@ sim:
   # disagree fail the launch closed.  Both keys are required for a corrected
   # launch (dgcc.envs.env_config.CORRECTED_REQUIRED_KEYS) -- there is no
   # silent default, because changing either one changes the physics.
-  #   n_segments stays 32.  The 64-node transition is implemented and proven
-  #   byte-identical at 32, but is HELD until this host's cost cells exist
-  #   (steer 2026-08-03: the "1.01x" figure is a 1024-env artifact; at 4096 the
-  #   reported cost is raw 2.56x / tr/s 0.40x on a 4090, and this host is
-  #   unmeasured).
+  #   n_segments 64 (Rev 10, 2026-08-04): the Rev 6 cost HOLD is released.  The
+  #   32-mark mesh produces the discretization pilot's extreme-hinge artifact
+  #   (0% at 64), and the real-anchor stiffness fit
+  #   (dossier/V2_rope_calibration/fit_real.json) was performed AT n=64, so
+  #   staying at 32 would run constants fitted for a different mesh.
   #   rope_mass_total 0.040 kg: previously implicit and equal to n_segments
-  #   grams (0.032 kg at n=32).  Owner-specified value; this is a physics
-  #   change and is recorded as one.  It is adopted ahead of the node flip so
-  #   an acceptance regression is attributable to one variable.
-  n_segments: 32
+  #   grams (0.032 kg at n=32).  Owner-measured value; this is a physics
+  #   change and is recorded as one.  It was adopted AHEAD of the node flip
+  #   (Rev 6) so the two are separately attributable in the acceptance record.
+  n_segments: 64
   rope_mass_total: 0.040
   grasp_realism: true
   # AT-1H always-on counters (env-correction design Rev 3 상시 로깅 요건).

@@ -204,10 +204,11 @@ def make_runner(n_envs: int = 4, **fake_kwargs: Any) -> tuple[BatchedEpisodeRunn
 def test_p1_rope_domain_pinned_field_by_field() -> None:
     params = p1_rope_params()
     assert params.length_m == 1.0
-    # Rev 6: the total rope mass is now declared explicitly.  The
-    # discretization stays at 32 until the 64-node flip is released; the POLICY
-    # node count K is 32 either way (the C1 mapping layer decouples them).
-    assert params.n_segments == 32  # base.py default is 50 — must be overridden
+    # Rev 10: the discretization is 64 (the Rev 6 cost hold is released and the
+    # real-anchor stiffness fit was performed at n=64).  The POLICY node count
+    # K stays 32 either way -- the C1 arc-length mapping layer decouples the
+    # action space from the mesh, so this flip is NOT an action-space change.
+    assert params.n_segments == 64  # base.py default is 50 — must be overridden
     assert params.rope_mass_total_kg == 0.040
     assert params.bend_stiffness == 1.0
     assert params.twist_stiffness == 1.0
